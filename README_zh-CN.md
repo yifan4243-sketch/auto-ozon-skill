@@ -20,6 +20,21 @@
 
 不支持 cart、checkout、order、seller、supplier、research、compare、feedback，不支持自动下单、购物车操作、订单或物流管理、旺旺聊天。
 
+## Ozon MCP 外接桥
+
+Ozon API 发现和只读调用通过外部 [PCDCK/ozon-mcp](https://github.com/PCDCK/ozon-mcp) MCP server 完成。该 Python 项目以 `vendor/ozon-mcp` git submodule 形式接入，不复制、不改写到 `packages/adapters-ozon/src`。
+
+```bash
+git submodule update --init --recursive
+cd vendor/ozon-mcp
+uv sync
+uv run ozon-mcp --help
+cd ../..
+pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
+```
+
+当前阶段 Ozon 侧只允许 read 方法。`ozon call` 和 `ozon fetch-all` 会先调用 `ozon_describe_method` 检查 `safety`，遇到 `write` 或 `destructive` 会本地阻断。
+
 ## 风控
 
 本项目不绕过 1688 风控，不接打码平台，不自动处理滑块或验证码。遇到风控时使用 `--headed` 打开浏览器，由人工完成验证。
