@@ -1,0 +1,5 @@
+{
+  "code": "RISK_CONTROL",
+  "message": "1688 risk control or verification required. Run with --headed and complete verification manually.",
+  "recoverable": true
+}

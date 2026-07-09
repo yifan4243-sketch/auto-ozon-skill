@@ -1,0 +1,212 @@
+import type { Page, Response as PWResponse } from 'playwright';
+import { withTimeout } from './wait.js';
+
+export type ResponseMatcher = RegExp | ((response: PWResponse) => boolean);
+export type ResponseParser<T> = (
+  response: PWResponse,
+) => Promise<T | null | undefined | false>;
+
+export interface ResponseCaptureFailure {
+  at: string;
+  phase: 'match' | 'parse';
+  url: string;
+  name?: string;
+  message: string;
+}
+
+export interface ResponseCaptureEmptyResult {
+  at: string;
+  url: string;
+}
+
+export interface ResponseCaptureDiagnostics {
+  timeoutMs: number;
+  startedAt: string;
+  endedAt?: string;
+  disposed: boolean;
+  settled: boolean;
+  timedOut: boolean;
+  seenCount: number;
+  matchedCount: number;
+  parsedCount: number;
+  emptyResultCount: number;
+  failureCount: number;
+  lastSeenUrl?: string;
+  lastMatchedUrl?: string;
+  lastParsedUrl?: string;
+  failures: ResponseCaptureFailure[];
+  emptyResults: ResponseCaptureEmptyResult[];
+}
+
+export interface StartResponseCaptureOptions<T> {
+  page: Page;
+  timeoutMs: number;
+  matcher: ResponseMatcher;
+  parse: ResponseParser<T>;
+  maxDiagnosticsEntries?: number;
+}
+
+export interface ResponseCaptureActionResult<T, TResult> {
+  actionResult: TResult;
+  response: T | null;
+  diagnostics: ResponseCaptureDiagnostics;
+}
+
+export interface ResponseCapture<T> {
+  wait(): Promise<T | null>;
+  waitForAction<TResult>(
+    action: () => Promise<TResult>,
+  ): Promise<ResponseCaptureActionResult<T, TResult>>;
+  dispose(): void;
+  diagnostics(): ResponseCaptureDiagnostics;
+}
+
+export function startResponseCapture<T>(
+  opts: StartResponseCaptureOptions<T>,
+): ResponseCapture<T> {
+  const maxDiagnosticsEntries = opts.maxDiagnosticsEntries ?? 5;
+  const startedAt = new Date().toISOString();
+  let endedAt: string | undefined;
+  let disposed = false;
+  let settled = false;
+  let timedOut = false;
+  let seenCount = 0;
+  let matchedCount = 0;
+  let parsedCount = 0;
+  let emptyResultCount = 0;
+  let lastSeenUrl: string | undefined;
+  let lastMatchedUrl: string | undefined;
+  let lastParsedUrl: string | undefined;
+  const failures: ResponseCaptureFailure[] = [];
+  const emptyResults: ResponseCaptureEmptyResult[] = [];
+  let waitPromise: Promise<T | null> | null = null;
+  let resolveCaptured!: (value: T) => void;
+  const captured = new Promise<T>((resolve) => {
+    resolveCaptured = resolve;
+  });
+
+  const remember = <TEntry>(entries: TEntry[], entry: TEntry) => {
+    entries.push(entry);
+    if (entries.length > maxDiagnosticsEntries) entries.shift();
+  };
+
+  const errorInfo = (error: unknown): { name?: string; message: string } => {
+    if (error instanceof Error) {
+      return { name: error.name, message: error.message };
+    }
+    return { message: String(error) };
+  };
+
+  const recordFailure = (
+    phase: ResponseCaptureFailure['phase'],
+    url: string,
+    error: unknown,
+  ) => {
+    const info = errorInfo(error);
+    remember(failures, {
+      at: new Date().toISOString(),
+      phase,
+      url,
+      ...info,
+    });
+  };
+
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    endedAt ??= new Date().toISOString();
+    opts.page.off('response', onResponse);
+  };
+
+  const matches = (response: PWResponse): boolean => {
+    if (opts.matcher instanceof RegExp) return opts.matcher.test(response.url());
+    return opts.matcher(response);
+  };
+
+  const onResponse = async (response: PWResponse) => {
+    if (disposed || settled) return;
+    const url = response.url();
+    seenCount++;
+    lastSeenUrl = url;
+    let matched = false;
+    try {
+      matched = matches(response);
+    } catch (e) {
+      recordFailure('match', url, e);
+      return;
+    }
+    if (!matched) return;
+    matchedCount++;
+    lastMatchedUrl = url;
+    try {
+      const value = await opts.parse(response);
+      if (!value) {
+        emptyResultCount++;
+        remember(emptyResults, { at: new Date().toISOString(), url });
+        return;
+      }
+      if (settled || disposed) return;
+      parsedCount++;
+      lastParsedUrl = url;
+      settled = true;
+      endedAt = new Date().toISOString();
+      resolveCaptured(value);
+    } catch (e) {
+      recordFailure('parse', url, e);
+    }
+  };
+
+  const diagnostics = (): ResponseCaptureDiagnostics => ({
+    timeoutMs: opts.timeoutMs,
+    startedAt,
+    endedAt,
+    disposed,
+    settled,
+    timedOut,
+    seenCount,
+    matchedCount,
+    parsedCount,
+    emptyResultCount,
+    failureCount: failures.length,
+    lastSeenUrl,
+    lastMatchedUrl,
+    lastParsedUrl,
+    failures: [...failures],
+    emptyResults: [...emptyResults],
+  });
+
+  opts.page.on('response', onResponse);
+
+  return {
+    wait() {
+      waitPromise ??= withTimeout(captured, {
+        timeoutMs: opts.timeoutMs,
+        fallback: null,
+      })
+        .then((value) => {
+          if (value === null && !settled) {
+            timedOut = true;
+            endedAt = new Date().toISOString();
+          }
+          return value;
+        })
+        .finally(dispose);
+      return waitPromise;
+    },
+    async waitForAction<TResult>(action: () => Promise<TResult>) {
+      try {
+        const actionResult = await action();
+        const response = await this.wait();
+        return {
+          actionResult,
+          response,
+          diagnostics: diagnostics(),
+        };
+      } finally {
+        dispose();
+      }
+    },
+    dispose,
+    diagnostics,
+  };
+}

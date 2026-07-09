@@ -1,0 +1,20 @@
+{
+  "imageId": "987654321",
+  "total": 1,
+  "offers": [
+    {
+      "offerId": "123456789",
+      "title": "加厚塑料收纳盒 家用透明整理箱",
+      "price": { "text": "¥4.50", "min": 4.5, "max": 6.8 },
+      "supplier": { "name": "义乌市测试日用品厂", "shopUrl": null, "years": 5 },
+      "location": { "province": "浙江", "city": "金华" },
+      "bizType": null,
+      "verified": { "factory": true, "business": false, "superFactory": false },
+      "tags": [],
+      "isP4P": false,
+      "turnover": "1200件",
+      "url": "https://detail.1688.com/offer/123456789.html",
+      "image": "https://img.example.com/main.jpg"
+    }
+  ]
+}

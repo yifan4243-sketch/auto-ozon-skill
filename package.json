@@ -7,9 +7,15 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
+    "test": "vitest run",
     "agent:verify": "pnpm typecheck"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "@types/node": "^20.14.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/qrcode": "^1.5.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }

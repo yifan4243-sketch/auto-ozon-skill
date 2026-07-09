@@ -7,5 +7,13 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p ../../tsconfig.base.json"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.2",
+    "playwright": "^1.48.0",
+    "playwright-extra": "^4.3.6",
+    "proper-lockfile": "^4.1.2",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "qrcode": "^1.5.4"
   }
 }
