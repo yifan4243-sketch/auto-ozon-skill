@@ -1,57 +1,29 @@
-import {
-  OZON_MCP_TOOLS,
-  errorResult,
-  mcpToolError,
-  okResult,
-  sanitizeSecretText,
-} from '../config.js';
-import { withPcdckClient } from '../mcp/pcdck-client.js';
-import { parseToolResult } from '../mcp/parse-tool-result.js';
+import { OZON_MCP_TOOLS } from '../config.js';
 import type {
   OzonCommandResult,
   OzonDescribeMethodOptions,
   OzonSearchMethodsOptions,
 } from '../types.js';
+import { callOzonMcpTool } from './tool-call.js';
 
 export async function ozonSearchMethods(
   options: OzonSearchMethodsOptions,
 ): Promise<OzonCommandResult> {
-  try {
-    return await withPcdckClient(async (client) => {
-      const result = await client.callTool(OZON_MCP_TOOLS.searchMethods, {
-        query: options.query,
-        ...(options.limit === undefined ? {} : { limit: options.limit }),
-      });
-      const parsed = parseToolResult(result);
-      if (parsed.isError) return mcpToolError('ozon.methods.search', parsed.data);
-      return okResult('ozon.methods.search', parsed.data);
-    });
-  } catch (error) {
-    return errorResult('ozon.methods.search', {
-      code: 'OZON_MCP_CALL_FAILED',
-      message: sanitizeSecretText(error),
-      recoverable: true,
-    });
-  }
+  return callOzonMcpTool('ozon.methods.search', OZON_MCP_TOOLS.searchMethods, {
+    query: options.query,
+    ...(options.section === undefined ? {} : { section: options.section }),
+    ...(options.api === undefined ? {} : { api: options.api }),
+    ...(options.safety === undefined ? {} : { safety: options.safety }),
+    ...(options.limit === undefined ? {} : { limit: options.limit }),
+  });
 }
 
 export async function ozonDescribeMethod(
   options: OzonDescribeMethodOptions,
 ): Promise<OzonCommandResult> {
-  try {
-    return await withPcdckClient(async (client) => {
-      const result = await client.callTool(OZON_MCP_TOOLS.describeMethod, {
-        operation_id: options.operationId,
-      });
-      const parsed = parseToolResult(result);
-      if (parsed.isError) return mcpToolError('ozon.methods.describe', parsed.data);
-      return okResult('ozon.methods.describe', parsed.data);
-    });
-  } catch (error) {
-    return errorResult('ozon.methods.describe', {
-      code: 'OZON_MCP_CALL_FAILED',
-      message: sanitizeSecretText(error),
-      recoverable: true,
-    });
-  }
+  return callOzonMcpTool('ozon.methods.describe', OZON_MCP_TOOLS.describeMethod, {
+    ...(options.operationId === undefined ? {} : { operation_id: options.operationId }),
+    ...(options.path === undefined ? {} : { path: options.path }),
+    ...(options.httpMethod === undefined ? {} : { http_method: options.httpMethod }),
+  });
 }
