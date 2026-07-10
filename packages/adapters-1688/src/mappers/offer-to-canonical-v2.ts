@@ -2,6 +2,7 @@ import type { CanonicalProductV2 } from '../../../contracts/src/canonical-produc
 import type { CollectionMethod } from '../../../contracts/src/common.js';
 import { assembleCanonicalSkus } from '../../../transformer/src/sku-assembler.js';
 import { analyzeSkuVariants } from '../../../transformer/src/variant-analyzer.js';
+import { validateSourceSkuIds } from '../../../transformer/src/sku-identifier.js';
 import type { OfferResult } from '../engine/commands/offers.js';
 
 export function offerToCanonicalV2(
@@ -27,7 +28,7 @@ export function offerToCanonicalV2(
     (image) => image !== offer.detailUrl,
   );
   const warnings = [...skuAnalysis.warnings];
-  const errors: string[] = [];
+  const errors = validateSourceSkuIds(offer.skus.map((sku) => sku.skuId));
 
   if (!offer.offerId) errors.push('Missing source offer ID.');
   if (!offer.title.trim()) errors.push('Missing product title.');

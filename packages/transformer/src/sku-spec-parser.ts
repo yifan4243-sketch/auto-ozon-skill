@@ -125,7 +125,7 @@ function parseKeyValueSegments(
 ): Record<string, string> {
   const out: Record<string, string> = {};
   const segments = raw
-    .split(/[;；|｜,，]+/)
+    .split(/[;；|｜,，]+|>(?=[^>;；|｜,，]*[:=：])/)
     .map((segment) => segment.trim())
     .filter(Boolean);
 

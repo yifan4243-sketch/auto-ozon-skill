@@ -2,6 +2,11 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { OfferResult } from '../../../packages/adapters-1688/src/engine/commands/offers.js';
 import { offerToCanonicalV2 } from '../../../packages/adapters-1688/src/mappers/offer-to-canonical-v2.js';
+import {
+  normalizePositivePackageValue,
+  normalizeRawWeight,
+} from '../../../packages/transformer/src/package-value-normalizer.js';
+import { assembleCanonicalSkus } from '../../../packages/transformer/src/sku-assembler.js';
 import { parseSkuSpec } from '../../../packages/transformer/src/sku-spec-parser.js';
 
 type OfferFixtureOverride = Partial<Omit<OfferResult, 'supplier' | 'freight'>> & {
@@ -41,7 +46,12 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       specs: { 规格: '标准款' },
       supplier_stock: 88,
       sale_count: 9,
-      package: { length_cm: 20, matched_by: 'exact_spec' },
+      package: {
+        length_cm: 20,
+        raw_weight: null,
+        weight_unit: 'unknown',
+        matched_by: 'exact_spec',
+      },
     });
     expect(result.sku_analysis.has_source_skus).toBe(true);
     expect(result.sku_analysis.is_multi_sku).toBe(false);
@@ -160,6 +170,119 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
     ]);
     expect(result.product.gallery_images).not.toContain(result.skus[0]!.image);
   });
+
+  it('empty-sku-id blocks validation and keeps every values_by_sku entry', () => {
+    const result = convert('empty-sku-id');
+    const varyingPrice = result.sku_analysis.varying_fields.find(
+      (entry) => entry.field === 'price_cny',
+    );
+
+    expect(result.validation.status).toBe('blocked');
+    expect(result.validation.errors).toContain(
+      'Empty source_sku_id at source SKU position(s): 1.',
+    );
+    expect(varyingPrice?.values_by_sku).toEqual({
+      '[empty-sku-id]#1': 10,
+      'valid-id': 11,
+    });
+  });
+
+  it('duplicate-sku-id blocks validation without silently overwriting values', () => {
+    const result = convert('duplicate-sku-id');
+    const varyingPrice = result.sku_analysis.varying_fields.find(
+      (entry) => entry.field === 'price_cny',
+    );
+
+    expect(result.validation.status).toBe('blocked');
+    expect(result.validation.errors).toContain(
+      'Duplicate source_sku_id "duplicate-id" at source SKU positions: 1, 2.',
+    );
+    expect(varyingPrice?.values_by_sku).toEqual({
+      'duplicate-id#1': 10,
+      'duplicate-id#2': 11,
+    });
+  });
+
+  it('empty-package-record reports a matched but factually empty package', () => {
+    const result = convert('empty-package-record');
+
+    expect(result.skus[0]!.package).toMatchObject({
+      matched_by: 'exact_spec',
+      length_cm: null,
+      width_cm: null,
+      height_cm: null,
+      raw_weight: null,
+      weight_unit: 'unknown',
+      volume_cm3: null,
+    });
+    expect(result.sku_analysis.missing_fields).toContainEqual({
+      field: 'package',
+      sku_ids: ['empty-package'],
+    });
+    expect(result.validation.status).toBe('warning');
+  });
+
+  it('weight-below-three nulls all sub-three weights and non-positive package values', () => {
+    const result = convert('weight-below-three');
+    const firstPackage = result.skus[0]!.package;
+
+    expect(result.skus.map((sku) => sku.package.raw_weight)).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect(result.skus.every((sku) => sku.package.weight_unit === 'unknown')).toBe(true);
+    expect(firstPackage).toMatchObject({
+      length_cm: null,
+      width_cm: null,
+      height_cm: null,
+      volume_cm3: null,
+      matched_by: 'sku_id',
+    });
+    expect(result.sku_analysis.missing_fields).toContainEqual({
+      field: 'package.raw_weight',
+      sku_ids: ['weight-0', 'weight-0.5', 'weight-1', 'weight-2.99'],
+    });
+    expect(result.sku_analysis.missing_fields).toContainEqual({
+      field: 'package',
+      sku_ids: ['weight-0'],
+    });
+    expect(result.sku_analysis.missing_fields).toContainEqual({
+      field: 'package.length_cm',
+      sku_ids: ['weight-0'],
+    });
+    expect(result.sku_analysis.missing_fields).toContainEqual({
+      field: 'package.width_cm',
+      sku_ids: ['weight-0'],
+    });
+    expect(result.sku_analysis.missing_fields).toContainEqual({
+      field: 'package.height_cm',
+      sku_ids: ['weight-0'],
+    });
+    expect(result.sku_analysis.missing_fields).toContainEqual({
+      field: 'package.volume_cm3',
+      sku_ids: ['weight-0'],
+    });
+    expect(result.validation.status).toBe('warning');
+    expect(result.validation.warnings).toContain(
+      'Missing valid package raw weight for SKU(s): weight-0, weight-0.5, weight-1, weight-2.99.',
+    );
+  });
+
+  it('weight-equals-three preserves the inclusive minimum', () => {
+    expect(convert('weight-equals-three').skus[0]!.package).toMatchObject({
+      raw_weight: 3,
+      weight_unit: 'unknown',
+    });
+  });
+
+  it('weight-above-three preserves the source value without conversion', () => {
+    expect(convert('weight-above-three').skus[0]!.package).toMatchObject({
+      raw_weight: 3.01,
+      weight_unit: 'unknown',
+    });
+  });
 });
 
 describe('deterministic SKU specification parsing', () => {
@@ -177,6 +300,64 @@ describe('deterministic SKU specification parsing', () => {
       specs: {},
       unparsed_spec_segments: ['红色', '9寸'],
     });
+  });
+
+  it('parses mixed colon and arrow key-value text', () => {
+    expect(
+      parseSkuSpec({
+        raw_spec_text: '颜色:红色>尺码:M',
+        options: [],
+      }),
+    ).toEqual({
+      specs: { 颜色: '红色', 尺码: 'M' },
+      unparsed_spec_segments: [],
+    });
+  });
+});
+
+describe('source package value normalization', () => {
+  it('applies the raw weight floor centrally at exactly three', () => {
+    expect([0, 0.5, 1, 2.99, 3, 3.01].map(normalizeRawWeight)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      3,
+      3.01,
+    ]);
+  });
+
+  it('applies the same weight floor to the generated DEFAULT SKU', () => {
+    const skus = assembleCanonicalSkus({
+      skus: [],
+      packageInfo: [
+        {
+          skuId: '',
+          spec: '',
+          length: 10,
+          width: 10,
+          height: 10,
+          weight: 2.99,
+          volume: 1000,
+        },
+      ],
+      options: [],
+      priceMin: 10,
+      mainImage: null,
+    });
+
+    expect(skus[0]!.package).toMatchObject({
+      raw_weight: null,
+      weight_unit: 'unknown',
+    });
+  });
+
+  it('accepts only positive package dimensions and volume', () => {
+    expect([-1, 0, 0.01].map(normalizePositivePackageValue)).toEqual([
+      null,
+      null,
+      0.01,
+    ]);
   });
 });
 

@@ -16,10 +16,18 @@ export function analyzeSkuVariants(input: {
   const warnings: string[] = [];
 
   const missingPackages = input.skus
-    .filter((sku) => sku.package.matched_by === 'none' && packageHasNoFacts(sku))
+    .filter(packageHasNoFacts)
     .map((sku) => sku.source_sku_id);
   if (missingPackages.length > 0) {
     warnings.push(`Missing package data for SKU(s): ${missingPackages.join(', ')}.`);
+  }
+  const missingRawWeights = input.skus
+    .filter((sku) => sku.package.raw_weight === null)
+    .map((sku) => sku.source_sku_id);
+  if (missingRawWeights.length > 0) {
+    warnings.push(
+      `Missing valid package raw weight for SKU(s): ${missingRawWeights.join(', ')}.`,
+    );
   }
   const unparsed = input.skus
     .filter((sku) => sku.unparsed_spec_segments.length > 0)

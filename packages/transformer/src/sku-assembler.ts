@@ -8,6 +8,10 @@ import {
   parseSkuSpec,
   type SourceSkuOption,
 } from './sku-spec-parser.js';
+import {
+  normalizePositivePackageValue,
+  normalizeRawWeight,
+} from './package-value-normalizer.js';
 
 export interface SourceSkuForAssembly {
   skuId: string;
@@ -51,7 +55,7 @@ export function assembleCanonicalSkus(input: SkuAssemblyInput): CanonicalSkuV2[]
     });
     const sourcePackage = matchPackage(sourceSku, input.packageInfo);
     return {
-      source_sku_id: String(sourceSku.skuId),
+      source_sku_id: String(sourceSku.skuId ?? '').trim(),
       raw_spec_text: sourceSku.specs,
       specs: parsed.specs,
       unparsed_spec_segments: parsed.unparsed_spec_segments,
@@ -110,13 +114,14 @@ function toCanonicalPackage(
   input: SourcePackageForAssembly,
   matchedBy: CanonicalSkuPackageV2['matched_by'],
 ): CanonicalSkuPackageV2 {
+  const rawWeight = normalizeRawWeight(input.weight);
   return {
-    length_cm: finiteOrNull(input.length),
-    width_cm: finiteOrNull(input.width),
-    height_cm: finiteOrNull(input.height),
-    raw_weight: finiteOrNull(input.weight),
-    weight_unit: normalizeWeightUnit(input.weightUnit),
-    volume_cm3: finiteOrNull(input.volume),
+    length_cm: normalizePositivePackageValue(input.length),
+    width_cm: normalizePositivePackageValue(input.width),
+    height_cm: normalizePositivePackageValue(input.height),
+    raw_weight: rawWeight,
+    weight_unit: rawWeight === null ? 'unknown' : normalizeWeightUnit(input.weightUnit),
+    volume_cm3: normalizePositivePackageValue(input.volume),
     source: '1688',
     matched_by: matchedBy,
   };

@@ -2,6 +2,7 @@ import type {
   CanonicalSkuV2,
   SkuAnalysisV2,
 } from '../../contracts/src/canonical-product-v2.js';
+import { buildSkuRecordKeys } from './sku-identifier.js';
 
 const BASE_COMPARISON_FIELDS = [
   'price_cny',
@@ -32,17 +33,19 @@ export function compareSkuFields(
   const commonFields: Record<string, unknown> = {};
   const varyingFields: SkuAnalysisV2['varying_fields'] = [];
   const missingFields: SkuAnalysisV2['missing_fields'] = [];
+  const skuRecordKeys = buildSkuRecordKeys(skus);
 
   for (const field of fields) {
     const valuesBySku: Record<string, unknown> = {};
+    const values: unknown[] = [];
     const missingSkuIds: string[] = [];
-    for (const sku of skus) {
+    skus.forEach((sku, index) => {
       const value = readField(sku, field);
-      valuesBySku[sku.source_sku_id] = value;
+      values.push(value);
+      valuesBySku[skuRecordKeys[index]!] = value;
       if (isMissing(field, value)) missingSkuIds.push(sku.source_sku_id);
-    }
+    });
 
-    const values = Object.values(valuesBySku);
     const first = values[0];
     const allEqual = values.length > 0 && values.every((value) => Object.is(value, first));
     if (allEqual && !isMissing(field, first)) {
@@ -56,7 +59,7 @@ export function compareSkuFields(
   }
 
   const packageMissing = skus
-    .filter((sku) => sku.package.matched_by === 'none' && packageHasNoFacts(sku))
+    .filter(packageHasNoFacts)
     .map((sku) => sku.source_sku_id);
   if (packageMissing.length > 0) {
     missingFields.unshift({ field: 'package', sku_ids: packageMissing });

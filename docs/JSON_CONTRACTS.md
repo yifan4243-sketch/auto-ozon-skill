@@ -80,7 +80,10 @@ Every `CanonicalSkuV2` retains its own price, multi-price, supplier stock,
 sale count, image, parsed source specifications, unparsed specification
 segments, and package object. Package dimensions and raw weight are never
 promoted out of the SKU. `weight_unit` is `"g"`, `"kg"`, or `"unknown"` and
-is not inferred from the numeric weight.
+is not inferred from the numeric weight. A raw source weight below `3` is not
+considered valid package weight and is stored as `null` with unit `"unknown"`.
+Package length, width, height, and volume must be positive; zero, negative, or
+non-finite values are stored as `null`.
 
 `sku_analysis` is a non-destructive summary containing:
 
@@ -95,3 +98,8 @@ Common values remain present on every item in `skus`; the summary never removes
 source facts. The contract contains no Ozon category IDs, Ozon attribute IDs,
 Russian content, shipping or sale-price calculations, Agent output, Ozon draft,
 or final `items[]` request.
+
+Source SKU IDs are validated before the product can be considered usable. Empty
+or duplicate IDs add validation errors and block the product. For an invalid ID
+set, `values_by_sku` uses deterministic positional suffixes so no comparison
+value can be overwritten silently.

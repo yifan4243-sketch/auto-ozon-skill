@@ -68,6 +68,13 @@ Package arrays are never joined by index, and one SKU's package is never copied
 to another SKU. A no-SKU offer produces one `DEFAULT` SKU; a real single SKU
 keeps its source ID.
 
+After matching, an empty package record is still reported as missing. Raw weight
+must be at least `3` to be retained; smaller values become `null` without unit
+conversion. Package length, width, height, and volume must be positive. Empty or
+duplicate source SKU IDs are validation errors and block the V2 product; field
+comparison uses collision-free positional keys so invalid IDs cannot overwrite
+one another in `values_by_sku`.
+
 Specification parsing uses only structured source facts, known 1688 option
 names and values, and explicit key/value syntax. Ambiguous text is kept in
 `raw_spec_text` and `unparsed_spec_segments`; the transformer does not invent

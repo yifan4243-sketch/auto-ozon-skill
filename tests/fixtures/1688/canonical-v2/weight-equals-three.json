@@ -1,0 +1,12 @@
+{
+  "offer": {
+    "offerId": "200000017",
+    "options": [{ "prop": "规格", "values": [{ "name": "边界重量", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "weight-3", "specs": "边界重量", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": [
+      { "skuId": "weight-3", "spec": "边界重量", "length": 10, "width": 10, "height": 10, "weight": 3, "volume": 1000 }
+    ]
+  }
+}

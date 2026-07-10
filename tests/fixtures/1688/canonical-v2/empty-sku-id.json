@@ -1,0 +1,11 @@
+{
+  "offer": {
+    "offerId": "200000013",
+    "options": [{ "prop": "规格", "values": [{ "name": "空ID款", "imageUrl": null }, { "name": "正常款", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "", "specs": "空ID款", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "valid-id", "specs": "正常款", "price": 11, "multiPrice": null, "stock": 6, "saleCount": 2, "image": null }
+    ],
+    "packageInfo": []
+  }
+}

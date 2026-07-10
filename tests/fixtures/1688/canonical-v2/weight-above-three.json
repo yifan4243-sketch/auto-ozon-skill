@@ -1,0 +1,12 @@
+{
+  "offer": {
+    "offerId": "200000018",
+    "options": [{ "prop": "规格", "values": [{ "name": "有效重量", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "weight-above-3", "specs": "有效重量", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": [
+      { "skuId": "weight-above-3", "spec": "有效重量", "length": 10, "width": 10, "height": 10, "weight": 3.01, "volume": 1000 }
+    ]
+  }
+}
