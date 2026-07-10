@@ -53,7 +53,7 @@ Not supported: `serve`, background management, `research`, `compare`, `supplier`
 
 ## Complete PCDCK/ozon-mcp bridge
 
-The TypeScript adapter exposes all 15 MCP tools provided by `vendor/ozon-mcp`:
+The TypeScript adapter provides wrappers for all 15 MCP tools defined by `vendor/ozon-mcp`:
 
 - `ozon_call_method`
 - `ozon_fetch_all`
@@ -70,6 +70,12 @@ The TypeScript adapter exposes all 15 MCP tools provided by `vendor/ozon-mcp`:
 - `ozon_list_methods_for_subscription`
 - `ozon_get_swagger_meta`
 - `ozon_get_error_catalog`
+
+Runtime registration follows the upstream server:
+
+- 12 discovery, workflow, graph, and reference tools are always available.
+- `ozon_call_method` and `ozon_fetch_all` are available when Seller or Performance credentials are configured.
+- `ozon_get_subscription_status` is available only when Seller credentials are configured.
 
 The Python MCP implementation remains in the external `vendor/ozon-mcp` submodule and is not copied into TypeScript.
 
