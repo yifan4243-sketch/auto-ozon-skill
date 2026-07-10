@@ -26,6 +26,8 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
   const errors = [];
   const nextActions = new Set<string>();
   const credentials = credentialStatus();
+  const hasExecutionCredentials =
+    credentials.sellerCredentials || credentials.performanceCredentials;
 
   const vendorExists = directoryExists(vendorDir);
   checks.push({
@@ -116,8 +118,23 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
 
   addToolCheck(checks, 'discovery tools', discoveryTools, toolsListOk);
   addToolCheck(checks, 'reference tools', referenceTools, toolsListOk);
-  addToolCheck(checks, 'execution tools', executionTools, toolsListOk, 'warning');
   addToolCheck(checks, 'full bridge core tools', fullBridgeCoreTools, toolsListOk);
+
+  checks.push({
+    name: 'execution tools',
+    status: executionTools.available
+      ? 'ok'
+      : toolsListOk && hasExecutionCredentials
+        ? 'error'
+        : toolsListOk
+          ? 'skipped'
+          : 'skipped',
+    message: executionTools.available
+      ? 'Execution tools are available.'
+      : hasExecutionCredentials
+        ? `Missing: ${executionTools.missing.join(', ')}`
+        : 'No Seller or Performance credentials are configured; execution tools are expected to be absent.',
+  });
 
   checks.push({
     name: 'credential-dependent tools',
@@ -138,7 +155,14 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
   if (toolsListOk && !fullBridgeCoreTools.available) {
     errors.push({
       code: 'OZON_FULL_BRIDGE_TOOLS_MISSING',
-      message: `Required Ozon MCP tools are missing: ${fullBridgeCoreTools.missing.join(', ')}`,
+      message: `Required Ozon MCP core tools are missing: ${fullBridgeCoreTools.missing.join(', ')}`,
+      recoverable: true,
+    });
+  }
+  if (toolsListOk && hasExecutionCredentials && !executionTools.available) {
+    errors.push({
+      code: 'OZON_EXECUTION_TOOLS_MISSING',
+      message: `Credential-enabled Ozon MCP execution tools are missing: ${executionTools.missing.join(', ')}`,
       recoverable: true,
     });
   }
@@ -150,11 +174,11 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
     });
   }
 
-  if (toolsListOk && fullBridgeCoreTools.available && !credentials.sellerCredentials) {
+  if (toolsListOk && fullBridgeCoreTools.available && !hasExecutionCredentials) {
     warnings.push({
       code: 'OZON_CREDENTIALS_MISSING',
       message:
-        'The complete offline/discovery bridge is available; live account calls and subscription status need seller credentials.',
+        'The complete offline/discovery bridge is available; live account calls need Seller or Performance credentials.',
     });
     EXECUTION_TOOLS_NEXT_ACTIONS.forEach((action) => nextActions.add(action));
   }
