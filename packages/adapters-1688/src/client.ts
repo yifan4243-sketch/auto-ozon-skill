@@ -137,9 +137,11 @@ export async function search1688ByKeyword(
       { keyword, max: candidateMax, sort, filters, headed: input.headed },
       { headed: input.headed, profile: input.profile },
     );
-    const offerIds = search.offers
-      .map((offer) => String(offer.offerId ?? '').trim())
-      .filter((offerId) => /^\d+$/.test(offerId) && offerId !== '0');
+    const offerIds = normalizeOfferIds(
+      search.offers
+        .map((offer) => String(offer.offerId ?? '').trim())
+        .filter((offerId) => /^\d+$/.test(offerId) && offerId !== '0'),
+    );
 
     if (skuMax === undefined) {
       const details = await collectOffersBatch(offerIds, input);
@@ -282,6 +284,7 @@ async function collectKeywordOffersUntilSkuTarget(input: {
 
       items.push(canonical);
     } catch (error) {
+      if (isTerminalOfferError(error)) throw error;
       failures.push(toOfferFailure(offerId, error));
     }
   }
@@ -389,6 +392,24 @@ function sanitiseDeepCollectMessage(message: string): string {
     return '1688 触发滑块验证，请使用 --headed 手动处理。';
   }
   return message;
+}
+
+const TERMINAL_OFFER_ERROR_CODES = new Set([
+  'BROWSER_CONTEXT_BROKEN',
+  'CANCELED',
+  'CHROMIUM_MISSING',
+  'LOCK_BUSY',
+  'NOT_LOGGED_IN',
+  'RATE_LIMITED',
+  'RISK_CONTROL',
+  'SITE_CHANGED',
+]);
+
+function isTerminalOfferError(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code;
+  if (typeof code === 'string' && TERMINAL_OFFER_ERROR_CODES.has(code)) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /x5secdata|punish|captcha|verify|nocaptcha|滑块|验证码/i.test(message);
 }
 
 async function wrapCommand<T>(
