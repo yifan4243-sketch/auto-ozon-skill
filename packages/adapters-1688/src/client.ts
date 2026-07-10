@@ -70,9 +70,18 @@ interface SkuMaxFilteredOffer {
 
 interface SkuMaxFilteringSummary {
   skuMax: number;
+  targetMax: number;
+  candidateMax: number;
   totalBeforeSkuFilter: number;
+  totalEligibleBeforeTargetLimit: number;
   totalAfterSkuFilter: number;
   filtered: SkuMaxFilteredOffer[];
+}
+
+interface SkuMaxFilterOptions {
+  skuMax: number;
+  targetMax: number;
+  candidateMax: number;
 }
 
 export async function login1688(input: LoginInput): Promise<CommandResult<unknown>> {
@@ -108,9 +117,10 @@ export async function search1688ByKeyword(
   return wrapCommand('source.keyword', async () => {
     const keyword = input.keyword.trim();
     if (!keyword) throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
-    const max = clampPositive(input.max ?? 20, 1, 600);
+    const targetMax = clampPositive(input.max ?? 20, 1, 600);
     const sort = normalizeSearchSort(input.sort);
     const skuMax = normalizeSkuMax(input.skuMax);
+    const candidateMax = skuMax === undefined ? targetMax : calculateSkuMaxCandidateMax(targetMax);
     const filters = normalizeFilters({
       priceMin: input.filters?.priceMin ?? null,
       priceMax: input.filters?.priceMax ?? null,
@@ -122,7 +132,7 @@ export async function search1688ByKeyword(
     });
     const search = await dispatch<SearchArgs, SearchResult>(
       'search',
-      { keyword, max, sort, filters, headed: input.headed },
+      { keyword, max: candidateMax, sort, filters, headed: input.headed },
       { headed: input.headed, profile: input.profile },
     );
     const offerIds = search.offers
@@ -130,7 +140,8 @@ export async function search1688ByKeyword(
       .filter((offerId) => /^\d+$/.test(offerId) && offerId !== '0');
     const details = await collectOffersBatch(offerIds, input);
     const result = searchToSourcingResult({ query: keyword, search, details });
-    return applySkuMaxFilter(result, skuMax);
+    if (skuMax === undefined) return result;
+    return applySkuMaxFilter(result, { skuMax, targetMax, candidateMax });
   });
 }
 
@@ -205,26 +216,25 @@ function offersToSourcingResult(
   };
 }
 
-function applySkuMaxFilter(result: SourcingResult, skuMax?: number): SourcingResult {
-  if (skuMax === undefined) return result;
-
-  const kept: SourcingResult['items'] = [];
+function applySkuMaxFilter(result: SourcingResult, options: SkuMaxFilterOptions): SourcingResult {
+  const eligible: SourcingResult['items'] = [];
   const filtered: SkuMaxFilteredOffer[] = [];
 
   for (const item of result.items) {
     const skuCount = getSkuCount(item);
-    if (skuCount <= skuMax) {
-      kept.push(item);
+    if (skuCount <= options.skuMax) {
+      eligible.push(item);
       continue;
     }
     filtered.push({
       offerId: item.source.offerId,
       reason: 'SKU_COUNT_EXCEEDED',
       skuCount,
-      skuMax,
+      skuMax: options.skuMax,
     });
   }
 
+  const kept = eligible.slice(0, options.targetMax);
   const keptOfferIds = new Set(kept.map((item) => item.source.offerId));
 
   return {
@@ -234,8 +244,11 @@ function applySkuMaxFilter(result: SourcingResult, skuMax?: number): SourcingRes
     success: kept.length,
     items: kept,
     raw: withSkuMaxFiltering(result.raw, {
-      skuMax,
+      skuMax: options.skuMax,
+      targetMax: options.targetMax,
+      candidateMax: options.candidateMax,
       totalBeforeSkuFilter: result.items.length,
+      totalEligibleBeforeTargetLimit: eligible.length,
       totalAfterSkuFilter: kept.length,
       filtered,
     }),
@@ -275,6 +288,10 @@ function normalizeSkuMax(value: number | undefined): number | undefined {
     throw new CliError(2, 'BAD_INPUT', '--sku-max must be greater than or equal to 1.');
   }
   return normalized;
+}
+
+function calculateSkuMaxCandidateMax(targetMax: number): number {
+  return clampPositive(targetMax * 10, targetMax, 600);
 }
 
 async function wrapCommand<T>(
