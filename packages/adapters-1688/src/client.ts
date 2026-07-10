@@ -13,7 +13,10 @@ import type { SimilarArgs, SimilarResult } from './engine/commands/similar.js';
 import {
   collectOffersBatch,
   normalizeOfferIds,
+  type OfferArgs,
   type OfferBatchResult,
+  type OfferFailure,
+  type OfferResult,
 } from './engine/commands/offers.js';
 import {
   normalizeFilters,
@@ -68,20 +71,19 @@ interface SkuMaxFilteredOffer {
   skuMax: number;
 }
 
+type SkuMaxStopReason = 'TARGET_REACHED' | 'CANDIDATE_EXHAUSTED';
+
 interface SkuMaxFilteringSummary {
   skuMax: number;
   targetMax: number;
   candidateMax: number;
+  checkedCandidates: number;
+  stoppedEarly: boolean;
+  stopReason: SkuMaxStopReason;
   totalBeforeSkuFilter: number;
   totalEligibleBeforeTargetLimit: number;
   totalAfterSkuFilter: number;
   filtered: SkuMaxFilteredOffer[];
-}
-
-interface SkuMaxFilterOptions {
-  skuMax: number;
-  targetMax: number;
-  candidateMax: number;
 }
 
 export async function login1688(input: LoginInput): Promise<CommandResult<unknown>> {
@@ -138,10 +140,23 @@ export async function search1688ByKeyword(
     const offerIds = search.offers
       .map((offer) => String(offer.offerId ?? '').trim())
       .filter((offerId) => /^\d+$/.test(offerId) && offerId !== '0');
-    const details = await collectOffersBatch(offerIds, input);
-    const result = searchToSourcingResult({ query: keyword, search, details });
-    if (skuMax === undefined) return result;
-    return applySkuMaxFilter(result, { skuMax, targetMax, candidateMax });
+
+    if (skuMax === undefined) {
+      const details = await collectOffersBatch(offerIds, input);
+      return searchToSourcingResult({ query: keyword, search, details });
+    }
+
+    return collectKeywordOffersUntilSkuTarget({
+      query: keyword,
+      search,
+      offerIds,
+      filters,
+      profile: input.profile,
+      headed: input.headed,
+      skuMax,
+      targetMax,
+      candidateMax,
+    });
   });
 }
 
@@ -216,42 +231,110 @@ function offersToSourcingResult(
   };
 }
 
-function applySkuMaxFilter(result: SourcingResult, options: SkuMaxFilterOptions): SourcingResult {
-  const eligible: SourcingResult['items'] = [];
+async function collectKeywordOffersUntilSkuTarget(input: {
+  query: string;
+  search: SearchResult;
+  offerIds: string[];
+  filters: SearchFilterSummary;
+  profile?: string;
+  headed?: boolean;
+  skuMax: number;
+  targetMax: number;
+  candidateMax: number;
+}): Promise<SourcingResult> {
+  const candidateOfferIds = input.offerIds.slice(0, input.candidateMax);
+  const checkedOfferIds: string[] = [];
+  const collectedOffers: OfferResult[] = [];
+  const items: SourcingResult['items'] = [];
   const filtered: SkuMaxFilteredOffer[] = [];
+  const failures: OfferFailure[] = [];
 
-  for (const item of result.items) {
-    const skuCount = getSkuCount(item);
-    if (skuCount <= options.skuMax) {
-      eligible.push(item);
+  for (let i = 0; i < candidateOfferIds.length && items.length < input.targetMax; i++) {
+    const offerId = candidateOfferIds[i]!;
+    checkedOfferIds.push(offerId);
+
+    if (!/^\d+$/.test(offerId)) {
+      failures.push({ offerId, code: 'BAD_INPUT', message: 'Invalid offerId' });
       continue;
     }
-    filtered.push({
-      offerId: item.source.offerId,
-      reason: 'SKU_COUNT_EXCEEDED',
-      skuCount,
-      skuMax: options.skuMax,
-    });
+
+    process.stderr.write(`[${i + 1}/${candidateOfferIds.length}] collecting offerId ${offerId}\n`);
+
+    try {
+      const offer = await dispatch<OfferArgs, OfferResult>(
+        'offers',
+        { offerId, headed: input.headed },
+        { headed: input.headed, profile: input.profile },
+      );
+      collectedOffers.push(offer);
+
+      const canonical = offerToCanonical(offer, 'keyword');
+      const skuCount = getSkuCount(canonical);
+      if (skuCount > input.skuMax) {
+        filtered.push({
+          offerId: canonical.source.offerId,
+          reason: 'SKU_COUNT_EXCEEDED',
+          skuCount,
+          skuMax: input.skuMax,
+        });
+        continue;
+      }
+
+      items.push(canonical);
+    } catch (error) {
+      failures.push(toOfferFailure(offerId, error));
+    }
   }
 
-  const kept = eligible.slice(0, options.targetMax);
-  const keptOfferIds = new Set(kept.map((item) => item.source.offerId));
+  const stopReason: SkuMaxStopReason =
+    items.length >= input.targetMax ? 'TARGET_REACHED' : 'CANDIDATE_EXHAUSTED';
+  const details: OfferBatchResult = {
+    mode: 'offers',
+    total: checkedOfferIds.length,
+    success: collectedOffers.length,
+    failed: failures.length,
+    offerIds: checkedOfferIds,
+    offers: collectedOffers,
+    failures,
+  };
 
   return {
-    ...result,
-    offerIds: result.offerIds?.filter((offerId) => keptOfferIds.has(String(offerId))),
-    total: kept.length + result.failed,
-    success: kept.length,
-    items: kept,
-    raw: withSkuMaxFiltering(result.raw, {
-      skuMax: options.skuMax,
-      targetMax: options.targetMax,
-      candidateMax: options.candidateMax,
-      totalBeforeSkuFilter: result.items.length,
-      totalEligibleBeforeTargetLimit: eligible.length,
-      totalAfterSkuFilter: kept.length,
-      filtered,
-    }),
+    mode: 'keyword',
+    query: input.query,
+    offerIds: items.map((item) => item.source.offerId),
+    total: items.length + failures.length,
+    success: items.length,
+    failed: failures.length,
+    items,
+    raw: withSkuMaxFiltering(
+      {
+        keyword: input.search.keyword,
+        sort: input.search.sort,
+        filters: input.filters,
+        totalBeforeFilter: input.search.totalBeforeFilter,
+        total: input.search.total,
+        offers: input.search.offers,
+        details,
+      },
+      {
+        skuMax: input.skuMax,
+        targetMax: input.targetMax,
+        candidateMax: input.candidateMax,
+        checkedCandidates: checkedOfferIds.length,
+        stoppedEarly: stopReason === 'TARGET_REACHED' && checkedOfferIds.length < candidateOfferIds.length,
+        stopReason,
+        totalBeforeSkuFilter: collectedOffers.length,
+        totalEligibleBeforeTargetLimit: items.length,
+        totalAfterSkuFilter: items.length,
+        filtered,
+      },
+    ),
+    failures: failures.map((failure) => ({
+      offerId: failure.offerId,
+      code: failure.code,
+      message: failure.message,
+      recoverable: failure.code !== 'BAD_INPUT',
+    })),
   };
 }
 
@@ -292,6 +375,22 @@ function normalizeSkuMax(value: number | undefined): number | undefined {
 
 function calculateSkuMaxCandidateMax(targetMax: number): number {
   return clampPositive(targetMax * 10, targetMax, 600);
+}
+
+function toOfferFailure(offerId: string, error: unknown): OfferFailure {
+  const err = error as Error & { code?: string };
+  return {
+    offerId,
+    code: err.code || 'DEEP_COLLECT_FAILED',
+    message: sanitiseDeepCollectMessage(err.message || String(error)),
+  };
+}
+
+function sanitiseDeepCollectMessage(message: string): string {
+  if (/x5secdata|punish|captcha|verify|nocaptcha/i.test(message)) {
+    return '1688 触发滑块验证，请使用 --headed 手动处理。';
+  }
+  return message;
 }
 
 async function wrapCommand<T>(
