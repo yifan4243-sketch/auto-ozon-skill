@@ -31,6 +31,7 @@ export async function ozonCallMethod(
       const result = await client.callTool(OZON_MCP_TOOLS.callMethod, {
         operation_id: options.operationId,
         params: options.params,
+        ...(options.cabinetTier === undefined ? {} : { cabinet_tier: options.cabinetTier }),
       });
       const parsed = parseToolResult(result);
       if (parsed.isError || isOzonErrorPayload(parsed.data)) {

@@ -1,6 +1,6 @@
 # auto-ozon-skill
 
-TypeScript monorepo for Ozon seller automation. The current implemented slice is the 1688 sourcing adapter.
+TypeScript monorepo for Ozon seller automation. The implemented foundation currently includes the 1688 sourcing adapter and a complete TypeScript bridge to `PCDCK/ozon-mcp`.
 
 ## 1688 sourcing
 
@@ -18,7 +18,15 @@ Not supported: cart, checkout, order, seller chat, supplier research, research, 
 
 ## Ozon MCP bridge
 
-Ozon API discovery and read-only calls are bridged through the external [PCDCK/ozon-mcp](https://github.com/PCDCK/ozon-mcp) MCP server in `vendor/ozon-mcp`. The Python engine remains a vendor submodule and is not copied into `packages/adapters-ozon/src`.
+Ozon API discovery and guarded read-only calls are bridged through the external [PCDCK/ozon-mcp](https://github.com/PCDCK/ozon-mcp) MCP server in `vendor/ozon-mcp`. The Python engine remains a vendor submodule and is not copied into `packages/adapters-ozon/src`.
+
+The TypeScript adapter provides wrappers and CLI commands for all 15 MCP tools: method and section discovery, examples, related methods, workflows, rate limits, error catalog, Swagger metadata, subscription information, pagination, and generic API calls.
+
+Runtime availability follows the upstream MCP server:
+
+- 12 discovery/reference tools work without Ozon credentials.
+- `ozon_call_method` and `ozon_fetch_all` appear when Seller or Performance credentials are configured.
+- `ozon_get_subscription_status` appears when Seller credentials are configured.
 
 ```bash
 git submodule update --init --recursive
@@ -27,11 +35,13 @@ uv sync
 uv run ozon-mcp --help
 cd ../..
 pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
-pnpm --filter @auto-ozon/cli dev -- ozon methods search "product list" --json --pretty
-pnpm --filter @auto-ozon/cli dev -- ozon methods describe ProductAPI_GetProductList --json --pretty
+pnpm --filter @auto-ozon/cli dev -- ozon reference swagger-meta --json --pretty
+pnpm --filter @auto-ozon/cli dev -- ozon methods search "product import" --api seller --json --pretty
+pnpm --filter @auto-ozon/cli dev -- ozon methods describe ProductAPI_ImportProductsV3 --json --pretty
+pnpm --filter @auto-ozon/cli dev -- ozon methods examples ProductAPI_ImportProductsV3 --json --pretty
 ```
 
-The current Ozon integration phase is read-only. `ozon call` and `ozon fetch-all` are locally blocked for `write` and `destructive` methods.
+The current Ozon integration phase is read-only. `ozon call` and `ozon fetch-all` describe the target method first and locally block `write` and `destructive` methods with `OZON_WRITE_BLOCKED`.
 
 ## Commands
 
@@ -43,6 +53,8 @@ pnpm --filter @auto-ozon/cli dev -- source offers 123456789 987654321 --json
 pnpm --filter @auto-ozon/cli dev -- source similar 123456789 --json
 pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
 ```
+
+See `docs/COMMANDS.md` for the full CLI surface.
 
 ## Safety
 

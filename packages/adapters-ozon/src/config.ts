@@ -2,24 +2,54 @@ import type { ErrorObject, WarningObject } from '../../contracts/src/command-res
 import type { OzonCredentialsStatus, OzonToolAvailability } from './types.js';
 
 export const OZON_MCP_TOOLS = {
-  searchMethods: 'ozon_search_methods',
-  describeMethod: 'ozon_describe_method',
   callMethod: 'ozon_call_method',
   fetchAll: 'ozon_fetch_all',
+  describeMethod: 'ozon_describe_method',
+  searchMethods: 'ozon_search_methods',
+  listSections: 'ozon_list_sections',
+  getSection: 'ozon_get_section',
   listWorkflows: 'ozon_list_workflows',
   getWorkflow: 'ozon_get_workflow',
+  getRelatedMethods: 'ozon_get_related_methods',
+  getExamples: 'ozon_get_examples',
+  getRateLimits: 'ozon_get_rate_limits',
+  getSubscriptionStatus: 'ozon_get_subscription_status',
+  listMethodsForSubscription: 'ozon_list_methods_for_subscription',
+  getSwaggerMeta: 'ozon_get_swagger_meta',
+  getErrorCatalog: 'ozon_get_error_catalog',
 } as const;
 
 export const DISCOVERY_TOOLS = [
   OZON_MCP_TOOLS.searchMethods,
   OZON_MCP_TOOLS.describeMethod,
+  OZON_MCP_TOOLS.listSections,
+  OZON_MCP_TOOLS.getSection,
+  OZON_MCP_TOOLS.getRelatedMethods,
   OZON_MCP_TOOLS.listWorkflows,
   OZON_MCP_TOOLS.getWorkflow,
+] as const;
+
+export const REFERENCE_TOOLS = [
+  OZON_MCP_TOOLS.getExamples,
+  OZON_MCP_TOOLS.getRateLimits,
+  OZON_MCP_TOOLS.listMethodsForSubscription,
+  OZON_MCP_TOOLS.getSwaggerMeta,
+  OZON_MCP_TOOLS.getErrorCatalog,
 ] as const;
 
 export const EXECUTION_TOOLS = [
   OZON_MCP_TOOLS.callMethod,
   OZON_MCP_TOOLS.fetchAll,
+] as const;
+
+export const CREDENTIAL_TOOLS = [OZON_MCP_TOOLS.getSubscriptionStatus] as const;
+
+// PCDCK/ozon-mcp always registers discovery, workflow, graph, and reference tools.
+// Execution tools are registered only when Seller or Performance credentials exist;
+// subscription status is registered only when Seller credentials exist.
+export const FULL_BRIDGE_CORE_TOOLS = [
+  ...DISCOVERY_TOOLS,
+  ...REFERENCE_TOOLS,
 ] as const;
 
 export const SECRET_ENV_KEYS = [
@@ -43,13 +73,13 @@ export const UV_NEXT_ACTIONS = [
 ];
 
 export const EXECUTION_TOOLS_NEXT_ACTIONS = [
-  'Configure OZON_CLIENT_ID and OZON_API_KEY.',
+  'Configure Seller credentials (OZON_CLIENT_ID + OZON_API_KEY) or Performance credentials (OZON_PERFORMANCE_CLIENT_ID + OZON_PERFORMANCE_CLIENT_SECRET).',
   'Run auto-ozon ozon doctor --json --pretty.',
 ];
 
 export const WRITE_BLOCKED_NEXT_ACTIONS = [
-  'Use method search/describe for now.',
-  'Implement publish preview/confirm flow before enabling write operations.',
+  'Use method search/describe/examples to inspect the write method.',
+  'Keep write operations behind a separate preview and explicit confirmation flow.',
 ];
 
 export function credentialStatus(env = process.env): OzonCredentialsStatus {
@@ -145,7 +175,8 @@ export function executionToolsDisabled(command: string) {
     command,
     {
       code: 'OZON_EXECUTION_TOOLS_DISABLED',
-      message: 'Ozon execution tools are disabled. Configure OZON_CLIENT_ID and OZON_API_KEY.',
+      message:
+        'Ozon execution tools are disabled. Configure Seller or Performance credentials.',
       recoverable: true,
     },
     EXECUTION_TOOLS_NEXT_ACTIONS,
@@ -158,7 +189,7 @@ export function writeBlocked(command: string) {
     {
       code: 'OZON_WRITE_BLOCKED',
       message:
-        'This Ozon method modifies data and is blocked in the current read-only integration phase.',
+        'This Ozon method modifies data and is blocked by the local read-only bridge policy.',
       recoverable: true,
     },
     WRITE_BLOCKED_NEXT_ACTIONS,

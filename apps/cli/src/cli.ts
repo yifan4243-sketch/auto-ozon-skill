@@ -9,15 +9,6 @@ import {
   search1688ByImage,
   search1688ByKeyword,
 } from '../../../packages/adapters-1688/src/client.js';
-import {
-  ozonCallMethod,
-  ozonDescribeMethod,
-  ozonDoctor,
-  ozonFetchAll,
-  ozonGetWorkflow,
-  ozonListWorkflows,
-  ozonSearchMethods,
-} from '../../../packages/adapters-ozon/src/client.js';
 import { CliError } from '../../../packages/adapters-1688/src/engine/io/errors.js';
 import {
   currentCommandName,
@@ -27,6 +18,7 @@ import {
   makeEnvelope,
   setOutputFlags,
 } from '../../../packages/adapters-1688/src/engine/io/output.js';
+import { registerOzonCommands } from './commands/ozon.js';
 
 export function buildProgram(): Command {
   const program = new Command();
@@ -219,90 +211,7 @@ export function buildProgram(): Command {
       );
     });
 
-  const ozon = program
-    .command('ozon')
-    .description('External PCDCK/ozon-mcp bridge for Ozon discovery and read-only calls');
-
-  ozon
-    .command('doctor')
-    .description('Check vendor/ozon-mcp, uv, MCP startup, tools, and credentials')
-    .action(async () => {
-      emitCommandResult(await ozonDoctor());
-    });
-
-  const ozonMethods = ozon.command('methods').description('Search and describe Ozon API methods');
-  ozonMethods
-    .command('search')
-    .description('Search PCDCK Ozon MCP methods')
-    .argument('<query>', 'Search query')
-    .option('--limit <n>', 'Maximum number of methods', '10')
-    .action(async (query, opts) => {
-      emitCommandResult(
-        await ozonSearchMethods({
-          query,
-          limit: parseNumber(opts.limit),
-        }),
-      );
-    });
-  ozonMethods
-    .command('describe')
-    .description('Describe one Ozon API method')
-    .argument('<operationId>', 'Ozon operationId')
-    .action(async (operationId) => {
-      emitCommandResult(await ozonDescribeMethod({ operationId }));
-    });
-
-  ozon
-    .command('call')
-    .description('Call a read-only Ozon method through PCDCK/ozon-mcp')
-    .argument('<operationId>', 'Ozon operationId')
-    .option('--params <json>', 'JSON params object', '{}')
-    .action(async (operationId, opts) => {
-      const params = parseJsonParams(opts.params, 'ozon.call');
-      if (!params.ok) {
-        emitCommandResult(params.result);
-        return;
-      }
-      emitCommandResult(await ozonCallMethod({ operationId, params: params.value }));
-    });
-
-  ozon
-    .command('fetch-all')
-    .description('Fetch all pages for a read-only paginated Ozon method')
-    .argument('<operationId>', 'Ozon operationId')
-    .option('--params <json>', 'JSON params object', '{}')
-    .option('--max-items <n>', 'Maximum items to fetch', '10000')
-    .action(async (operationId, opts) => {
-      const params = parseJsonParams(opts.params, 'ozon.fetchAll');
-      if (!params.ok) {
-        emitCommandResult(params.result);
-        return;
-      }
-      emitCommandResult(
-        await ozonFetchAll({
-          operationId,
-          params: params.value,
-          maxItems: parseNumber(opts.maxItems),
-        }),
-      );
-    });
-
-  const ozonWorkflows = ozon
-    .command('workflows')
-    .description('List and inspect curated PCDCK Ozon MCP workflows');
-  ozonWorkflows
-    .command('list')
-    .description('List Ozon MCP workflows')
-    .action(async () => {
-      emitCommandResult(await ozonListWorkflows());
-    });
-  ozonWorkflows
-    .command('get')
-    .description('Get one Ozon MCP workflow')
-    .argument('<name>', 'Workflow name')
-    .action(async (name) => {
-      emitCommandResult(await ozonGetWorkflow({ name }));
-    });
+  registerOzonCommands(program, emitCommandResult, parseJsonParams, parseNumber);
 
   addOutputFlagsToAll(program);
   program.hook('preAction', (_thisCmd, actionCmd) => {
