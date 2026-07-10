@@ -302,7 +302,7 @@ async function collectKeywordOffersUntilSkuTarget(input: {
     mode: 'keyword',
     query: input.query,
     offerIds: items.map((item) => item.source.offerId),
-    total: items.length + failures.length,
+    total: checkedOfferIds.length,
     success: items.length,
     failed: failures.length,
     items,
@@ -365,12 +365,10 @@ function withSkuMaxFiltering(raw: unknown, skuMaxSummary: SkuMaxFilteringSummary
 
 function normalizeSkuMax(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
-  if (!Number.isFinite(value)) throw new CliError(2, 'BAD_INPUT', '--sku-max must be a number.');
-  const normalized = Math.trunc(value);
-  if (normalized < 1) {
-    throw new CliError(2, 'BAD_INPUT', '--sku-max must be greater than or equal to 1.');
+  if (!Number.isInteger(value) || value < 1) {
+    throw new CliError(2, 'BAD_INPUT', '--sku-max must be a positive integer.');
   }
-  return normalized;
+  return value;
 }
 
 function calculateSkuMaxCandidateMax(targetMax: number): number {
