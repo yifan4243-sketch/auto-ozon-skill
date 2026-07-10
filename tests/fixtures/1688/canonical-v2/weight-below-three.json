@@ -1,0 +1,18 @@
+{
+  "offer": {
+    "offerId": "200000016",
+    "options": [{ "prop": "规格", "values": [{ "name": "w0", "imageUrl": null }, { "name": "w0.5", "imageUrl": null }, { "name": "w1", "imageUrl": null }, { "name": "w2.99", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "weight-0", "specs": "w0", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "weight-0.5", "specs": "w0.5", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "weight-1", "specs": "w1", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "weight-2.99", "specs": "w2.99", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": [
+      { "skuId": "weight-0", "spec": "w0", "length": 0, "width": -1, "height": 0, "weight": 0, "volume": -10 },
+      { "skuId": "weight-0.5", "spec": "w0.5", "length": 10, "width": 10, "height": 10, "weight": 0.5, "volume": 1000 },
+      { "skuId": "weight-1", "spec": "w1", "length": 10, "width": 10, "height": 10, "weight": 1, "volume": 1000 },
+      { "skuId": "weight-2.99", "spec": "w2.99", "length": 10, "width": 10, "height": 10, "weight": 2.99, "volume": 1000 }
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 export * from './client.js';
 export * from './mappers/offer-to-canonical.js';
+export * from './mappers/offer-to-canonical-v2.js';
 export * from './mappers/search-to-sourcing-result.js';
 export * from './mappers/image-search-to-sourcing-result.js';
 export * from './engine/commands/offers.js';

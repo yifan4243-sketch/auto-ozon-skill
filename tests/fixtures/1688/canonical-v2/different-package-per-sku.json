@@ -1,0 +1,14 @@
+{
+  "offer": {
+    "offerId": "200000006",
+    "options": [{ "prop": "规格", "values": [{ "name": "小号", "imageUrl": null }, { "name": "大号", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "small", "specs": "小号", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "large", "specs": "大号", "price": 15, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": [
+      { "skuId": "small", "spec": "小号", "length": 20, "width": 10, "height": 5, "weight": 300, "volume": 1000 },
+      { "skuId": "large", "spec": "大号", "length": 40, "width": 20, "height": 10, "weight": 900, "volume": 8000 }
+    ]
+  }
+}

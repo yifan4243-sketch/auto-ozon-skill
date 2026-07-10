@@ -18,7 +18,7 @@ interface CommandResult<T = unknown> {
 
 Errors are structured and mark recoverability.
 
-## CanonicalProduct
+## CanonicalProduct V1
 
 1688 detail results map to `CanonicalProduct` with:
 
@@ -48,3 +48,58 @@ interface SourcingResult {
 ```
 
 Partial detail failures remain in `failures`; successful products still appear in `items`.
+
+## CanonicalProductV2
+
+`CanonicalProductV2` is the source-fact contract for deterministic 1688 SKU
+normalization. Its JSON field names use English `snake_case`; Chinese text is
+preserved only in source values such as titles, attributes, option names, and
+option values.
+
+```ts
+interface CanonicalProductV2 {
+  schema_version: 2;
+  source: {
+    platform: "1688";
+    offer_id: string;
+    offer_url: string;
+    collected_at: string;
+    collection_method: "keyword" | "image" | "offers" | "similar";
+    detail_url: string | null;
+    source_category_id: string | null;
+  };
+  supplier: SupplierSourceFacts;
+  product: ProductSourceFacts;
+  skus: CanonicalSkuV2[];
+  sku_analysis: SkuAnalysisV2;
+  validation: ValidationReport;
+}
+```
+
+Every `CanonicalSkuV2` retains its own price, multi-price, supplier stock,
+sale count, image, parsed source specifications, unparsed specification
+segments, and package object. Package dimensions and raw weight are never
+promoted out of the SKU. `weight_unit` is `"g"`, `"kg"`, or `"unknown"` and
+is not inferred from the numeric weight. A raw source weight below `3` is not
+considered valid package weight and is stored as `null` with unit `"unknown"`.
+Package length, width, height, and volume must be positive; zero, negative, or
+non-finite values are stored as `null`.
+
+`sku_analysis` is a non-destructive summary containing:
+
+- whether source SKUs existed, whether the product is multi-SKU, and the
+  normalized SKU count;
+- common and varying values for price, multi-price, image, per-SKU package
+  fields, and source specification dimensions;
+- source variant dimensions and missing dimensions by SKU;
+- missing fields, duplicate complete specification combinations, and warnings.
+
+Common values remain present on every item in `skus`; the summary never removes
+source facts. The contract contains no Ozon category IDs, Ozon attribute IDs,
+Russian content, shipping or sale-price calculations, Agent output, Ozon draft,
+or final `items[]` request.
+
+Source SKU IDs are validated before the product can be considered usable. Empty
+or duplicate IDs add validation errors and block the product. For an invalid ID
+set, `values_by_sku` uses deterministic positional suffixes so no comparison
+value can be overwritten silently.

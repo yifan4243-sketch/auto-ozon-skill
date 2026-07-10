@@ -1,0 +1,14 @@
+{
+  "offer": {
+    "offerId": "200000005",
+    "options": [{ "prop": "颜色", "values": [{ "name": "红色", "imageUrl": null }, { "name": "蓝色", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "same-red", "specs": "红色", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "same-blue", "specs": "蓝色", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": [
+      { "skuId": "same-red", "spec": "红色", "length": 30, "width": 20, "height": 10, "weight": 500, "volume": 6000 },
+      { "skuId": "same-blue", "spec": "蓝色", "length": 30, "width": 20, "height": 10, "weight": 500, "volume": 6000 }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "offer": {
+    "offerId": "200000008",
+    "options": [{ "prop": "规格", "values": [{ "name": "批发款", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "bulk", "specs": "批发款", "price": 12, "multiPrice": 9.5, "stock": 100, "saleCount": 80, "image": null }
+    ],
+    "packageInfo": []
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "offer": {
+    "offerId": "200000014",
+    "options": [{ "prop": "颜色", "values": [{ "name": "红色", "imageUrl": null }, { "name": "蓝色", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "duplicate-id", "specs": "红色", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "duplicate-id", "specs": "蓝色", "price": 11, "multiPrice": null, "stock": 6, "saleCount": 2, "image": null }
+    ],
+    "packageInfo": []
+  }
+}

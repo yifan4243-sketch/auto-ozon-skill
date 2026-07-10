@@ -1,0 +1,12 @@
+{
+  "offer": {
+    "offerId": "200000015",
+    "options": [{ "prop": "规格", "values": [{ "name": "空包装", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "empty-package", "specs": "空包装", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": [
+      { "skuId": "unrelated-package-id", "spec": "空包装", "length": null, "width": null, "height": null, "weight": null, "volume": null }
+    ]
+  }
+}

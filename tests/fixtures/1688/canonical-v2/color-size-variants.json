@@ -1,0 +1,16 @@
+{
+  "offer": {
+    "offerId": "200000004",
+    "options": [
+      { "prop": "颜色", "values": [{ "name": "红色", "imageUrl": null }, { "name": "蓝色", "imageUrl": null }] },
+      { "prop": "尺码", "values": [{ "name": "M", "imageUrl": null }, { "name": "L", "imageUrl": null }] }
+    ],
+    "skus": [
+      { "skuId": "red-m", "specs": "红色>M", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "red-l", "specs": "红色>L", "price": 11, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "blue-m", "specs": "蓝色>M", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null },
+      { "skuId": "blue-l", "specs": "蓝色>L", "price": 11, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": []
+  }
+}
