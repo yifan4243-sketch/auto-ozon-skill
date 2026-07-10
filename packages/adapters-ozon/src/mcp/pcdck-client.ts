@@ -47,11 +47,20 @@ export async function withPcdckClient<T>(
   createClient: () => PcdckOzonMcpClient = () => new PcdckOzonMcpClient(),
 ): Promise<T> {
   const client = createClient();
-  await client.connect();
+  let primaryError: unknown;
   try {
+    await client.connect();
     return await fn(client);
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
-    await client.close();
+    try {
+      await client.close();
+    } catch (closeError) {
+      // Preserve the original connect/call failure instead of masking it with cleanup failure.
+      if (primaryError === undefined) throw closeError;
+    }
   }
 }
 
