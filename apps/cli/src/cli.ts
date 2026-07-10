@@ -143,11 +143,7 @@ export function buildProgram(): Command {
     .option('--verified <kind>', 'Filter: any | factory | business | super-factory', 'any')
     .option('--min-turnover <n>', 'Minimum parsed turnover/order count')
     .option('--exclude-ads', 'Exclude P4P/ad results')
-    .option(
-      '--sku-max <n>',
-      'Keep only products whose normalized SKU count is less than or equal to n',
-      parseSkuMax,
-    )
+    .option('--sku-max <n>', 'Keep only products whose normalized SKU count is less than or equal to n')
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .action(async (keyword, opts) => {
@@ -164,7 +160,7 @@ export function buildProgram(): Command {
           minTurnover: parseOptionalNumber(opts.minTurnover),
           excludeAds: opts.excludeAds,
         },
-        skuMax: opts.skuMax,
+        skuMax: parseSkuMax(opts.skuMax),
         profile: opts.profile,
         headed: opts.headed,
       });
@@ -368,7 +364,8 @@ function printCommandResult(result: CommandResult<unknown>): void {
   process.stdout.write(`${result.command}: ok\n`);
 }
 
-function parseSkuMax(raw: string): number {
+function parseSkuMax(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1) {
     throw new CliError(2, 'BAD_INPUT', '--sku-max must be a positive integer.');
