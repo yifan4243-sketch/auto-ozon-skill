@@ -6,3 +6,5 @@ coverage/
 *.log
 .venv/
 __pycache__/
+
+tmp/
