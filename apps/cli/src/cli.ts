@@ -139,6 +139,7 @@ export function buildProgram(): Command {
     .option('--verified <kind>', 'Filter: any | factory | business | super-factory', 'any')
     .option('--min-turnover <n>', 'Minimum parsed turnover/order count')
     .option('--exclude-ads', 'Exclude P4P/ad results')
+    .option('--sku-max <n>', 'Keep only products whose normalized SKU count is less than or equal to n')
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .action(async (keyword, opts) => {
@@ -155,6 +156,7 @@ export function buildProgram(): Command {
           minTurnover: parseOptionalNumber(opts.minTurnover),
           excludeAds: opts.excludeAds,
         },
+        skuMax: parseNumber(opts.skuMax),
         profile: opts.profile,
         headed: opts.headed,
       });
