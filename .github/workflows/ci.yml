@@ -35,7 +35,10 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      - name: Test Ozon bridge
+        run: pnpm exec vitest run tests/ozon-full-bridge.test.ts
+
+      - name: Test full suite
         run: pnpm test
 
       - name: Build
