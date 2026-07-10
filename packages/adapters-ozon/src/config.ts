@@ -44,10 +44,12 @@ export const EXECUTION_TOOLS = [
 
 export const CREDENTIAL_TOOLS = [OZON_MCP_TOOLS.getSubscriptionStatus] as const;
 
+// PCDCK/ozon-mcp always registers discovery, workflow, graph, and reference tools.
+// Execution tools are registered only when Seller or Performance credentials exist;
+// subscription status is registered only when Seller credentials exist.
 export const FULL_BRIDGE_CORE_TOOLS = [
   ...DISCOVERY_TOOLS,
   ...REFERENCE_TOOLS,
-  ...EXECUTION_TOOLS,
 ] as const;
 
 export const SECRET_ENV_KEYS = [
