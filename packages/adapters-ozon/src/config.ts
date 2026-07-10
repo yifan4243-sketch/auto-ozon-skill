@@ -73,7 +73,7 @@ export const UV_NEXT_ACTIONS = [
 ];
 
 export const EXECUTION_TOOLS_NEXT_ACTIONS = [
-  'Configure OZON_CLIENT_ID and OZON_API_KEY.',
+  'Configure Seller credentials (OZON_CLIENT_ID + OZON_API_KEY) or Performance credentials (OZON_PERFORMANCE_CLIENT_ID + OZON_PERFORMANCE_CLIENT_SECRET).',
   'Run auto-ozon ozon doctor --json --pretty.',
 ];
 
@@ -175,7 +175,8 @@ export function executionToolsDisabled(command: string) {
     command,
     {
       code: 'OZON_EXECUTION_TOOLS_DISABLED',
-      message: 'Ozon execution tools are disabled. Configure OZON_CLIENT_ID and OZON_API_KEY.',
+      message:
+        'Ozon execution tools are disabled. Configure Seller or Performance credentials.',
       recoverable: true,
     },
     EXECUTION_TOOLS_NEXT_ACTIONS,
