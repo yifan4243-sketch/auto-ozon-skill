@@ -36,6 +36,7 @@ export interface SearchKeywordInput {
   max?: number;
   sort?: SearchSort;
   filters?: Partial<SearchFilterSummary>;
+  skuMax?: number;
   profile?: string;
   headed?: boolean;
 }
@@ -58,6 +59,20 @@ export interface SimilarInput {
   max?: number;
   profile?: string;
   headed?: boolean;
+}
+
+interface SkuMaxFilteredOffer {
+  offerId: string;
+  reason: 'SKU_COUNT_EXCEEDED';
+  skuCount: number;
+  skuMax: number;
+}
+
+interface SkuMaxFilteringSummary {
+  skuMax: number;
+  totalBeforeSkuFilter: number;
+  totalAfterSkuFilter: number;
+  filtered: SkuMaxFilteredOffer[];
 }
 
 export async function login1688(input: LoginInput): Promise<CommandResult<unknown>> {
@@ -95,6 +110,7 @@ export async function search1688ByKeyword(
     if (!keyword) throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
     const max = clampPositive(input.max ?? 20, 1, 600);
     const sort = normalizeSearchSort(input.sort);
+    const skuMax = normalizeSkuMax(input.skuMax);
     const filters = normalizeFilters({
       priceMin: input.filters?.priceMin ?? null,
       priceMax: input.filters?.priceMax ?? null,
@@ -113,7 +129,8 @@ export async function search1688ByKeyword(
       .map((offer) => String(offer.offerId ?? '').trim())
       .filter((offerId) => /^\d+$/.test(offerId) && offerId !== '0');
     const details = await collectOffersBatch(offerIds, input);
-    return searchToSourcingResult({ query: keyword, search, details });
+    const result = searchToSourcingResult({ query: keyword, search, details });
+    return applySkuMaxFilter(result, skuMax);
   });
 }
 
@@ -186,6 +203,78 @@ function offersToSourcingResult(
       recoverable: failure.code !== 'BAD_INPUT',
     })),
   };
+}
+
+function applySkuMaxFilter(result: SourcingResult, skuMax?: number): SourcingResult {
+  if (skuMax === undefined) return result;
+
+  const kept: SourcingResult['items'] = [];
+  const filtered: SkuMaxFilteredOffer[] = [];
+
+  for (const item of result.items) {
+    const skuCount = getSkuCount(item);
+    if (skuCount <= skuMax) {
+      kept.push(item);
+      continue;
+    }
+    filtered.push({
+      offerId: item.source.offerId,
+      reason: 'SKU_COUNT_EXCEEDED',
+      skuCount,
+      skuMax,
+    });
+  }
+
+  const keptOfferIds = new Set(kept.map((item) => item.source.offerId));
+
+  return {
+    ...result,
+    offerIds: result.offerIds?.filter((offerId) => keptOfferIds.has(String(offerId))),
+    total: kept.length + result.failed,
+    success: kept.length,
+    items: kept,
+    raw: withSkuMaxFiltering(result.raw, {
+      skuMax,
+      totalBeforeSkuFilter: result.items.length,
+      totalAfterSkuFilter: kept.length,
+      filtered,
+    }),
+  };
+}
+
+function getSkuCount(item: SourcingResult['items'][number]): number {
+  return item.product.skus.length > 0 ? item.product.skus.length : 1;
+}
+
+function withSkuMaxFiltering(raw: unknown, skuMaxSummary: SkuMaxFilteringSummary): unknown {
+  const filtering = { skuMax: skuMaxSummary };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { originalRaw: raw, filtering };
+  }
+
+  const rawObject = raw as Record<string, unknown>;
+  const existingFiltering =
+    rawObject.filtering && typeof rawObject.filtering === 'object' && !Array.isArray(rawObject.filtering)
+      ? (rawObject.filtering as Record<string, unknown>)
+      : {};
+
+  return {
+    ...rawObject,
+    filtering: {
+      ...existingFiltering,
+      ...filtering,
+    },
+  };
+}
+
+function normalizeSkuMax(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value)) throw new CliError(2, 'BAD_INPUT', '--sku-max must be a number.');
+  const normalized = Math.trunc(value);
+  if (normalized < 1) {
+    throw new CliError(2, 'BAD_INPUT', '--sku-max must be greater than or equal to 1.');
+  }
+  return normalized;
 }
 
 async function wrapCommand<T>(
