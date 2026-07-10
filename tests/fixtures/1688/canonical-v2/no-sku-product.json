@@ -1,0 +1,21 @@
+{
+  "offer": {
+    "offerId": "200000001",
+    "priceMin": 3.2,
+    "priceTiers": [],
+    "options": [],
+    "skus": [],
+    "packageInfo": [
+      {
+        "skuId": "",
+        "spec": "",
+        "length": 12,
+        "width": 8,
+        "height": 4,
+        "weight": 120,
+        "volume": 384
+      }
+    ],
+    "mainImage": "https://img.example.com/default.jpg"
+  }
+}

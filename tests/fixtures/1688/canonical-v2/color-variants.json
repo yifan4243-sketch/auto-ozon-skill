@@ -1,0 +1,19 @@
+{
+  "offer": {
+    "offerId": "200000003",
+    "options": [
+      {
+        "prop": "颜色",
+        "values": [
+          { "name": "红色", "imageUrl": "https://img.example.com/red.jpg" },
+          { "name": "蓝色", "imageUrl": "https://img.example.com/blue.jpg" }
+        ]
+      }
+    ],
+    "skus": [
+      { "skuId": "red", "specs": "红色", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 2, "image": "https://img.example.com/red.jpg" },
+      { "skuId": "blue", "specs": "蓝色", "price": 10, "multiPrice": null, "stock": 6, "saleCount": 3, "image": "https://img.example.com/blue.jpg" }
+    ],
+    "packageInfo": []
+  }
+}

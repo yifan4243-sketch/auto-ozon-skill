@@ -1,0 +1,16 @@
+{
+  "offer": {
+    "offerId": "200000012",
+    "detailUrl": "https://cbu01.alicdn.com/detail-only.html",
+    "images": [
+      "https://img.example.com/main.jpg",
+      "https://cbu01.alicdn.com/detail-only.html",
+      "https://img.example.com/gallery.jpg"
+    ],
+    "options": [{ "prop": "颜色", "values": [{ "name": "红色", "imageUrl": "https://img.example.com/sku-only.jpg" }] }],
+    "skus": [
+      { "skuId": "detail-test", "specs": "红色", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": "https://img.example.com/sku-only.jpg" }
+    ],
+    "packageInfo": []
+  }
+}

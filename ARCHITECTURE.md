@@ -12,7 +12,13 @@ apps/cli
   complete Ozon MCP command registration
 
 packages/contracts
-  CommandResult, CanonicalProduct, SourcingResult
+  CommandResult, CanonicalProduct V1, CanonicalProductV2, SourcingResult
+
+packages/transformer
+  deterministic SKU specification parsing
+  per-SKU package assembly
+  common/varying source-field comparison
+  source variant-dimension analysis
 
 packages/adapters-1688
   engine/auth
@@ -79,6 +85,28 @@ keyword / image / offerIds / similar
 ```
 
 `search` always performs detail collection by default. The former optional deep mode is now the normal behavior needed for Ozon listing preparation.
+
+## CanonicalProductV2 source-fact pipeline
+
+V1 remains the contract used by the current source commands. The independent V2
+mapper adds a non-breaking phase-one pipeline:
+
+```text
+1688 OfferResult
+-> offerToCanonicalV2
+-> CanonicalProductV2.skus (complete per-SKU source facts)
+-> CanonicalProductV2.sku_analysis (common, varying, missing, duplicate specs)
+```
+
+Each source SKU owns an independent package object. Matching uses exact SKU ID,
+then normalized exact specification text, and otherwise produces null package
+facts with `matched_by = "none"`. Raw weights retain their source value and use
+`weight_unit = "unknown"` unless the source explicitly supplies a recognized
+unit.
+
+This layer stops before marketplace interpretation. Agent classification, Ozon
+category and attribute retrieval, missing-package policy, freight, pricing,
+Russian copy, Ozon internal drafts, and final `items[]` are downstream work.
 
 ## Removed scope
 

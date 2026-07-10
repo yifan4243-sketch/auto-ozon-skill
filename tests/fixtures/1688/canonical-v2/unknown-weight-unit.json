@@ -1,0 +1,12 @@
+{
+  "offer": {
+    "offerId": "200000010",
+    "options": [{ "prop": "规格", "values": [{ "name": "标准", "imageUrl": null }] }],
+    "skus": [
+      { "skuId": "unknown-unit", "specs": "标准", "price": 10, "multiPrice": null, "stock": 5, "saleCount": 1, "image": null }
+    ],
+    "packageInfo": [
+      { "skuId": "unknown-unit", "spec": "标准", "length": 10, "width": 10, "height": 10, "weight": 500, "volume": 1000 }
+    ]
+  }
+}
