@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildProgram } from '../../../apps/cli/src/cli.js';
+import { OZON_MCP_TOOLS } from '../../../packages/adapters-ozon/src/config.js';
 import { parseToolResult } from '../../../packages/adapters-ozon/src/mcp/parse-tool-result.js';
 import { withPcdckClient } from '../../../packages/adapters-ozon/src/mcp/pcdck-client.js';
 
@@ -77,14 +78,7 @@ describe('ozon doctor', () => {
     vi.mocked(spawnSync).mockReturnValue(makeSpawnResult(0, 'ok'));
     mockPcdckClient({
       listTools: async () => ({
-        tools: [
-          { name: 'ozon_search_methods' },
-          { name: 'ozon_describe_method' },
-          { name: 'ozon_call_method' },
-          { name: 'ozon_fetch_all' },
-          { name: 'ozon_list_workflows' },
-          { name: 'ozon_get_workflow' },
-        ],
+        tools: Object.values(OZON_MCP_TOOLS).map((name) => ({ name })),
       }),
     });
 
