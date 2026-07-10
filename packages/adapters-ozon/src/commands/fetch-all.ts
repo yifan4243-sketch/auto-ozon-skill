@@ -28,6 +28,7 @@ export async function ozonFetchAll(
         operation_id: options.operationId,
         params: options.params,
         ...(options.maxItems === undefined ? {} : { max_items: options.maxItems }),
+        ...(options.cabinetTier === undefined ? {} : { cabinet_tier: options.cabinetTier }),
       });
       const parsed = parseToolResult(result);
       if (parsed.isError || isOzonErrorPayload(parsed.data)) {
