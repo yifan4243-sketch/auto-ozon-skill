@@ -62,6 +62,10 @@ export interface CanonicalProductV2 {
     collection_method: CollectionMethod;
     detail_url: string | null;
     source_category_id: string | null;
+    discovery_context: {
+      search_term: string | null;
+      seed_offer_id: string | null;
+    };
   };
   supplier: {
     name: string | null;

@@ -3,3 +3,4 @@ export * from './command-result.js';
 export * from './canonical-product.js';
 export * from './canonical-product-v2.js';
 export * from './sourcing-result.js';
+export * from './sourcing-result-v2.js';

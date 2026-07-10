@@ -5,10 +5,18 @@ import { Command } from 'commander';
 import type { CommandResult } from '../../../packages/contracts/src/command-result.js';
 import {
   get1688Offers,
+  get1688OffersV2,
   get1688Similar,
+  get1688SimilarV2,
   search1688ByImage,
+  search1688ByImageV2,
   search1688ByKeyword,
+  search1688ByKeywordV2,
 } from '../../../packages/adapters-1688/src/client.js';
+import {
+  normalizeV2Offline,
+  parseCollectionMethod,
+} from '../../../packages/adapters-1688/src/v2/offline-normalize.js';
 import { CliError } from '../../../packages/adapters-1688/src/engine/io/errors.js';
 import {
   currentCommandName,
@@ -138,8 +146,12 @@ export function buildProgram(): Command {
     .option('--sku-max <n>', 'Keep only products whose normalized SKU count is less than or equal to n')
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
+    .option('--schema-version <1|2>', 'Canonical product schema version', '1')
+    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
     .action(async (keyword, opts) => {
-      const result = await search1688ByKeyword({
+      const schemaVersion = parseSchemaVersion(opts.schemaVersion);
+      validateSaveDir(schemaVersion, opts.saveDir);
+      const input = {
         keyword,
         max: parseNumber(opts.max),
         sort: opts.sort,
@@ -155,7 +167,11 @@ export function buildProgram(): Command {
         skuMax: parseSkuMax(opts.skuMax),
         profile: opts.profile,
         headed: opts.headed,
-      });
+      };
+      const result =
+        schemaVersion === 2
+          ? await search1688ByKeywordV2({ ...input, saveDir: opts.saveDir })
+          : await search1688ByKeyword(input);
       emitCommandResult(result);
     });
 
@@ -166,14 +182,21 @@ export function buildProgram(): Command {
     .option('--max <n>', 'Maximum number of candidates', '20')
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
+    .option('--schema-version <1|2>', 'Canonical product schema version', '1')
+    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
     .action(async (imagePath, opts) => {
+      const schemaVersion = parseSchemaVersion(opts.schemaVersion);
+      validateSaveDir(schemaVersion, opts.saveDir);
+      const input = {
+        imagePath,
+        max: parseNumber(opts.max),
+        profile: opts.profile,
+        headed: opts.headed,
+      };
       emitCommandResult(
-        await search1688ByImage({
-          imagePath,
-          max: parseNumber(opts.max),
-          profile: opts.profile,
-          headed: opts.headed,
-        }),
+        schemaVersion === 2
+          ? await search1688ByImageV2({ ...input, saveDir: opts.saveDir })
+          : await search1688ByImage(input),
       );
     });
 
@@ -183,13 +206,20 @@ export function buildProgram(): Command {
     .argument('<offerIds...>', 'One or more 1688 offer IDs')
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
+    .option('--schema-version <1|2>', 'Canonical product schema version', '1')
+    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
     .action(async (offerIds: string[], opts) => {
+      const schemaVersion = parseSchemaVersion(opts.schemaVersion);
+      validateSaveDir(schemaVersion, opts.saveDir);
+      const input = {
+        offerIds,
+        profile: opts.profile,
+        headed: opts.headed,
+      };
       emitCommandResult(
-        await get1688Offers({
-          offerIds,
-          profile: opts.profile,
-          headed: opts.headed,
-        }),
+        schemaVersion === 2
+          ? await get1688OffersV2({ ...input, saveDir: opts.saveDir })
+          : await get1688Offers(input),
       );
     });
 
@@ -200,13 +230,42 @@ export function buildProgram(): Command {
     .option('--max <n>', 'Maximum number of candidates', '20')
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
+    .option('--schema-version <1|2>', 'Canonical product schema version', '1')
+    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
     .action(async (offerId, opts) => {
+      const schemaVersion = parseSchemaVersion(opts.schemaVersion);
+      validateSaveDir(schemaVersion, opts.saveDir);
+      const input = {
+        offerId,
+        max: parseNumber(opts.max),
+        profile: opts.profile,
+        headed: opts.headed,
+      };
       emitCommandResult(
-        await get1688Similar({
-          offerId,
-          max: parseNumber(opts.max),
-          profile: opts.profile,
-          headed: opts.headed,
+        schemaVersion === 2
+          ? await get1688SimilarV2({ ...input, saveDir: opts.saveDir })
+          : await get1688Similar(input),
+      );
+    });
+
+  source
+    .command('normalize-v2')
+    .description('Replay saved OfferResult JSON into CanonicalProductV2 offline')
+    .option('--input <path>', 'OfferResult or OfferBatchResult JSON file')
+    .option('--method <method>', 'keyword | image | offers | similar', 'offers')
+    .option('--search-term <text>', 'Discovery search term to preserve')
+    .option('--seed-offer-id <id>', 'Discovery seed offer ID to preserve')
+    .option('--output <path>', 'Write the complete command result JSON')
+    .option('--save-dir <directory>', 'Save a standard auditable V2 run')
+    .action(async (opts) => {
+      emitCommandResult(
+        await normalizeV2Offline({
+          inputPath: opts.input ?? '',
+          method: parseCollectionMethod(opts.method),
+          searchTerm: opts.searchTerm,
+          seedOfferId: opts.seedOfferId,
+          outputPath: opts.output,
+          saveDir: opts.saveDir,
         }),
       );
     });
@@ -259,9 +318,41 @@ function printCommandResult(result: CommandResult<unknown>): void {
     for (const error of result.errors) {
       process.stderr.write(`error: ${error.code}: ${error.message}\n`);
     }
+  }
+  const data = result.data as
+    | {
+        schema_version?: number;
+        total?: number;
+        success?: number;
+        failed?: number;
+        items?: unknown[];
+        summary?: {
+          product_count: number;
+          total_sku_count: number;
+          validation_status_counts: Record<string, number>;
+          package_match_counts: Record<string, number>;
+          missing_package_sku_count: number;
+          missing_weight_sku_count: number;
+          unparsed_spec_sku_count: number;
+        };
+        integrity_report?: { status: string };
+        artifacts?: { run_directory: string } | null;
+      }
+    | undefined;
+  if (data?.schema_version === 2 && data.summary && data.integrity_report) {
+    process.stdout.write(
+      formatCanonicalV2HumanSummary(result, {
+        total: data.total,
+        success: data.success,
+        failed: data.failed,
+        summary: data.summary,
+        integrity_report: data.integrity_report,
+        artifacts: data.artifacts,
+      }),
+    );
     return;
   }
-  const data = result.data as { total?: number; success?: number; failed?: number; items?: unknown[] } | undefined;
+  if (!result.ok) return;
   if (data && typeof data === 'object' && 'success' in data) {
     process.stdout.write(
       `${result.command}: ${data.success ?? 0}/${data.total ?? 0} collected` +
@@ -271,6 +362,67 @@ function printCommandResult(result: CommandResult<unknown>): void {
     return;
   }
   process.stdout.write(`${result.command}: ok\n`);
+}
+
+export function formatCanonicalV2HumanSummary(
+  result: CommandResult<unknown>,
+  data: {
+    total?: number;
+    success?: number;
+    failed?: number;
+    summary: {
+      product_count: number;
+      total_sku_count: number;
+      validation_status_counts: Record<string, number>;
+      package_match_counts: Record<string, number>;
+      missing_package_sku_count: number;
+      missing_weight_sku_count: number;
+      unparsed_spec_sku_count: number;
+    };
+    integrity_report: { status: string };
+    artifacts?: { run_directory: string } | null;
+  },
+): string {
+    const status = data.summary.validation_status_counts;
+    const matches = data.summary.package_match_counts;
+    return (
+      `${result.command}: ${data.success ?? 0}/${data.total ?? 0} collected` +
+      ((data.failed ?? 0) > 0 ? `, ${data.failed} failed` : '') +
+      '\n' +
+      'schema: CanonicalProductV2\n' +
+      `products: ${data.summary.product_count}\n` +
+      `skus: ${data.summary.total_sku_count}\n` +
+      `status: valid=${status.valid ?? 0} warning=${status.warning ?? 0} ` +
+      `needs_review=${status.needs_review ?? 0} blocked=${status.blocked ?? 0}\n` +
+      `package matches: sku_id=${matches.sku_id ?? 0} ` +
+      `exact_spec=${matches.exact_spec ?? 0} none=${matches.none ?? 0}\n` +
+      `missing packages: ${data.summary.missing_package_sku_count}\n` +
+      `missing weights: ${data.summary.missing_weight_sku_count}\n` +
+      `unparsed specs: ${data.summary.unparsed_spec_sku_count}\n` +
+      `integrity: ${data.integrity_report.status}\n` +
+      (data.artifacts ? `artifacts: ${data.artifacts.run_directory}\n` : '')
+    );
+}
+
+export type ProductSchemaVersion = 1 | 2;
+
+export function parseSchemaVersion(raw: string | undefined): ProductSchemaVersion {
+  if (raw === undefined || raw === '1') return 1;
+  if (raw === '2') return 2;
+  throw new CliError(2, 'BAD_INPUT', '--schema-version must be exactly 1 or 2.');
+}
+
+function validateSaveDir(
+  schemaVersion: ProductSchemaVersion,
+  saveDir: string | undefined,
+): void {
+  if (saveDir && schemaVersion !== 2) {
+    throw new CliError(
+      2,
+      'BAD_INPUT',
+      '--save-dir requires --schema-version 2 for source collection commands.',
+    );
+  }
 }
 
 function parseSkuMax(raw: string | undefined): number | undefined {

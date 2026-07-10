@@ -11,7 +11,10 @@ vi.mock('../../../packages/adapters-1688/src/engine/session/dispatch.js', () => 
 }));
 
 import { buildProgram } from '../../../apps/cli/src/cli.js';
-import { search1688ByKeyword } from '../../../packages/adapters-1688/src/client.js';
+import {
+  search1688ByKeyword,
+  search1688ByKeywordV2,
+} from '../../../packages/adapters-1688/src/client.js';
 
 describe('keyword SKU filtering', () => {
   beforeEach(() => {
@@ -107,6 +110,35 @@ describe('keyword SKU filtering', () => {
       errors: [{ code: 'BAD_INPUT', message: '--sku-max must be a positive integer.' }],
     });
     expect(dispatchMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps V1 and V2 sku-max selection and early stopping identical', async () => {
+    const search = makeSearch(['1001', '1001', '1002', '1003', '1004']);
+    const offers = new Map([
+      ['1001', makeOffer('1001', 3)],
+      ['1002', makeOffer('1002', 0)],
+      ['1003', makeOffer('1003', 2)],
+      ['1004', makeOffer('1004', 1)],
+    ]);
+    mockSearchAndOffers(search, offers);
+    const v1 = await search1688ByKeyword({ keyword: '测试', max: 2, skuMax: 2 });
+    const v1DispatchIds = offerDispatchIds();
+
+    dispatchMock.mockReset();
+    mockSearchAndOffers(search, offers);
+    const v2 = await search1688ByKeywordV2({
+      keyword: '测试',
+      max: 2,
+      skuMax: 2,
+    });
+
+    expect(v1.data?.offerIds).toEqual(['1002', '1003']);
+    expect(v2.data?.offer_ids).toEqual(v1.data?.offerIds);
+    expect(offerDispatchIds()).toEqual(v1DispatchIds);
+    expect(v2.data?.items[0]?.sku_analysis).toMatchObject({
+      has_source_skus: false,
+      sku_count: 1,
+    });
   });
 });
 

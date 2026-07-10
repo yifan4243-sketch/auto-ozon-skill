@@ -1,6 +1,6 @@
 import type { CommandResult, ErrorObject } from '../../contracts/src/command-result.js';
 import type { SourcingResult } from '../../contracts/src/sourcing-result.js';
-import type { CollectionMethod } from '../../contracts/src/common.js';
+import type { SourcingResultV2 } from '../../contracts/src/sourcing-result-v2.js';
 import { dispatch } from './engine/session/dispatch.js';
 import { CliError } from './engine/io/errors.js';
 import { run as loginRun, type LoginOpts } from './engine/commands/login.js';
@@ -25,9 +25,11 @@ import {
   type SearchFilterSummary,
   type SearchSort,
 } from './engine/commands/sourcing-utils.js';
-import { offerToCanonical } from './mappers/offer-to-canonical.js';
-import { searchToSourcingResult } from './mappers/search-to-sourcing-result.js';
-import { imageSearchToSourcingResult } from './mappers/image-search-to-sourcing-result.js';
+import {
+  collectedRunToV1,
+  finalizeCanonicalV2Run,
+  type CollectedSourcingRun,
+} from './v2/sourcing-runtime.js';
 
 export interface LoginInput extends LoginOpts {}
 export interface LogoutInput extends LogoutOpts {}
@@ -63,6 +65,15 @@ export interface SimilarInput {
   profile?: string;
   headed?: boolean;
 }
+
+export interface CanonicalV2RunInput {
+  saveDir?: string;
+}
+
+export interface SearchKeywordV2Input extends SearchKeywordInput, CanonicalV2RunInput {}
+export interface SearchImageV2Input extends SearchImageInput, CanonicalV2RunInput {}
+export interface OffersV2Input extends OffersInput, CanonicalV2RunInput {}
+export interface SimilarV2Input extends SimilarInput, CanonicalV2RunInput {}
 
 interface SkuMaxFilteredOffer {
   offerId: string;
@@ -116,38 +127,115 @@ export async function doctor1688(input: DoctorInput): Promise<CommandResult<unkn
 export async function search1688ByKeyword(
   input: SearchKeywordInput,
 ): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.keyword', async () => {
-    const keyword = input.keyword.trim();
-    if (!keyword) throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
-    const targetMax = clampPositive(input.max ?? 20, 1, 600);
-    const sort = normalizeSearchSort(input.sort);
-    const skuMax = normalizeSkuMax(input.skuMax);
-    const candidateMax = skuMax === undefined ? targetMax : calculateSkuMaxCandidateMax(targetMax);
-    const filters = normalizeFilters({
-      priceMin: input.filters?.priceMin ?? null,
-      priceMax: input.filters?.priceMax ?? null,
-      province: input.filters?.province,
-      city: input.filters?.city,
-      verified: normalizeVerifiedFilter(input.filters?.verified),
-      minTurnover: input.filters?.minTurnover ?? null,
-      excludeAds: input.filters?.excludeAds,
+  return wrapCommand('source.keyword', async () =>
+    collectedRunToV1(await collectKeywordSource(input)),
+  );
+}
+
+export async function search1688ByKeywordV2(
+  input: SearchKeywordV2Input,
+): Promise<CommandResult<SourcingResultV2>> {
+  return wrapCommandResult('source.keyword', async () => {
+    const run = await collectKeywordSource(input);
+    return finalizeCanonicalV2Run(run, {
+      command: 'source.keyword',
+      discoveryContext: { searchTerm: input.keyword, seedOfferId: null },
+      saveDir: input.saveDir,
     });
-    const search = await dispatch<SearchArgs, SearchResult>(
-      'search',
-      { keyword, max: candidateMax, sort, filters, headed: input.headed },
-      { headed: input.headed, profile: input.profile },
-    );
-    const offerIds = normalizeOfferIds(
-      search.offers
-        .map((offer) => String(offer.offerId ?? '').trim())
-        .filter((offerId) => /^\d+$/.test(offerId) && offerId !== '0'),
-    );
+  });
+}
 
-    if (skuMax === undefined) {
-      const details = await collectOffersBatch(offerIds, input);
-      return searchToSourcingResult({ query: keyword, search, details });
-    }
+export async function search1688ByImage(
+  input: SearchImageInput,
+): Promise<CommandResult<SourcingResult>> {
+  return wrapCommand('source.image', async () =>
+    collectedRunToV1(await collectImageSource(input)),
+  );
+}
 
+export async function search1688ByImageV2(
+  input: SearchImageV2Input,
+): Promise<CommandResult<SourcingResultV2>> {
+  return wrapCommandResult('source.image', async () =>
+    finalizeCanonicalV2Run(await collectImageSource(input), {
+      command: 'source.image',
+      discoveryContext: { searchTerm: null, seedOfferId: null },
+      saveDir: input.saveDir,
+    }),
+  );
+}
+
+export async function get1688Offers(
+  input: OffersInput,
+): Promise<CommandResult<SourcingResult>> {
+  return wrapCommand('source.offers', async () =>
+    collectedRunToV1(await collectOffersSource(input)),
+  );
+}
+
+export async function get1688OffersV2(
+  input: OffersV2Input,
+): Promise<CommandResult<SourcingResultV2>> {
+  return wrapCommandResult('source.offers', async () =>
+    finalizeCanonicalV2Run(await collectOffersSource(input), {
+      command: 'source.offers',
+      discoveryContext: { searchTerm: null, seedOfferId: null },
+      saveDir: input.saveDir,
+    }),
+  );
+}
+
+export async function get1688Similar(
+  input: SimilarInput,
+): Promise<CommandResult<SourcingResult>> {
+  return wrapCommand('source.similar', async () =>
+    collectedRunToV1(await collectSimilarSource(input)),
+  );
+}
+
+export async function get1688SimilarV2(
+  input: SimilarV2Input,
+): Promise<CommandResult<SourcingResultV2>> {
+  return wrapCommandResult('source.similar', async () =>
+    finalizeCanonicalV2Run(await collectSimilarSource(input), {
+      command: 'source.similar',
+      discoveryContext: { searchTerm: null, seedOfferId: input.offerId },
+      saveDir: input.saveDir,
+    }),
+  );
+}
+
+async function collectKeywordSource(
+  input: SearchKeywordInput,
+): Promise<CollectedSourcingRun> {
+  const keyword = input.keyword.trim();
+  if (!keyword) throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
+  const targetMax = clampPositive(input.max ?? 20, 1, 600);
+  const sort = normalizeSearchSort(input.sort);
+  const skuMax = normalizeSkuMax(input.skuMax);
+  const candidateMax =
+    skuMax === undefined ? targetMax : calculateSkuMaxCandidateMax(targetMax);
+  const filters = normalizeFilters({
+    priceMin: input.filters?.priceMin ?? null,
+    priceMax: input.filters?.priceMax ?? null,
+    province: input.filters?.province,
+    city: input.filters?.city,
+    verified: normalizeVerifiedFilter(input.filters?.verified),
+    minTurnover: input.filters?.minTurnover ?? null,
+    excludeAds: input.filters?.excludeAds,
+  });
+  const search = await dispatch<SearchArgs, SearchResult>(
+    'search',
+    { keyword, max: candidateMax, sort, filters, headed: input.headed },
+    { headed: input.headed, profile: input.profile },
+  );
+  const offerIds = normalizeOfferIds(
+    search.offers
+      .map((offer) => String(offer.offerId ?? '').trim())
+      .filter((offerId) => /^\d+$/.test(offerId) && offerId !== '0'),
+  );
+
+  if (skuMax !== undefined) {
     return collectKeywordOffersUntilSkuTarget({
       query: keyword,
       search,
@@ -159,77 +247,83 @@ export async function search1688ByKeyword(
       targetMax,
       candidateMax,
     });
-  });
-}
+  }
 
-export async function search1688ByImage(
-  input: SearchImageInput,
-): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.image', async () => {
-    if (!input.imagePath) throw new CliError(2, 'BAD_INPUT', 'Image path is required.');
-    const max = clampPositive(input.max ?? 20, 1, 200);
-    const imageSearch = await dispatch<ImageSearchArgs, ImageSearchResult>(
-      'image-search',
-      { imagePath: input.imagePath, max, headed: input.headed },
-      { headed: input.headed, profile: input.profile },
-    );
-    const offerIds = imageSearch.offers.map((offer) => offer.offerId);
-    const details = await collectOffersBatch(offerIds, input);
-    return imageSearchToSourcingResult({ imagePath: input.imagePath, imageSearch, details });
-  });
-}
-
-export async function get1688Offers(
-  input: OffersInput,
-): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.offers', async () => {
-    const details = await collectOffersBatch(input.offerIds, input);
-    return offersToSourcingResult(details, 'offers');
-  });
-}
-
-export async function get1688Similar(
-  input: SimilarInput,
-): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.similar', async () => {
-    if (!/^\d+$/.test(input.offerId)) {
-      throw new CliError(2, 'BAD_INPUT', `Invalid offerId: ${input.offerId}`);
-    }
-    const max = clampPositive(input.max ?? 20, 1, 200);
-    const similar = await dispatch<SimilarArgs, SimilarResult>(
-      'similar',
-      { offerId: input.offerId, max, headed: input.headed },
-      { headed: input.headed, profile: input.profile },
-    );
-    const offerIds = similar.offers.map((offer) => offer.offerId);
-    const details = await collectOffersBatch(offerIds, input);
-    return {
-      ...offersToSourcingResult(details, 'similar'),
-      mode: 'similar',
-      query: input.offerId,
-      raw: { similar, details },
-    };
-  });
-}
-
-function offersToSourcingResult(
-  details: OfferBatchResult,
-  method: CollectionMethod,
-): SourcingResult {
+  const details = await collectOffersBatch(offerIds, input);
   return {
-    mode: method === 'offers' ? 'offers' : method,
-    offerIds: details.offerIds,
-    total: details.total,
-    success: details.success,
-    failed: details.failed,
-    items: details.offers.map((offer) => offerToCanonical(offer, method)),
-    raw: details,
-    failures: details.failures.map((failure) => ({
-      offerId: failure.offerId,
-      code: failure.code,
-      message: failure.message,
-      recoverable: failure.code !== 'BAD_INPUT',
-    })),
+    mode: 'keyword',
+    query: keyword,
+    imagePath: null,
+    details,
+    rawV1: {
+      keyword: search.keyword,
+      sort: search.sort,
+      filters: search.filters,
+      totalBeforeFilter: search.totalBeforeFilter,
+      total: search.total,
+      offers: search.offers,
+      details,
+    },
+  };
+}
+
+async function collectImageSource(input: SearchImageInput): Promise<CollectedSourcingRun> {
+  if (!input.imagePath) throw new CliError(2, 'BAD_INPUT', 'Image path is required.');
+  const max = clampPositive(input.max ?? 20, 1, 200);
+  const imageSearch = await dispatch<ImageSearchArgs, ImageSearchResult>(
+    'image-search',
+    { imagePath: input.imagePath, max, headed: input.headed },
+    { headed: input.headed, profile: input.profile },
+  );
+  const details = await collectOffersBatch(
+    imageSearch.offers.map((offer) => offer.offerId),
+    input,
+  );
+  return {
+    mode: 'image',
+    query: null,
+    imagePath: input.imagePath,
+    details,
+    rawV1: {
+      imageId: imageSearch.imageId,
+      total: imageSearch.total,
+      offers: imageSearch.offers,
+      details,
+    },
+  };
+}
+
+async function collectOffersSource(input: OffersInput): Promise<CollectedSourcingRun> {
+  const details = await collectOffersBatch(input.offerIds, input);
+  return {
+    mode: 'offers',
+    query: null,
+    imagePath: null,
+    details,
+    rawV1: details,
+  };
+}
+
+async function collectSimilarSource(input: SimilarInput): Promise<CollectedSourcingRun> {
+  if (!/^\d+$/.test(input.offerId)) {
+    throw new CliError(2, 'BAD_INPUT', `Invalid offerId: ${input.offerId}`);
+  }
+  const max = clampPositive(input.max ?? 20, 1, 200);
+  const similar = await dispatch<SimilarArgs, SimilarResult>(
+    'similar',
+    { offerId: input.offerId, max, headed: input.headed },
+    { headed: input.headed, profile: input.profile },
+  );
+  const details = await collectOffersBatch(
+    similar.offers.map((offer) => offer.offerId),
+    input,
+  );
+  return {
+    mode: 'similar',
+    query: input.offerId,
+    imagePath: null,
+    details,
+    rawV1: { similar, details },
   };
 }
 
@@ -243,15 +337,19 @@ async function collectKeywordOffersUntilSkuTarget(input: {
   skuMax: number;
   targetMax: number;
   candidateMax: number;
-}): Promise<SourcingResult> {
+}): Promise<CollectedSourcingRun> {
   const candidateOfferIds = input.offerIds.slice(0, input.candidateMax);
   const checkedOfferIds: string[] = [];
   const collectedOffers: OfferResult[] = [];
-  const items: SourcingResult['items'] = [];
+  const selectedOffers: OfferResult[] = [];
   const filtered: SkuMaxFilteredOffer[] = [];
   const failures: OfferFailure[] = [];
 
-  for (let i = 0; i < candidateOfferIds.length && items.length < input.targetMax; i++) {
+  for (
+    let i = 0;
+    i < candidateOfferIds.length && selectedOffers.length < input.targetMax;
+    i++
+  ) {
     const offerId = candidateOfferIds[i]!;
     checkedOfferIds.push(offerId);
 
@@ -270,11 +368,10 @@ async function collectKeywordOffersUntilSkuTarget(input: {
       );
       collectedOffers.push(offer);
 
-      const canonical = offerToCanonical(offer, 'keyword');
-      const skuCount = getSkuCount(canonical);
+      const skuCount = normalizedOfferSkuCount(offer);
       if (skuCount > input.skuMax) {
         filtered.push({
-          offerId: canonical.source.offerId,
+          offerId: offer.offerId,
           reason: 'SKU_COUNT_EXCEEDED',
           skuCount,
           skuMax: input.skuMax,
@@ -282,7 +379,7 @@ async function collectKeywordOffersUntilSkuTarget(input: {
         continue;
       }
 
-      items.push(canonical);
+      selectedOffers.push(offer);
     } catch (error) {
       if (isTerminalOfferError(error)) throw error;
       failures.push(toOfferFailure(offerId, error));
@@ -290,8 +387,10 @@ async function collectKeywordOffersUntilSkuTarget(input: {
   }
 
   const stopReason: SkuMaxStopReason =
-    items.length >= input.targetMax ? 'TARGET_REACHED' : 'CANDIDATE_EXHAUSTED';
-  const details: OfferBatchResult = {
+    selectedOffers.length >= input.targetMax
+      ? 'TARGET_REACHED'
+      : 'CANDIDATE_EXHAUSTED';
+  const checkedDetails: OfferBatchResult = {
     mode: 'offers',
     total: checkedOfferIds.length,
     success: collectedOffers.length,
@@ -300,16 +399,22 @@ async function collectKeywordOffersUntilSkuTarget(input: {
     offers: collectedOffers,
     failures,
   };
+  const selectedDetails: OfferBatchResult = {
+    mode: 'offers',
+    total: checkedOfferIds.length,
+    success: selectedOffers.length,
+    failed: failures.length,
+    offerIds: selectedOffers.map((offer) => offer.offerId),
+    offers: selectedOffers,
+    failures,
+  };
 
   return {
     mode: 'keyword',
     query: input.query,
-    offerIds: items.map((item) => item.source.offerId),
-    total: checkedOfferIds.length,
-    success: items.length,
-    failed: failures.length,
-    items,
-    raw: withSkuMaxFiltering(
+    imagePath: null,
+    details: selectedDetails,
+    rawV1: withSkuMaxFiltering(
       {
         keyword: input.search.keyword,
         sort: input.search.sort,
@@ -317,7 +422,7 @@ async function collectKeywordOffersUntilSkuTarget(input: {
         totalBeforeFilter: input.search.totalBeforeFilter,
         total: input.search.total,
         offers: input.search.offers,
-        details,
+        details: checkedDetails,
       },
       {
         skuMax: input.skuMax,
@@ -327,22 +432,16 @@ async function collectKeywordOffersUntilSkuTarget(input: {
         stoppedEarly: stopReason === 'TARGET_REACHED' && checkedOfferIds.length < candidateOfferIds.length,
         stopReason,
         totalBeforeSkuFilter: collectedOffers.length,
-        totalEligibleBeforeTargetLimit: items.length,
-        totalAfterSkuFilter: items.length,
+        totalEligibleBeforeTargetLimit: selectedOffers.length,
+        totalAfterSkuFilter: selectedOffers.length,
         filtered,
       },
     ),
-    failures: failures.map((failure) => ({
-      offerId: failure.offerId,
-      code: failure.code,
-      message: failure.message,
-      recoverable: failure.code !== 'BAD_INPUT',
-    })),
   };
 }
 
-function getSkuCount(item: SourcingResult['items'][number]): number {
-  return item.product.skus.length > 0 ? item.product.skus.length : 1;
+function normalizedOfferSkuCount(offer: OfferResult): number {
+  return offer.skus.length > 0 ? offer.skus.length : 1;
 }
 
 function withSkuMaxFiltering(raw: unknown, skuMaxSummary: SkuMaxFilteringSummary): unknown {
@@ -426,6 +525,24 @@ async function wrapCommand<T>(
       errors: [],
       nextActions: [],
     };
+  } catch (error) {
+    const err = toErrorObject(error);
+    return {
+      ok: false,
+      command,
+      warnings: [],
+      errors: [err],
+      nextActions: nextActionsFor(err),
+    };
+  }
+}
+
+async function wrapCommandResult<T>(
+  command: string,
+  fn: () => Promise<CommandResult<T>>,
+): Promise<CommandResult<T>> {
+  try {
+    return await fn();
   } catch (error) {
     const err = toErrorObject(error);
     return {

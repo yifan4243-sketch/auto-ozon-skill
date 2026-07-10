@@ -56,6 +56,36 @@ pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
 
 See `docs/COMMANDS.md` for the full CLI surface.
 
+## CanonicalProductV2 runtime
+
+The four sourcing commands continue to return CanonicalProduct V1 by default.
+Use `--schema-version 2` to opt into the source-fact V2 contract, conversion
+summary, and deterministic integrity report:
+
+```bash
+pnpm --filter @auto-ozon/cli dev -- source keyword "修枝剪" --max 10 --schema-version 2
+pnpm --filter @auto-ozon/cli dev -- source offers 123456789 --schema-version 2 --json-v2 --pretty
+pnpm --filter @auto-ozon/cli dev -- source offers 123456789 --schema-version 2 --save-dir ../../data/validation/canonical-v2-runs
+pnpm --filter @auto-ozon/cli dev -- source normalize-v2 --input C:/path/to/saved-offer.json --method offers
+```
+
+`--schema-version 2` selects the product data contract. `--json-v2` remains an
+independent response-envelope option; both may be used together. Offline replay
+accepts exactly one typed `OfferResult` or one typed `OfferBatchResult` and does
+not require a browser, login, or network.
+
+V2 preserves keyword/similar discovery context for later category work. A
+future category Agent may select only real category IDs and paths from
+`data/ozon/categories/ozon-category-tree.json`; this phase does not run that
+Agent or read the tree for matching. Original brand attributes are retained,
+but ownership and authorization are not inferred. Prohibited-category and
+logistics restrictions will come from user-provided knowledge bases in a later
+phase.
+
+See `docs/CANONICAL_V2_REAL_VALIDATION.md` for the manual real-data validation
+procedure. Local validation runs under `data/validation/canonical-v2-runs/` are
+gitignored.
+
 ## Safety
 
 The adapter does not bypass 1688 risk control. If verification appears, rerun with `--headed` and complete it manually. Sensitive cookies and tokens must not be logged.

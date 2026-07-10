@@ -283,6 +283,18 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       weight_unit: 'unknown',
     });
   });
+
+  it('brand-source-attribute preserves the raw brand without risk blocking', () => {
+    const result = convert('brand-source-attribute');
+
+    expect(result.product.attributes).toMatchObject({
+      品牌: '测试品牌',
+      材质: '钢',
+    });
+    expect(result.product.attributes).not.toHaveProperty('brand_id');
+    expect(result.validation.errors).toEqual([]);
+    expect(result.validation.status).not.toBe('blocked');
+  });
 });
 
 describe('deterministic SKU specification parsing', () => {

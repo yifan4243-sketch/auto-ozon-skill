@@ -84,3 +84,52 @@ Later phases, not this normalization path, are responsible for Agent category
 classification, Ozon `GetAttributes`, attribute-dictionary resolution, missing
 package policy, shipping and pricing, Russian content, internal Ozon drafts,
 and final Ozon `items[]` requests.
+
+## V2 runtime sourcing
+
+```text
+keyword / image / offers / similar
+-> collect candidate details once as typed OfferResult records
+-> apply sku-max directly to OfferResult when requested
+-> map the same selected batch to V1 (default) or V2 (explicit)
+-> summarize V2 facts
+-> compare OfferResult against CanonicalProductV2
+-> optionally save an auditable run
+```
+
+`--schema-version 2` chooses the product contract. `--json-v2` independently
+chooses the existing response envelope. No command performs a V1 collection and
+then tries to recover OfferResult from an unknown `raw` shape.
+
+Keyword runs store the same original search term on every returned product.
+Similar runs store the seed offer ID. Offers and image runs store null discovery
+context, and the image path is not included in CanonicalProductV2.
+
+## Audit runs and offline replay
+
+`--save-dir` creates a unique run directory:
+
+```text
+<save-dir>/<run_id>/
+  manifest.json
+  raw/<offer_id>.json
+  canonical-v2/<offer_id>.json
+  integrity-report.json
+  failures.json
+```
+
+Only reconstructed, typed OfferResult fields are written to `raw`; unknown
+fields, browser responses, cookies, tokens, credentials, and image paths are not
+copied. `source normalize-v2` accepts one known OfferResult or OfferBatchResult
+for deterministic replay without network access.
+
+Validation warnings describe source-data gaps. Integrity violations describe
+conversion bugs. The latter fail the command but still allow completed
+diagnostic artifacts to remain on disk.
+
+Original brand attributes are source facts and are not interpreted as ownership
+or authorization claims. Category selection, prohibited-category rules, and
+logistics restrictions remain future stages. The future category Agent must
+select only real IDs and paths from
+`data/ozon/categories/ozon-category-tree.json`; this runtime does not read that
+tree for matching.

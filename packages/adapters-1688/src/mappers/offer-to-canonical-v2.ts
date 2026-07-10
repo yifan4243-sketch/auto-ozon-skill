@@ -5,10 +5,16 @@ import { analyzeSkuVariants } from '../../../transformer/src/variant-analyzer.js
 import { validateSourceSkuIds } from '../../../transformer/src/sku-identifier.js';
 import type { OfferResult } from '../engine/commands/offers.js';
 
+export interface CanonicalV2DiscoveryContextInput {
+  searchTerm?: string | null;
+  seedOfferId?: string | null;
+}
+
 export function offerToCanonicalV2(
   offer: OfferResult,
   method: CollectionMethod,
   collectedAt = new Date().toISOString(),
+  discoveryContext: CanonicalV2DiscoveryContextInput = {},
 ): CanonicalProductV2 {
   const skus = assembleCanonicalSkus({
     skus: offer.skus,
@@ -52,6 +58,10 @@ export function offerToCanonicalV2(
       collection_method: method,
       detail_url: offer.detailUrl,
       source_category_id: offer.categoryId,
+      discovery_context: {
+        search_term: discoveryContext.searchTerm?.trim() || null,
+        seed_offer_id: discoveryContext.seedOfferId?.trim() || null,
+      },
     },
     supplier: {
       name: offer.supplier.name,

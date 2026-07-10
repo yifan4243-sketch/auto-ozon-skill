@@ -12,19 +12,22 @@ apps/cli
   complete Ozon MCP command registration
 
 packages/contracts
-  CommandResult, CanonicalProduct V1, CanonicalProductV2, SourcingResult
+  CommandResult, CanonicalProduct V1, CanonicalProductV2
+  SourcingResult V1, SourcingResultV2, V2 summary/integrity contracts
 
 packages/transformer
   deterministic SKU specification parsing
   per-SKU package assembly
   common/varying source-field comparison
   source variant-dimension analysis
+  V2 run summary and OfferResult-to-canonical integrity checks
 
 packages/adapters-1688
   engine/auth
   engine/session
   engine/commands
   mappers
+  V2 offline codec, runtime result builder, and safe run artifacts
   client.ts
 
 packages/adapters-ozon
@@ -107,6 +110,29 @@ unit.
 This layer stops before marketplace interpretation. Agent classification, Ozon
 category and attribute retrieval, missing-package policy, freight, pricing,
 Russian copy, Ozon internal drafts, and final `items[]` are downstream work.
+
+## V2 runtime and validation
+
+The client first produces a typed internal collection run. The default mapper
+returns SourcingResult V1. Explicit V2 calls map the same OfferResult objects to
+CanonicalProductV2, calculate a run summary, and execute deterministic integrity
+checks. Keyword `sku-max` filtering now counts source SKUs directly and shares
+the same selected OfferResult batch between both contract versions.
+
+Offline replay accepts only explicit OfferResult or OfferBatchResult shapes.
+The codec reconstructs known fields, preventing arbitrary input keys from
+flowing into audit artifacts. Audit persistence is separate from browser failure
+diagnostics and writes a unique run directory without overwriting prior runs.
+
+The V2 integrity layer verifies product/SKU cardinality, stable IDs and SKU
+facts, package matching and numeric normalization, gallery separation, and
+blocked invalid-ID handling. Integrity failure is a program error; validation
+warnings remain source-data observations.
+
+No category Agent, Ozon attribute mapping, prohibited/logistics knowledge base,
+pricing, Russian content, draft, or publishing behavior is part of this layer.
+Future category selection is constrained to real entries from
+`data/ozon/categories/ozon-category-tree.json`.
 
 ## Removed scope
 

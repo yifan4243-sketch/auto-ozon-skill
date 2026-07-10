@@ -49,6 +49,31 @@ pnpm --filter @auto-ozon/cli dev -- ozon methods examples ProductAPI_ImportProdu
 
 完整命令请查看 `docs/COMMANDS.md`。
 
+## CanonicalProductV2 运行时
+
+四个采集命令默认仍返回 CanonicalProduct V1。只有显式指定
+`--schema-version 2` 时，才输出 V2 来源事实合同、运行摘要和确定性完整性报告：
+
+```bash
+pnpm --filter @auto-ozon/cli dev -- source keyword "修枝剪" --max 10 --schema-version 2
+pnpm --filter @auto-ozon/cli dev -- source offers 123456789 --schema-version 2 --json-v2 --pretty
+pnpm --filter @auto-ozon/cli dev -- source offers 123456789 --schema-version 2 --save-dir ../../data/validation/canonical-v2-runs
+pnpm --filter @auto-ozon/cli dev -- source normalize-v2 --input C:/path/to/saved-offer.json --method offers
+```
+
+`--schema-version 2` 控制商品数据合同版本；`--json-v2` 仍只控制响应信封，
+两个参数可以同时使用。`source normalize-v2` 仅接受明确的单个
+`OfferResult` 或 `OfferBatchResult`，无需浏览器、登录或网络即可离线回放。
+
+V2 保存 keyword 搜索词和 similar 种子 offerId，为后续类目处理提供来源上下文。
+未来类目 Agent 只能从 `data/ozon/categories/ozon-category-tree.json` 选择真实
+类目 ID 和路径；本阶段不运行 Agent，也不读取类目树做匹配。1688 原始品牌属性
+会保留，但系统不判断品牌归属或授权。禁售和物流禁运规则将在后续阶段读取用户
+提供的知识库，本阶段不硬编码规则。
+
+人工真实数据验证流程见 `docs/CANONICAL_V2_REAL_VALIDATION.md`。本地验证结果目录
+`data/validation/canonical-v2-runs/` 已加入 `.gitignore`。
+
 ## 风控
 
 本项目不绕过 1688 风控，不接打码平台，不自动处理滑块或验证码。遇到风控时使用 `--headed` 打开浏览器，由人工完成验证。

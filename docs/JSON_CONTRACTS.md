@@ -67,6 +67,10 @@ interface CanonicalProductV2 {
     collection_method: "keyword" | "image" | "offers" | "similar";
     detail_url: string | null;
     source_category_id: string | null;
+    discovery_context: {
+      search_term: string | null;
+      seed_offer_id: string | null;
+    };
   };
   supplier: SupplierSourceFacts;
   product: ProductSourceFacts;
@@ -103,3 +107,43 @@ Source SKU IDs are validated before the product can be considered usable. Empty
 or duplicate IDs add validation errors and block the product. For an invalid ID
 set, `values_by_sku` uses deterministic positional suffixes so no comparison
 value can be overwritten silently.
+
+`discovery_context.search_term` stores the original keyword for keyword runs.
+`discovery_context.seed_offer_id` stores the original seed for similar runs.
+Offers, image, and context-free offline conversion use null values. Local image
+paths are never stored in CanonicalProductV2.
+
+## SourcingResultV2
+
+```ts
+interface SourcingResultV2 {
+  schema_version: 2;
+  mode: "keyword" | "image" | "offers" | "similar";
+  query: string | null;
+  offer_ids: string[];
+  total: number;
+  success: number;
+  failed: number;
+  items: CanonicalProductV2[];
+  failures: Array<{
+    offer_id: string | null;
+    code: string;
+    message: string;
+    recoverable: boolean;
+  }>;
+  summary: CanonicalV2RunSummary;
+  integrity_report: CanonicalV2IntegrityReport;
+  artifacts: CanonicalV2RunArtifacts | null;
+  raw?: unknown;
+}
+```
+
+Collection `success`/`failed` counts are separate from product validation. A
+blocked or needs-review product remains in `items`; it is not a collection
+failure. `summary` counts products, SKUs, validation statuses, package match
+methods, missing packages/weights, unparsed specs, and duplicate spec groups.
+
+`validation` reports incomplete or reviewable source facts. `integrity_report`
+instead detects program conversion damage such as missing SKUs, changed prices,
+incorrect package normalization, or detail URLs entering the gallery. An
+integrity failure returns `V2_INTEGRITY_FAILED` and a non-zero process exit code.
