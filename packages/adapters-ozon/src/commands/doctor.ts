@@ -1,9 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import {
+  CREDENTIAL_TOOLS,
   DISCOVERY_TOOLS,
   EXECUTION_TOOLS,
   EXECUTION_TOOLS_NEXT_ACTIONS,
+  FULL_BRIDGE_CORE_TOOLS,
+  REFERENCE_TOOLS,
   SUBMODULE_NEXT_ACTIONS,
   UV_NEXT_ACTIONS,
   credentialStatus,
@@ -82,7 +85,7 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
       mcpStartOk = true;
       const listResult = await client.listTools();
       toolsListOk = true;
-      toolNames = extractToolNames(listResult);
+      toolNames = extractToolNames(listResult).sort();
     } catch (error) {
       errors.push({
         code: mcpStartOk ? 'OZON_MCP_LIST_TOOLS_FAILED' : 'OZON_MCP_START_FAILED',
@@ -106,34 +109,52 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
   });
 
   const discoveryTools = toolAvailability(toolNames, DISCOVERY_TOOLS);
+  const referenceTools = toolAvailability(toolNames, REFERENCE_TOOLS);
   const executionTools = toolAvailability(toolNames, EXECUTION_TOOLS);
+  const credentialTools = toolAvailability(toolNames, CREDENTIAL_TOOLS);
+  const fullBridgeCoreTools = toolAvailability(toolNames, FULL_BRIDGE_CORE_TOOLS);
+
+  addToolCheck(checks, 'discovery tools', discoveryTools, toolsListOk);
+  addToolCheck(checks, 'reference tools', referenceTools, toolsListOk);
+  addToolCheck(checks, 'execution tools', executionTools, toolsListOk, 'warning');
+  addToolCheck(checks, 'full bridge core tools', fullBridgeCoreTools, toolsListOk);
+
   checks.push({
-    name: 'discovery tools',
-    status: discoveryTools.available ? 'ok' : toolsListOk ? 'error' : 'skipped',
-    message: discoveryTools.available
-      ? 'Discovery tools are available.'
-      : `Missing: ${discoveryTools.missing.join(', ')}`,
+    name: 'credential-dependent tools',
+    status: credentialTools.available
+      ? 'ok'
+      : toolsListOk && credentials.sellerCredentials
+        ? 'error'
+        : toolsListOk
+          ? 'skipped'
+          : 'skipped',
+    message: credentialTools.available
+      ? 'Credential-dependent tools are available.'
+      : credentials.sellerCredentials
+        ? `Missing: ${credentialTools.missing.join(', ')}`
+        : 'Seller credentials are not configured; subscription-status tool is expected to be absent.',
   });
-  if (toolsListOk && !discoveryTools.available) {
+
+  if (toolsListOk && !fullBridgeCoreTools.available) {
     errors.push({
-      code: 'OZON_DISCOVERY_TOOLS_MISSING',
-      message: 'Required Ozon discovery tools are missing from PCDCK/ozon-mcp.',
+      code: 'OZON_FULL_BRIDGE_TOOLS_MISSING',
+      message: `Required Ozon MCP tools are missing: ${fullBridgeCoreTools.missing.join(', ')}`,
+      recoverable: true,
+    });
+  }
+  if (toolsListOk && credentials.sellerCredentials && !credentialTools.available) {
+    errors.push({
+      code: 'OZON_CREDENTIAL_TOOLS_MISSING',
+      message: `Credential-dependent Ozon MCP tools are missing: ${credentialTools.missing.join(', ')}`,
       recoverable: true,
     });
   }
 
-  checks.push({
-    name: 'execution tools',
-    status: executionTools.available ? 'ok' : toolsListOk ? 'warning' : 'skipped',
-    message: executionTools.available
-      ? 'Execution tools are available.'
-      : `Missing: ${executionTools.missing.join(', ')}`,
-  });
-
-  if (toolsListOk && discoveryTools.available && !credentials.sellerCredentials) {
+  if (toolsListOk && fullBridgeCoreTools.available && !credentials.sellerCredentials) {
     warnings.push({
       code: 'OZON_CREDENTIALS_MISSING',
-      message: 'Discovery tools are available, execution tools are disabled.',
+      message:
+        'The complete offline/discovery bridge is available; live account calls and subscription status need seller credentials.',
     });
     EXECUTION_TOOLS_NEXT_ACTIONS.forEach((action) => nextActions.add(action));
   }
@@ -146,8 +167,12 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
     mcpStartOk,
     toolsListOk,
     toolCount: toolNames.length,
+    toolNames,
     discoveryTools,
+    referenceTools,
     executionTools,
+    credentialTools,
+    fullBridgeCoreTools,
     credentials,
     checks,
   };
@@ -160,6 +185,22 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
     };
   }
   return okResult('ozon.doctor', data, warnings, [...nextActions]);
+}
+
+function addToolCheck(
+  checks: OzonDoctorCheck[],
+  name: string,
+  availability: { available: boolean; missing: string[] },
+  toolsListOk: boolean,
+  missingStatus: 'error' | 'warning' = 'error',
+): void {
+  checks.push({
+    name,
+    status: availability.available ? 'ok' : toolsListOk ? missingStatus : 'skipped',
+    message: availability.available
+      ? `${name[0]?.toUpperCase() ?? ''}${name.slice(1)} are available.`
+      : `Missing: ${availability.missing.join(', ')}`,
+  });
 }
 
 function directoryExists(dir: string): boolean {
