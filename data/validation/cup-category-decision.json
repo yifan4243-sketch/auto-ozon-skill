@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "source_offer_id": "521463495483",
+  "product_understanding": {
+    "summary_zh": "正版三丽鸥凯蒂猫儿童密胺餐具套装，含碗、杯子、盘子、分餐盘四类。三丽鸥品牌授权凯蒂猫图案，食品级密胺材质，儿童适用。混合商品，需分四个类目组。",
+    "product_family_zh": "三丽鸥凯蒂猫儿童密胺餐具",
+    "evidence": [
+      { "source": "title_zh", "value": "正版三丽鸥凯蒂猫儿童密胺餐具餐盘碗盘子杯子三丽鸥餐具食品级" },
+      { "source": "attribute", "value": "材质：密胺、美耐皿" },
+      { "source": "attribute", "value": "适用人群：儿童" },
+      { "source": "attribute", "value": "产品类别：碗" }
+    ]
+  },
+  "representative_sku_ids": [
+    "4958524658531", "4958524658527", "4958524658529", "4958524658553"
+  ],
+  "product_structure": "mixed_product",
+  "category_groups": [
+    {
+      "group_id": "bowls",
+      "source_sku_ids": [
+        "4958524658555","4958524658556","4958524658531","4958524658539","4958524658552",
+        "4958524658545","4958524658540","4958524658551","4958524658541","4958524658528",
+        "4958524658546","4958524658537","4958524658538","4958524658536","4958524658560",
+        "4958524658535","4958524658542","5047549814903","4958524658547","4958524658550"
+      ],
+      "group_summary_zh": "三丽鸥凯蒂猫儿童密胺碗，含双耳碗、单耳碗、双色碗、心形碗、星形碗、深碗、韩式碗、汤碗、保鲜碗等多种款式，共20个SKU",
+      "evidence": [
+        { "source": "title_zh", "value": "碗" },
+        { "source": "attribute", "value": "材质：密胺" }
+      ],
+      "selected_category": {
+        "description_category_id": 17028741,
+        "description_category_name": "餐具",
+        "type_id": 92506,
+        "type_name": "碗",
+        "category_path_zh": ["住宅和花园", "餐具", "碗"]
+      },
+      "alternative_categories": [],
+      "confidence": "high",
+      "rationale_zh": "儿童密胺碗，属于住宅和花园 > 餐具 > 碗(92506)。"
+    },
+    {
+      "group_id": "cups",
+      "source_sku_ids": [
+        "4958524658562","4958524658554","4958524658530","4958524658534",
+        "4958524658527","4958524658557","4958524658543","4958524658544"
+      ],
+      "group_summary_zh": "三丽鸥凯蒂猫儿童密胺杯，含心形杯、带盖杯、双耳杯、欧式杯、双色水杯等，共8个SKU",
+      "evidence": [
+        { "source": "title_zh", "value": "杯子" },
+        { "source": "attribute", "value": "材质：密胺" }
+      ],
+      "selected_category": {
+        "description_category_id": 17028741,
+        "description_category_name": "餐具",
+        "type_id": 92499,
+        "type_name": "杯子",
+        "category_path_zh": ["住宅和花园", "餐具", "杯子"]
+      },
+      "alternative_categories": [],
+      "confidence": "high",
+      "rationale_zh": "儿童密胺杯，属于住宅和花园 > 餐具 > 杯子(92499)。"
+    },
+    {
+      "group_id": "plates",
+      "source_sku_ids": [
+        "4958524658529","4958524658548","4958524658559","4862978524590"
+      ],
+      "group_summary_zh": "三丽鸥凯蒂猫儿童密胺盘子，含头型盘、方碟、长方盘、五角星盘，共4个SKU",
+      "evidence": [
+        { "source": "title_zh", "value": "盘子" },
+        { "source": "attribute", "value": "材质：密胺" }
+      ],
+      "selected_category": {
+        "description_category_id": 17028741,
+        "description_category_name": "餐具",
+        "type_id": 92528,
+        "type_name": "盘子",
+        "category_path_zh": ["住宅和花园", "餐具", "盘子"]
+      },
+      "alternative_categories": [],
+      "confidence": "high",
+      "rationale_zh": "儿童密胺盘子，属于住宅和花园 > 餐具 > 盘子(92528)。"
+    },
+    {
+      "group_id": "divided-plates",
+      "source_sku_ids": [
+        "4958524658558","4958524658564","4958524658553"
+      ],
+      "group_summary_zh": "三丽鸥凯蒂猫儿童密胺分餐盘，含双色头型三格盘、四格盘、三格盘，共3个SKU",
+      "evidence": [
+        { "source": "title_zh", "value": "分餐盘" },
+        { "source": "attribute", "value": "材质：密胺" }
+      ],
+      "selected_category": {
+        "description_category_id": 17028741,
+        "description_category_name": "餐具",
+        "type_id": 92492,
+        "type_name": "分餐盘",
+        "category_path_zh": ["住宅和花园", "餐具", "分餐盘"]
+      },
+      "alternative_categories": [],
+      "confidence": "high",
+      "rationale_zh": "儿童密胺分餐盘，属于住宅和花园 > 餐具 > 分餐盘(92492)。"
+    }
+  ],
+  "unassigned_sku_ids": [],
+  "status": "decided",
+  "warnings": [],
+  "errors": []
+}

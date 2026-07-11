@@ -37,7 +37,6 @@ export interface CategoryAttributesV1 {
     description_category_name?: string;
     type_name?: string;
     category_path_zh?: string[];
-    group_id?: string;
   };
   attributes: CategoryAttributeV1[];
   raw_response: unknown;

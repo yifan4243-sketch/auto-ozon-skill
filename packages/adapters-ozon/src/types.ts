@@ -105,7 +105,6 @@ export interface GetCategoryAttributesOptions {
   categoryName?: string;
   typeName?: string;
   categoryPathZh?: string[];
-  groupId?: string;
   forceRefresh?: boolean;
 }
 

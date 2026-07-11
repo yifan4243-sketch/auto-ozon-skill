@@ -5,34 +5,50 @@ import type { CategoryAttributesV1 } from '../../../../packages/contracts/src/ca
 import type { CommandResult } from '../../../../packages/contracts/src/command-result.js';
 import type { CategoryDecisionProvider } from './category-decision-provider.js';
 import { FileDecisionProvider } from './category-decision-provider.js';
+import { validateCategoryDecisionSchema } from '../../../../packages/category-intelligence/src/category-decision-schema.js';
+import { loadOzonCategoryIndex } from '../../../../packages/category-intelligence/src/ozon-category-tree.js';
+import { validateCategoryDecision } from '../../../../packages/category-intelligence/src/category-decision-validator.js';
 
 export interface CategoryInspectOptions {
   keyword: string;
   max: number;
   decisionFile?: string;
   decisionProvider?: CategoryDecisionProvider;
-  json?: boolean;
-  pretty?: boolean;
+  forceRefresh?: boolean;
+}
+
+export interface CategoryAttributesGroupResultV1 {
+  group_ids: string[];
+  category: OzonCategorySelectionV1;
+  attributes_schema: CategoryAttributesV1;
 }
 
 export interface CategoryInspectResult {
   source: unknown;
   category_decision?: CategoryDecisionV1;
-  category_attributes?: CategoryAttributesV1[];
-}
-
-interface CategoryPairKey {
-  description_category_id: number;
-  type_id: number;
-}
-
-function pairKey(cat: OzonCategorySelectionV1): string {
-  return `${cat.description_category_id}:${cat.type_id}`;
+  category_attributes?: CategoryAttributesGroupResultV1[];
 }
 
 export async function runCategoryInspect(
   options: CategoryInspectOptions,
 ): Promise<CommandResult<CategoryInspectResult>> {
+  // Only single product supported in V0
+  if (options.max !== 1) {
+    return {
+      ok: false,
+      command: 'workflow.category.inspect',
+      warnings: [],
+      errors: [
+        {
+          code: 'CATEGORY_INSPECT_SINGLE_PRODUCT_ONLY',
+          message: 'workflow category inspect currently supports exactly one sourced product (--max 1).',
+          recoverable: true,
+        },
+      ],
+      nextActions: [],
+    };
+  }
+
   // Step 1: 1688 sourcing → CanonicalProductV2
   const sourceResult = await search1688ByKeywordV2({
     keyword: options.keyword,
@@ -68,8 +84,7 @@ export async function runCategoryInspect(
       warnings: [
         {
           code: 'NO_DECISION_PROVIDER',
-          message:
-            'No --decision-file or decision provider supplied. Provide --decision-file to complete the pipeline.',
+          message: 'No --decision-file supplied. Provide --decision-file to complete the pipeline.',
         },
       ],
       errors: [],
@@ -80,7 +95,7 @@ export async function runCategoryInspect(
     };
   }
 
-  // Step 2: Load CategoryDecisionV1
+  // Step 2: Load and validate CategoryDecisionV1
   let decision: CategoryDecisionV1;
   try {
     decision = await provider.load();
@@ -101,10 +116,30 @@ export async function runCategoryInspect(
     };
   }
 
-  // Validate decision matches source product
-  const srcAny = sourceData as unknown as { items?: Array<{ source?: { offer_id?: string } }> };
-  const sourceOfferId = srcAny?.items?.[0]?.source?.offer_id;
-  if (sourceOfferId && decision.source_offer_id && decision.source_offer_id !== sourceOfferId) {
+  // Validate JSON schema structure
+  const schemaValidation = validateCategoryDecisionSchema(decision);
+  if (!schemaValidation.valid) {
+    return {
+      ok: false,
+      command: 'workflow.category.inspect',
+      data: { source: sourceData },
+      warnings: [],
+      errors: [
+        {
+          code: 'CATEGORY_DECISION_SCHEMA_INVALID',
+          message: `CategoryDecisionV1 schema validation failed: ${schemaValidation.errors.length} error(s)`,
+          recoverable: true,
+          detail: { schema_errors: schemaValidation.errors.slice(0, 10) },
+        },
+      ],
+      nextActions: [],
+    };
+  }
+
+  // Extract the single CanonicalProductV2 from source
+  const srcAny = sourceData as unknown as { items?: Array<unknown> };
+  const product = srcAny?.items?.[0];
+  if (!product) {
     return {
       ok: false,
       command: 'workflow.category.inspect',
@@ -112,50 +147,57 @@ export async function runCategoryInspect(
       warnings: [],
       errors: [
         {
-          code: 'DECISION_OFFER_ID_MISMATCH',
-          message: `Decision offer_id (${decision.source_offer_id}) does not match sourced product (${sourceOfferId}).`,
+          code: 'NO_PRODUCT_IN_SOURCE',
+          message: 'No product found in source result items[0].',
           recoverable: true,
         },
       ],
-      nextActions: ['Ensure the --decision-file corresponds to the currently sourced product.'],
+      nextActions: [],
     };
   }
 
-  // Validate SKU coverage
-  const srcItem = srcAny?.items?.[0];
-  const sourceSkus = (srcItem as unknown as { skus?: Array<{ source_sku_id: string }> })?.skus;
-  if (sourceSkus) {
-    const sourceSkuIds = new Set(sourceSkus.map((s) => s.source_sku_id));
-    const decisionSkuIds = new Set<string>();
-    for (const group of decision.category_groups) {
-      for (const skuId of group.source_sku_ids) decisionSkuIds.add(skuId);
-    }
-    for (const skuId of decision.unassigned_sku_ids) decisionSkuIds.add(skuId);
-
-    const unknownSkus = [...decisionSkuIds].filter((id) => !sourceSkuIds.has(id));
-    if (unknownSkus.length > 0) {
-      return {
-        ok: false,
-        command: 'workflow.category.inspect',
-        data: { source: sourceData, category_decision: decision },
-        warnings: [],
-        errors: [
-          {
-            code: 'DECISION_SKU_MISMATCH',
-            message: `Decision references ${unknownSkus.length} SKU IDs not present in the sourced product (first 5: ${unknownSkus.slice(0, 5).join(', ')})`,
-            recoverable: true,
-          },
-        ],
-        nextActions: [],
-      };
-    }
+  // Load Ozon category index and run full validation
+  let categoryIndex;
+  try {
+    categoryIndex = await loadOzonCategoryIndex();
+  } catch (error) {
+    return {
+      ok: false,
+      command: 'workflow.category.inspect',
+      data: { source: sourceData, category_decision: decision },
+      warnings: [],
+      errors: [
+        {
+          code: 'CATEGORY_INDEX_LOAD_FAILED',
+          message: `Failed to load Ozon category tree: ${String(error)}`,
+          recoverable: true,
+        },
+      ],
+      nextActions: [],
+    };
   }
 
-  // Step 3: Collect all unique category pairs from all groups
-  const decidedGroups = decision.category_groups.filter(
-    (g) => g.selected_category !== null,
-  );
+  const validation = validateCategoryDecision(decision, product as never, categoryIndex);
+  if (!validation.valid) {
+    return {
+      ok: false,
+      command: 'workflow.category.inspect',
+      data: { source: sourceData, category_decision: decision },
+      warnings: [],
+      errors: [
+        {
+          code: 'CATEGORY_DECISION_VALIDATION_FAILED',
+          message: `CategoryDecision validation failed with ${validation.violations.length} violation(s).`,
+          recoverable: true,
+          detail: { violations: validation.violations },
+        },
+      ],
+      nextActions: [],
+    };
+  }
 
+  // Step 3: Collect unique category pairs from all decided groups, preserving group_ids
+  const decidedGroups = decision.category_groups.filter((g) => g.selected_category !== null);
   if (!decidedGroups.length) {
     return {
       ok: false,
@@ -173,68 +215,68 @@ export async function runCategoryInspect(
     };
   }
 
-  // Deduplicate by (description_category_id, type_id)
-  const uniquePairs = new Map<string, { selection: OzonCategorySelectionV1; groupId: string }>();
+  const pairMap = new Map<string, { selection: OzonCategorySelectionV1; groupIds: string[] }>();
   for (const group of decidedGroups) {
     const sel = group.selected_category!;
-    const key = pairKey(sel);
-    if (!uniquePairs.has(key)) {
-      uniquePairs.set(key, { selection: sel, groupId: group.group_id });
+    const key = `${sel.description_category_id}:${sel.type_id}`;
+    const entry = pairMap.get(key);
+    if (entry) {
+      entry.groupIds.push(group.group_id);
+    } else {
+      pairMap.set(key, { selection: sel, groupIds: [group.group_id] });
     }
   }
 
-  // Step 4: Fetch category attributes for each unique pair
-  const allErrors: CommandResult<CategoryInspectResult>['errors'] = [];
-  const categoryAttributesResults: CategoryAttributesV1[] = [];
+  // Step 4: Fetch attributes for each unique pair
+  const errors: CommandResult<CategoryInspectResult>['errors'] = [];
+  const results: CategoryAttributesGroupResultV1[] = [];
 
-  for (const [, { selection, groupId }] of uniquePairs) {
+  for (const [, { selection, groupIds }] of pairMap) {
     const attrsResult = await getCategoryAttributes({
       descriptionCategoryId: selection.description_category_id,
       typeId: selection.type_id,
       categoryName: selection.description_category_name,
       typeName: selection.type_name,
       categoryPathZh: selection.category_path_zh,
-      groupId,
+      forceRefresh: options.forceRefresh,
     });
 
     if (!attrsResult.ok) {
-      allErrors.push(...attrsResult.errors);
+      errors.push(...attrsResult.errors);
     } else if (attrsResult.data) {
-      categoryAttributesResults.push(attrsResult.data);
+      results.push({
+        group_ids: groupIds,
+        category: selection,
+        attributes_schema: attrsResult.data,
+      });
     }
   }
 
-  if (allErrors.length > 0 && categoryAttributesResults.length === 0) {
+  if (errors.length > 0) {
     return {
       ok: false,
       command: 'workflow.category.inspect',
       data: {
         source: sourceData,
         category_decision: decision,
+        category_attributes: results.length > 0 ? results : undefined,
       },
       warnings: [],
-      errors: allErrors,
+      errors,
       nextActions: [],
     };
   }
 
-  const hasErrors = allErrors.length > 0;
-
   return {
-    ok: !hasErrors,
+    ok: true,
     command: 'workflow.category.inspect',
     data: {
       source: sourceData,
       category_decision: decision,
-      category_attributes: categoryAttributesResults,
+      category_attributes: results,
     },
-    warnings: hasErrors
-      ? allErrors.map((e) => ({
-          code: `PARTIAL_${e.code}`,
-          message: e.message,
-        }))
-      : [],
-    errors: hasErrors ? allErrors : [],
+    warnings: [],
+    errors: [],
     nextActions: [],
   };
 }

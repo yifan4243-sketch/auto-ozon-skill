@@ -33,6 +33,7 @@ export async function readCategoryAttributesCache(
     const raw = await fs.readFile(cacheFile, 'utf8');
     return JSON.parse(raw) as CategoryAttributesV1;
   } catch {
+    // Cache miss — file missing or unparseable
     return null;
   }
 }
@@ -42,11 +43,13 @@ export async function writeCategoryAttributesCache(
 ): Promise<void> {
   const cacheDir = resolveCacheDir();
   await fs.mkdir(cacheDir, { recursive: true });
-  const cacheFile = path.join(
-    cacheDir,
-    buildCacheKey(data.category.description_category_id, data.category.type_id),
-  );
-  await fs.writeFile(cacheFile, JSON.stringify(data, null, 2), 'utf8');
+  const finalName = buildCacheKey(data.category.description_category_id, data.category.type_id);
+  const finalPath = path.join(cacheDir, finalName);
+  const tmpName = `${finalName}.tmp-${process.pid}-${Date.now()}`;
+  const tmpPath = path.join(cacheDir, tmpName);
+
+  await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+  await fs.rename(tmpPath, finalPath);
 }
 
 export async function deleteCategoryAttributesCache(

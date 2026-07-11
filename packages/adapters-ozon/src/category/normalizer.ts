@@ -46,7 +46,6 @@ export function normalizeCategoryAttributes(
       description_category_name: options.categoryName,
       type_name: options.typeName,
       category_path_zh: options.categoryPathZh,
-      group_id: options.groupId,
     },
     attributes,
     raw_response: rawAttributes,

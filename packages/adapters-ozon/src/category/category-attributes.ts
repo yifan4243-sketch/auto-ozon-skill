@@ -21,7 +21,6 @@ import { normalizeCategoryAttributes, normalizeAttributeValues } from './normali
 import {
   readCategoryAttributesCache,
   writeCategoryAttributesCache,
-  deleteCategoryAttributesCache,
 } from './cache.js';
 import { ensureExecutionToolAndReadSafety } from '../commands/call.js';
 
@@ -33,7 +32,7 @@ export async function getCategoryAttributes(
 ): Promise<OzonCommandResult<CategoryAttributesV1>> {
   const forceRefresh = options.forceRefresh === true;
 
-  // Check cache first (unless --refresh)
+  // Check cache first (unless --refresh; never delete pre-emptively)
   if (!forceRefresh) {
     const cached = await readCategoryAttributesCache(
       options.descriptionCategoryId,
@@ -42,12 +41,6 @@ export async function getCategoryAttributes(
     if (cached) {
       return okResult('category.attributes', cached);
     }
-  } else {
-    // Clear stale cache when forcing refresh
-    await deleteCategoryAttributesCache(
-      options.descriptionCategoryId,
-      options.typeId,
-    );
   }
 
   try {
@@ -115,9 +108,14 @@ export async function getCategoryAttributes(
         if (!result.ok) {
           return errorResult('category.attributes', {
             code: 'DICTIONARY_FETCH_FAILED',
-            message: `Failed to fetch dictionary values for attribute ${attributeId}: ${result.error}`,
+            message: `Failed to fetch dictionary values for attribute ${attributeId} (category ${options.descriptionCategoryId}/${options.typeId}): ${result.error}`,
             recoverable: true,
-            detail: { attributeId, lastValueId: result.lastValueId },
+            detail: {
+              attributeId,
+              lastValueId: result.lastValueId,
+              descriptionCategoryId: options.descriptionCategoryId,
+              typeId: options.typeId,
+            },
           }) as OzonCommandResult<CategoryAttributesV1>;
         }
 
@@ -191,7 +189,7 @@ async function fetchAllAttributeValues(
     if (parsed.isError || isOzonErrorPayload(parsed.data)) {
       return {
         ok: false,
-        error: `MCP error at last_value_id=${lastValueId}`,
+        error: `MCP error at attribute_id=${attributeId}, last_value_id=${lastValueId}, category=${descriptionCategoryId}/${typeId}`,
         lastValueId,
       };
     }
@@ -206,7 +204,7 @@ async function fetchAllAttributeValues(
     if (batch.length > 0 && newIds.length === 0) {
       return {
         ok: false,
-        error: `Dictionary cursor stalled at last_value_id=${lastValueId} — no new value IDs returned`,
+        error: `Dictionary cursor stalled at attribute_id=${attributeId}, last_value_id=${lastValueId} — no new value IDs returned`,
         lastValueId,
       };
     }
@@ -215,13 +213,23 @@ async function fetchAllAttributeValues(
     allValues.push(...batch);
 
     hasNext = Boolean(raw?.has_next);
+
+    // Empty page with has_next=true → would loop forever
+    if (hasNext && batch.length === 0) {
+      return {
+        ok: false,
+        error: `Empty dictionary page with has_next=true at attribute_id=${attributeId}, last_value_id=${lastValueId}, category=${descriptionCategoryId}/${typeId}`,
+        lastValueId,
+      };
+    }
+
     if (batch.length > 0) {
       const lastId = batch[batch.length - 1].id;
       // Cursor must advance
       if (lastId <= lastValueId && hasNext) {
         return {
           ok: false,
-          error: `Dictionary cursor did not advance at last_value_id=${lastValueId}, next=${lastId}, has_next=true`,
+          error: `Dictionary cursor did not advance at attribute_id=${attributeId}, last_value_id=${lastValueId}, next=${lastId}, has_next=true`,
           lastValueId,
         };
       }

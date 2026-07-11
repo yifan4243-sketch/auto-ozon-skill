@@ -325,14 +325,14 @@ function registerWorkflowCommands(
     .argument('<keyword>', 'Search keyword for 1688 sourcing')
     .option('--max <n>', 'Maximum products to source', '1')
     .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON file')
+    .option('--refresh', 'Force refresh, bypass category attributes cache')
     .action(async (keyword, opts) => {
       emitCommandResult(
         await runCategoryInspect({
           keyword,
           max: parseNumber(opts.max) ?? 1,
           decisionFile: opts.decisionFile,
-          json: opts.json,
-          pretty: opts.pretty,
+          forceRefresh: opts.refresh === true,
         }),
       );
     });
