@@ -252,15 +252,7 @@ function printResults(r: ImageSearchResult): void {
     process.stdout.write(`${idx}. ${o.title}\n`);
     const pad = ' '.repeat(w + 2);
     process.stdout.write(`${pad}${price}`);
-    if (o.turnover) process.stdout.write(`  ·  ${o.turnover}`);
     process.stdout.write('\n');
-    const supplierBits = [
-      o.supplier.name,
-      o.supplier.years ? `${o.supplier.years}年` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    if (supplierBits) process.stdout.write(`${pad}${supplierBits}\n`);
     process.stdout.write(`${pad}${o.url}\n`);
     if (i < r.offers.length - 1) process.stdout.write('\n');
   });

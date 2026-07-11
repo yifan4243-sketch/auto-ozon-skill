@@ -5,7 +5,7 @@ export function normalizeRawWeight(value: number | null | undefined): number | n
   return isFiniteNumber(value) && value >= MIN_VALID_SOURCE_WEIGHT ? value : null;
 }
 
-/** Package dimensions and volume must be positive source measurements. */
+/** Package dimensions must be positive source measurements. */
 export function normalizePositivePackageValue(
   value: number | null | undefined,
 ): number | null {

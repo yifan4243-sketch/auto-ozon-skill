@@ -13,7 +13,6 @@ const BASE_COMPARISON_FIELDS = [
   'package.height_cm',
   'package.raw_weight',
   'package.weight_unit',
-  'package.volume_cm3',
 ] as const;
 
 export interface SkuFieldComparison {
@@ -107,8 +106,6 @@ function readField(sku: CanonicalSkuV2, field: string): unknown {
       return sku.package.raw_weight;
     case 'package.weight_unit':
       return sku.package.weight_unit;
-    case 'package.volume_cm3':
-      return sku.package.volume_cm3;
     default:
       return null;
   }
@@ -123,6 +120,5 @@ function packageHasNoFacts(sku: CanonicalSkuV2): boolean {
   return sku.package.length_cm === null &&
     sku.package.width_cm === null &&
     sku.package.height_cm === null &&
-    sku.package.raw_weight === null &&
-    sku.package.volume_cm3 === null;
+    sku.package.raw_weight === null;
 }

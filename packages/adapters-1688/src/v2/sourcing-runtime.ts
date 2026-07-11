@@ -11,7 +11,10 @@ import {
   offerToCanonicalV2,
   type CanonicalV2DiscoveryContextInput,
 } from '../mappers/offer-to-canonical-v2.js';
-import { sanitizeOfferResult } from './offer-result-codec.js';
+import {
+  sanitizeOfferBatchResult,
+  sanitizeOfferResult,
+} from './offer-result-codec.js';
 import { saveCanonicalV2Run } from './run-artifacts.js';
 
 export interface CollectedSourcingRun {
@@ -19,7 +22,7 @@ export interface CollectedSourcingRun {
   query: string | null;
   imagePath: string | null;
   details: OfferBatchResult;
-  rawV1: unknown;
+  filtering?: Record<string, unknown>;
 }
 
 export interface FinalizeCanonicalV2RunOptions {
@@ -30,19 +33,23 @@ export interface FinalizeCanonicalV2RunOptions {
 }
 
 export function collectedRunToV1(run: CollectedSourcingRun): SourcingResult {
+  const safeDetails = sanitizeOfferBatchResult(run.details);
   return {
     mode: run.mode,
     ...(run.query !== null ? { query: run.query } : {}),
     ...(run.mode === 'image' && run.imagePath !== null
       ? { imagePath: run.imagePath }
       : {}),
-    offerIds: run.details.offerIds,
-    total: run.details.total,
-    success: run.details.success,
-    failed: run.details.failed,
-    items: run.details.offers.map((offer) => offerToCanonical(offer, run.mode)),
-    raw: run.rawV1,
-    failures: run.details.failures.map((failure) => ({
+    offerIds: safeDetails.offerIds,
+    total: safeDetails.total,
+    success: safeDetails.success,
+    failed: safeDetails.failed,
+    items: safeDetails.offers.map((offer) => offerToCanonical(offer, run.mode)),
+    raw: {
+      ...safeDetails,
+      ...(run.filtering ? { filtering: structuredClone(run.filtering) } : {}),
+    },
+    failures: safeDetails.failures.map((failure) => ({
       offerId: failure.offerId,
       code: failure.code,
       message: failure.message,

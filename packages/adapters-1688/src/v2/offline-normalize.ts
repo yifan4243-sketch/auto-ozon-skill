@@ -42,7 +42,6 @@ export async function normalizeV2Offline(
             : null,
       imagePath: null,
       details,
-      rawV1: details,
     };
     const result = await finalizeCanonicalV2Run(run, {
       command: 'source.normalize-v2',

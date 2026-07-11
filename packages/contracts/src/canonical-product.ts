@@ -5,14 +5,7 @@ export interface CanonicalProduct {
     offerUrl: string;
     collectedAt: string;
     collectionMethod: 'keyword' | 'image' | 'offers' | 'similar';
-  };
-
-  supplier: {
-    name?: string | null;
-    loginId?: string | null;
-    memberId?: string | null;
-    userId?: string | null;
-    location?: string | null;
+    sourceCategoryPathZh: string[];
   };
 
   product: {
@@ -28,12 +21,12 @@ export interface CanonicalProduct {
       sourceSkuId: string;
       specs: string;
       priceCny: number | null;
-      stock: number | null;
       image: string | null;
       attributes: Record<string, string>;
     }>;
     packageInfo?: {
-      weightKg?: number | null;
+      rawWeight?: number | null;
+      weightUnit: 'unknown';
       lengthCm?: number | null;
       widthCm?: number | null;
       heightCm?: number | null;

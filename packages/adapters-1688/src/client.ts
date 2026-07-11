@@ -21,7 +21,6 @@ import {
 import {
   normalizeFilters,
   normalizeSearchSort,
-  normalizeVerifiedFilter,
   type SearchFilterSummary,
   type SearchSort,
 } from './engine/commands/sourcing-utils.js';
@@ -83,19 +82,6 @@ interface SkuMaxFilteredOffer {
 }
 
 type SkuMaxStopReason = 'TARGET_REACHED' | 'CANDIDATE_EXHAUSTED';
-
-interface SkuMaxFilteringSummary {
-  skuMax: number;
-  targetMax: number;
-  candidateMax: number;
-  checkedCandidates: number;
-  stoppedEarly: boolean;
-  stopReason: SkuMaxStopReason;
-  totalBeforeSkuFilter: number;
-  totalEligibleBeforeTargetLimit: number;
-  totalAfterSkuFilter: number;
-  filtered: SkuMaxFilteredOffer[];
-}
 
 export async function login1688(input: LoginInput): Promise<CommandResult<unknown>> {
   return wrapCommand('1688.login', async () => {
@@ -218,11 +204,6 @@ async function collectKeywordSource(
   const filters = normalizeFilters({
     priceMin: input.filters?.priceMin ?? null,
     priceMax: input.filters?.priceMax ?? null,
-    province: input.filters?.province,
-    city: input.filters?.city,
-    verified: normalizeVerifiedFilter(input.filters?.verified),
-    minTurnover: input.filters?.minTurnover ?? null,
-    excludeAds: input.filters?.excludeAds,
   });
   const search = await dispatch<SearchArgs, SearchResult>(
     'search',
@@ -238,9 +219,7 @@ async function collectKeywordSource(
   if (skuMax !== undefined) {
     return collectKeywordOffersUntilSkuTarget({
       query: keyword,
-      search,
       offerIds,
-      filters,
       profile: input.profile,
       headed: input.headed,
       skuMax,
@@ -255,15 +234,6 @@ async function collectKeywordSource(
     query: keyword,
     imagePath: null,
     details,
-    rawV1: {
-      keyword: search.keyword,
-      sort: search.sort,
-      filters: search.filters,
-      totalBeforeFilter: search.totalBeforeFilter,
-      total: search.total,
-      offers: search.offers,
-      details,
-    },
   };
 }
 
@@ -284,12 +254,6 @@ async function collectImageSource(input: SearchImageInput): Promise<CollectedSou
     query: null,
     imagePath: input.imagePath,
     details,
-    rawV1: {
-      imageId: imageSearch.imageId,
-      total: imageSearch.total,
-      offers: imageSearch.offers,
-      details,
-    },
   };
 }
 
@@ -300,7 +264,6 @@ async function collectOffersSource(input: OffersInput): Promise<CollectedSourcin
     query: null,
     imagePath: null,
     details,
-    rawV1: details,
   };
 }
 
@@ -323,15 +286,12 @@ async function collectSimilarSource(input: SimilarInput): Promise<CollectedSourc
     query: input.offerId,
     imagePath: null,
     details,
-    rawV1: { similar, details },
   };
 }
 
 async function collectKeywordOffersUntilSkuTarget(input: {
   query: string;
-  search: SearchResult;
   offerIds: string[];
-  filters: SearchFilterSummary;
   profile?: string;
   headed?: boolean;
   skuMax: number;
@@ -390,15 +350,6 @@ async function collectKeywordOffersUntilSkuTarget(input: {
     selectedOffers.length >= input.targetMax
       ? 'TARGET_REACHED'
       : 'CANDIDATE_EXHAUSTED';
-  const checkedDetails: OfferBatchResult = {
-    mode: 'offers',
-    total: checkedOfferIds.length,
-    success: collectedOffers.length,
-    failed: failures.length,
-    offerIds: checkedOfferIds,
-    offers: collectedOffers,
-    failures,
-  };
   const selectedDetails: OfferBatchResult = {
     mode: 'offers',
     total: checkedOfferIds.length,
@@ -414,17 +365,8 @@ async function collectKeywordOffersUntilSkuTarget(input: {
     query: input.query,
     imagePath: null,
     details: selectedDetails,
-    rawV1: withSkuMaxFiltering(
-      {
-        keyword: input.search.keyword,
-        sort: input.search.sort,
-        filters: input.filters,
-        totalBeforeFilter: input.search.totalBeforeFilter,
-        total: input.search.total,
-        offers: input.search.offers,
-        details: checkedDetails,
-      },
-      {
+    filtering: {
+      skuMax: {
         skuMax: input.skuMax,
         targetMax: input.targetMax,
         candidateMax: input.candidateMax,
@@ -436,33 +378,12 @@ async function collectKeywordOffersUntilSkuTarget(input: {
         totalAfterSkuFilter: selectedOffers.length,
         filtered,
       },
-    ),
+    },
   };
 }
 
 function normalizedOfferSkuCount(offer: OfferResult): number {
   return offer.skus.length > 0 ? offer.skus.length : 1;
-}
-
-function withSkuMaxFiltering(raw: unknown, skuMaxSummary: SkuMaxFilteringSummary): unknown {
-  const filtering = { skuMax: skuMaxSummary };
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { originalRaw: raw, filtering };
-  }
-
-  const rawObject = raw as Record<string, unknown>;
-  const existingFiltering =
-    rawObject.filtering && typeof rawObject.filtering === 'object' && !Array.isArray(rawObject.filtering)
-      ? (rawObject.filtering as Record<string, unknown>)
-      : {};
-
-  return {
-    ...rawObject,
-    filtering: {
-      ...existingFiltering,
-      ...filtering,
-    },
-  };
 }
 
 function normalizeSkuMax(value: number | undefined): number | undefined {

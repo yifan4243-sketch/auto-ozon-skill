@@ -50,8 +50,10 @@ auto-ozon source normalize-v2 \
 1. Open `integrity-report.json`; any `fail` is a conversion defect to investigate.
 2. Review the manifest totals and failure list.
 3. Sample every validation status: valid, warning, needs_review, and blocked.
-4. Compare raw and canonical files for SKU count, ID, price, multi-price, stock,
-   sale count, SKU image, dimensions, weight, and specification parsing.
+4. Compare raw and canonical files for Chinese category path, SKU count, ID,
+   price, multi-price, SKU image, dimensions, weight, and specification parsing.
+   Confirm supplier/freight/region, numeric category ID, stock, sales, and volume
+   keys are absent from both files.
 5. Confirm keyword products share the original search term and similar products
    share the seed offer ID.
 6. Manually convert only useful, fully sanitized cases into repository fixtures.

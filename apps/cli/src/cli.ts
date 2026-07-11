@@ -135,14 +135,9 @@ export function buildProgram(): Command {
       'Maximum returned products; with --sku-max this is the qualified-product target',
       '20',
     )
-    .option('--sort <sort>', 'Sort: relevance | best-selling | price-asc | price-desc', 'relevance')
+    .option('--sort <sort>', 'Sort: relevance | price-asc | price-desc', 'relevance')
     .option('--price-min <n>', 'Minimum unit price')
     .option('--price-max <n>', 'Maximum unit price')
-    .option('--province <name>', 'Filter supplier province')
-    .option('--city <name>', 'Filter supplier city')
-    .option('--verified <kind>', 'Filter: any | factory | business | super-factory', 'any')
-    .option('--min-turnover <n>', 'Minimum parsed turnover/order count')
-    .option('--exclude-ads', 'Exclude P4P/ad results')
     .option('--sku-max <n>', 'Keep only products whose normalized SKU count is less than or equal to n')
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
@@ -158,11 +153,6 @@ export function buildProgram(): Command {
         filters: {
           priceMin: parseOptionalNumber(opts.priceMin),
           priceMax: parseOptionalNumber(opts.priceMax),
-          province: opts.province,
-          city: opts.city,
-          verified: opts.verified,
-          minTurnover: parseOptionalNumber(opts.minTurnover),
-          excludeAds: opts.excludeAds,
         },
         skuMax: parseSkuMax(opts.skuMax),
         profile: opts.profile,

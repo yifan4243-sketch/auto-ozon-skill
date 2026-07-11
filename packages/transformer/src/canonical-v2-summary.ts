@@ -46,6 +46,5 @@ function hasPackageFacts(pkg: CanonicalProductV2['skus'][number]['package']): bo
   return pkg.length_cm !== null ||
     pkg.width_cm !== null ||
     pkg.height_cm !== null ||
-    pkg.raw_weight !== null ||
-    pkg.volume_cm3 !== null;
+    pkg.raw_weight !== null;
 }

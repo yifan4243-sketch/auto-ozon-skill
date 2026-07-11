@@ -56,6 +56,16 @@ pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
 
 See `docs/COMMANDS.md` for the full CLI surface.
 
+### Retained-facts boundary
+
+The 1688 detail collector now keeps only facts needed by later sourcing,
+category selection, and listing preparation: offer identity and URL, the
+visible Chinese category breadcrumb, title, attributes, images/detail content,
+prices and order quantities, SKU IDs/specifications/prices/images, and package
+length/width/height/raw weight. It does not collect or emit numeric 1688
+category IDs, supplier identity, receiving or dispatch regions, freight weight,
+stock, sales counts, or source package volume. V1 and V2 share this boundary.
+
 ## CanonicalProductV2 runtime
 
 The four sourcing commands continue to return CanonicalProduct V1 by default.
@@ -75,12 +85,12 @@ accepts exactly one typed `OfferResult` or one typed `OfferBatchResult` and does
 not require a browser, login, or network.
 
 V2 preserves keyword/similar discovery context for later category work. A
-future category Agent may select only real category IDs and paths from
-`data/ozon/categories/ozon-category-tree.json`; this phase does not run that
-Agent or read the tree for matching. Original brand attributes are retained,
-but ownership and authorization are not inferred. Prohibited-category and
-logistics restrictions will come from user-provided knowledge bases in a later
-phase.
+future category Agent will use the search term, Chinese title, 1688 Chinese
+category path, product attributes, and SKU specifications to match the saved
+Ozon Chinese category table. This phase does not implement or run that Agent.
+Original brand attributes remain ordinary product attributes; ownership and
+authorization are not inferred. Prohibited-category and logistics restrictions
+remain later user-knowledge-base work.
 
 See `docs/CANONICAL_V2_REAL_VALIDATION.md` for the manual real-data validation
 procedure. Local validation runs under `data/validation/canonical-v2-runs/` are

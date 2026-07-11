@@ -10,7 +10,8 @@ source keyword
 -> map to CanonicalProduct[]
 ```
 
-Keyword search is deep by default because Ozon draft creation needs title, images, attributes, price tiers, SKUs, supplier info, and package data.
+Keyword search is deep by default because later listing preparation needs title,
+Chinese category path, images, attributes, prices, SKUs, and package dimensions/weight.
 
 ## Image sourcing
 
@@ -70,7 +71,8 @@ keeps its source ID.
 
 After matching, an empty package record is still reported as missing. Raw weight
 must be at least `3` to be retained; smaller values become `null` without unit
-conversion. Package length, width, height, and volume must be positive. Empty or
+conversion. Package length, width, and height must be positive; source volume is
+not collected. Empty or
 duplicate source SKU IDs are validation errors and block the V2 product; field
 comparison uses collision-free positional keys so invalid IDs cannot overwrite
 one another in `values_by_sku`.
@@ -118,10 +120,12 @@ context, and the image path is not included in CanonicalProductV2.
   failures.json
 ```
 
-Only reconstructed, typed OfferResult fields are written to `raw`; unknown
-fields, browser responses, cookies, tokens, credentials, and image paths are not
-copied. `source normalize-v2` accepts one known OfferResult or OfferBatchResult
-for deterministic replay without network access.
+Only reconstructed retained OfferResult fields are written to `raw`; unknown
+fields, browser responses, cookies, tokens, credentials, image paths, supplier
+facts, freight/regions, numeric category IDs, stock, sales, and volume are not
+copied. `source normalize-v2` accepts a current or legacy OfferResult or
+OfferBatchResult for deterministic replay without network access. Legacy-only
+keys are accepted and ignored without mutating the input object.
 
 Validation warnings describe source-data gaps. Integrity violations describe
 conversion bugs. The latter fail the command but still allow completed
@@ -129,7 +133,7 @@ diagnostic artifacts to remain on disk.
 
 Original brand attributes are source facts and are not interpreted as ownership
 or authorization claims. Category selection, prohibited-category rules, and
-logistics restrictions remain future stages. The future category Agent must
-select only real IDs and paths from
-`data/ozon/categories/ozon-category-tree.json`; this runtime does not read that
-tree for matching.
+logistics restrictions remain future stages. The future category Agent will use
+the search term, Chinese title, 1688 Chinese category path, attributes, and SKU
+specifications to match the saved Ozon Chinese category table; this runtime does
+not implement that matching.

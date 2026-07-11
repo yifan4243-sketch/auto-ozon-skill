@@ -1,4 +1,4 @@
-import type { BrowserContext, Page, Response as PWResponse } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
 import { dispatch } from '../session/dispatch.js';
 import { emit, info } from '../io/output.js';
 import { CliError } from '../io/errors.js';
@@ -6,7 +6,6 @@ import { withRecovery } from '../session/recovery.js';
 import { sleep } from '../session/wait.js';
 import { parseMtop } from '../session/mtop.js';
 import { startResponseCapture } from '../session/response-capture.js';
-import { debugTmpPath } from '../util/temp.js';
 
 export interface OffersOpts {
   offerId?: string;
@@ -40,6 +39,8 @@ export interface OfferResult {
   offerId: string;
   title: string;
   url: string;
+  /** Visible 1688 category breadcrumb, ordered from broad to specific. */
+  categoryPathZh: string[];
   priceRange: string | null;
   priceMin: number | null;
   priceMax: number | null;
@@ -59,21 +60,6 @@ export interface OfferResult {
   /** Per-SKU package dimensions (件重尺) when the seller filled them in.
    *  Empty array for small items (clothes, etc.) where 1688 omits this. */
   packageInfo: SkuPackage[];
-  supplier: {
-    name: string | null;
-    loginId: string | null;
-    memberId: string | null;
-    userId: string | null;
-  };
-  freight: {
-    receiveAddress: string | null;
-    sendArea: string | null;
-    province: string | null;
-    city: string | null;
-    unitWeight: number | null;
-  };
-  saledCount: number | null;
-  categoryId: string | null;
   options: SkuOption[];
   skus: SkuVariant[];
   mainImage: string | null;
@@ -99,8 +85,6 @@ export interface SkuPackage {
   height: number | null;
   /** Stated weight (raw value — 1688 sometimes uses grams or kg per offer). */
   weight: number | null;
-  /** Volume (cm³). */
-  volume: number | null;
 }
 
 export interface SkuOption {
@@ -114,14 +98,11 @@ export interface SkuVariant {
   price: number | null;
   /** Bulk-tier price when 1688 surfaces a separate multi-piece price. */
   multiPrice: number | null;
-  stock: number | null;
-  saleCount: number;
   /** Best-effort image URL derived from the first option (颜色/款式) match. */
   image: string | null;
 }
 
 const SKU_API_RE = /wosc\.queryofferskuselectormodel/i;
-let DETAIL_SEQ = 0;
 
 export async function execute(
   ctx: BrowserContext,
@@ -150,136 +131,12 @@ export async function executeRaw(
     matcher: SKU_API_RE,
     parse: async (resp) => {
       const text = await resp.text();
-      if (process.env.BB1688_PROBE === '1') {
-        try {
-          const fs = await import('node:fs/promises');
-          const file = debugTmpPath('1688-sku-raw.json');
-          await fs.writeFile(file, text);
-          process.stderr.write(
-            `[probe] saved sku → ${file} (${text.length} bytes)\n`,
-          );
-        } catch {
-          /* ignore */
-        }
-      }
       const json = parseMtop<{ data?: { skuSelectorBizModel?: SkuBizModel } }>(
         text,
       );
       return json?.data?.skuSelectorBizModel ?? null;
     },
   });
-  const onResp = async (resp: PWResponse) => {
-    // Probe: save every offerdetail.service response so we can see which
-    // call carries productAttributes.
-    if (
-      process.env.BB1688_PROBE === '1' &&
-      /mmga\.offerdetail\.service/i.test(resp.url())
-    ) {
-      try {
-        const text = await resp.text();
-        const fs = await import('node:fs/promises');
-        DETAIL_SEQ++;
-        const file = debugTmpPath(
-          `1688-offerdetail-${String(DETAIL_SEQ).padStart(2, '0')}.json`,
-        );
-        await fs.writeFile(file, text);
-        process.stderr.write(
-          `[probe] saved offerdetail → ${file} (${text.length} bytes)\n`,
-        );
-      } catch {
-        /* ignore */
-      }
-    }
-  };
-  page.on('response', onResp);
-
-  if (process.env.BB1688_PROBE === '1') {
-    const log = (line: string) => process.stderr.write(line + '\n');
-    log('[probe] active (offer)');
-    let mtopSeq = 0;
-    let htmlSeq = 0;
-    page.on('response', async (resp) => {
-      const u = resp.url();
-      const ct = resp.headers()['content-type'] ?? '';
-      if (
-        /\.(png|jpg|jpeg|gif|webp|css|woff2?|svg|ico|mp4|ttf|otf|js|map)(\?|$)/i.test(
-          u,
-        )
-      )
-        return;
-      if (/mmstat\.com|google-analytics|alicdn\.com\/sufei/.test(u)) return;
-      try {
-        const path = new URL(u).pathname;
-        // mtop OR any non-mtop XHR-style endpoint (wosc.*, *.json, etc.)
-        const isApi =
-          /mtop[.\/]|wosc\.|h5api|\/api\/|\/ajax\/|\.json/i.test(path) ||
-          /json/i.test(ct);
-        if (isApi) {
-          let body = '';
-          try {
-            body = await resp.text();
-          } catch {
-            /* ignore */
-          }
-          const offerHits = (body.match(/"offerId|offerId":/g) ?? []).length;
-          const titleHits = (body.match(/"subject"|"title"/g) ?? []).length;
-          const priceHits = (body.match(/"price"|priceInfo|priceRange/g) ?? [])
-            .length;
-          log(
-            `[api ] ${path.slice(0, 80)} ct=${ct.slice(0, 25)} bodyLen=${body.length} offerId×${offerHits} title×${titleHits} price×${priceHits}`,
-          );
-          if (body.length > 3000 && (offerHits > 0 || titleHits > 0)) {
-            try {
-              const fs = await import('node:fs/promises');
-              const seq = (++mtopSeq).toString().padStart(2, '0');
-              const tag = path.split('/').filter(Boolean).pop() ?? 'api';
-              const file = debugTmpPath(`1688-offer-mtop-${seq}-${tag.slice(0, 40)}.json`);
-              await fs.writeFile(file, body);
-              log(`[api ] saved → ${file}`);
-            } catch {
-              /* ignore */
-            }
-          }
-          return;
-        }
-        // HTML responses on detail.1688.com — likely SSR shell with inline data
-        if (
-          /detail\.1688\.com|detail\.m\.1688\.com/.test(u) &&
-          /text\/html/i.test(ct)
-        ) {
-          const body = await resp.text();
-          try {
-            const fs = await import('node:fs/promises');
-            const seq = (++htmlSeq).toString().padStart(2, '0');
-            const file = debugTmpPath(`1688-offer-page-${seq}.html`);
-            await fs.writeFile(file, body);
-            // Probe for known inline-JSON variables.
-            const markers = [
-              'window.runParams',
-              'window.detailData',
-              'window.context',
-              'window.offerDetail',
-              'window.__INITIAL_DATA__',
-              'window.__detail__',
-              'window.__VITA_DATA__',
-              'window.dataLayer',
-              '"offerId":',
-              '"subject":',
-              '"sellerLoginId":',
-            ];
-            const hits = markers.filter((k) => body.includes(k));
-            log(
-              `[html] saved → ${file} (${body.length} bytes) markers=[${hits.join(', ')}]`,
-            );
-          } catch {
-            /* ignore */
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    });
-  }
 
   const url = `https://detail.1688.com/offer/${args.offerId}.html`;
   try {
@@ -306,7 +163,6 @@ export async function executeRaw(
     return assemble(args.offerId, url, sku, pageInfo);
   } finally {
     skuCapture.dispose();
-    page.off('response', onResp);
   }
 }
 
@@ -320,15 +176,12 @@ interface SkuBizModel {
       price?: string;
       discountPrice?: string;
       multiPrice?: string;
-      canBookCount?: string;
-      saleCount?: string | number;
     }
   >;
   skuPriceScale?: string;
   skuSelectorModel?: {
     tradeModel?: {
       beginAmount?: number | string;
-      saleCount?: number | string;
       unit?: string;
       mixModel?: { mixAmount?: number | string };
       offerPriceModel?: {
@@ -336,29 +189,13 @@ interface SkuBizModel {
       };
     };
   };
-  extraInfo?: {
-    freightInfo?: {
-      unitWeight?: number;
-      receiveAddress?: string;
-      sendAddressCode?: string;
-      sellerUserId?: number | string;
-    };
-  };
 }
 
 interface PageInfo {
   title: string;
-  supplierName: string | null;
-  sellerLoginId: string | null;
-  sellerMemberId: string | null;
-  sellerUserId: string | null;
-  saledCount: number | null;
+  categoryPathZh: string[];
   mainImage: string | null;
   images: string[];
-  sendArea: string | null;
-  province: string | null;
-  city: string | null;
-  categoryId: string | null;
   detailUrl: string | null;
   attributes: ProductAttribute[];
   packageInfo: SkuPackage[];
@@ -411,7 +248,7 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
   }
 
   const fromContext = await page
-    .evaluate((debugMode: boolean) => {
+    .evaluate(() => {
       type ImageEntry =
         | string
         | {
@@ -419,43 +256,20 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
             imageURI?: string;
             size310x310ImageURI?: string;
           };
-      type TempModel = {
-        companyName?: string;
-        sellerLoginId?: string;
-        sellerMemberId?: string;
-        sellerUserId?: number | string;
-        saledCount?: number | string;
-        postCategoryId?: number | string;
-        topCategoryId?: number | string;
-      };
       type OfferData = {
         subject?: string;
         images?: ImageEntry[];
-        freightInfo?: {
-          sendAddress?: string;
-          sendCityText?: string;
-          sendProvinceText?: string;
-          sendArea?: string;
-        };
-        tempModel?: TempModel;
       };
       const w = window as unknown as {
         context?: { result?: { data?: OfferData } };
-        FE_GLOBALS?: {
-          offerLoginId?: string;
-          loginId?: string;
-          memberId?: string;
-        };
       };
       const d = w.context?.result?.data as Record<string, unknown> | undefined;
       if (!d) return null;
-      const feg = w.FE_GLOBALS ?? {};
 
-      // description module — has detailUrl + leafCategoryId.
+      // Description content is retained, but numeric category identifiers are not.
       const descFields = (d.description as {
         fields?: {
           detailUrl?: string;
-          leafCategoryId?: number | string;
           detailVideoId?: string;
         };
       })?.fields ?? {};
@@ -521,7 +335,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         width: number | null;
         height: number | null;
         weight: number | null;
-        volume: number | null;
       }[] = [];
       if (Array.isArray(packRaw)) {
         for (const p of packRaw) {
@@ -533,7 +346,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
             width?: number;
             height?: number;
             weight?: number;
-            volume?: number;
           };
           packageInfo.push({
             skuId: o.skuId != null ? String(o.skuId) : '',
@@ -542,7 +354,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
             width: o.width ?? null,
             height: o.height ?? null,
             weight: o.weight ?? null,
-            volume: o.volume ?? null,
           });
         }
       }
@@ -551,12 +362,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
       const productTitle = (d.productTitle as {
         fields?: {
           title?: string;
-          shopInfo?: {
-            companyName?: string;
-            authCompanyName?: string;
-            sellerSlrServiceScore?: string;
-          };
-          newSaleCount?: string;
           unit?: string;
         };
       })?.fields ?? {};
@@ -568,8 +373,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
           video?: { coverUrl?: string; videoId?: string };
         };
       })?.fields ?? {};
-      const shop = productTitle.shopInfo ?? {};
-
       const imgs: string[] = [];
       const rawImgs = gallery.mainImage;
       if (Array.isArray(rawImgs)) {
@@ -591,29 +394,62 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
           }
         }
       }
-      const catId =
-        descFields.leafCategoryId != null
-          ? String(descFields.leafCategoryId)
-          : null;
+      const categoryCandidates: string[][] = [];
+      const readCategoryCandidate = (value: unknown, depth = 0): string[] => {
+        if (depth > 4 || value === null || value === undefined) return [];
+        if (typeof value === 'string') return [value];
+        if (Array.isArray(value)) {
+          return value.flatMap((item) => readCategoryCandidate(item, depth + 1));
+        }
+        if (typeof value !== 'object') return [];
+        const entry = value as Record<string, unknown>;
+        for (const key of ['name', 'title', 'text', 'categoryName', 'label']) {
+          if (typeof entry[key] === 'string') return [entry[key] as string];
+        }
+        for (const key of ['fields', 'items', 'list', 'categories', 'path', 'children']) {
+          if (entry[key] !== undefined) {
+            const values = readCategoryCandidate(entry[key], depth + 1);
+            if (values.length > 0) return values;
+          }
+        }
+        return [];
+      };
+      for (const key of [
+        'breadcrumb',
+        'breadcrumbs',
+        'breadCrumb',
+        'categoryPath',
+        'categoryNavigation',
+      ]) {
+        const candidate = readCategoryCandidate(d[key]);
+        if (candidate.length > 0) categoryCandidates.push(candidate);
+      }
+      for (const selector of [
+        '[class*="breadcrumb"]',
+        '[class*="bread-crumb"]',
+        '[class*="crumb"]',
+        '[data-testid*="breadcrumb"]',
+      ]) {
+        for (const container of document.querySelectorAll(selector)) {
+          const candidate = [...container.querySelectorAll('a, span')]
+            .map((node) => node.textContent?.trim() ?? '')
+            .filter(Boolean);
+          if (candidate.length > 0) categoryCandidates.push(candidate);
+        }
+      }
+      const categoryPathZh = categoryCandidates.sort(
+        (left, right) => right.length - left.length,
+      )[0] ?? [];
       return {
         detailUrl: descFields.detailUrl ?? null,
         attributes,
         packageInfo,
         title: productTitle.title ?? gallery.subject ?? '',
-        supplierName:
-          shop.companyName ?? shop.authCompanyName ?? null,
-        sellerLoginId: feg.offerLoginId ?? feg.loginId ?? null,
-        sellerMemberId: feg.memberId ?? null,
-        sellerUserId: null,
-        saledCount: null,
+        categoryPathZh,
         mainImage: imgs[0] ?? null,
         images: imgs,
-        sendArea: null,
-        province: null,
-        city: null,
-        categoryId: catId,
       };
-    }, debug)
+    })
     .catch(() => null);
 
   if (!fromContext) return scrapeDomFallback(page);
@@ -624,42 +460,36 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     const raw = await page.title();
     title = raw.replace(/\s*-\s*阿里巴巴\s*$/, '').trim();
   }
-  return { ...fromContext, title };
+  return {
+    ...fromContext,
+    title,
+    categoryPathZh: normalizeCategoryPathZh(fromContext.categoryPathZh),
+  };
 }
 
 async function scrapeDomFallback(page: Page): Promise<PageInfo> {
   const raw = await page.title();
   const title = raw.replace(/\s*-\s*阿里巴巴\s*$/, '').trim();
   const info = await page.evaluate(() => {
-    function txt(sel: string): string | null {
-      const e = document.querySelector(sel);
-      return e?.textContent?.trim() ?? null;
-    }
     function imgSrc(sel: string): string | null {
       const e = document.querySelector(sel) as HTMLImageElement | null;
       return e?.src ?? e?.getAttribute('data-src') ?? null;
     }
     return {
-      supplierName: txt('h1') ?? null,
       mainImage:
         imgSrc('.v-image-wrap img') ??
         imgSrc('.ant-image-img') ??
         imgSrc('img[alt*="主图"]'),
+      categoryPathZh: [...document.querySelectorAll(
+        '[class*="breadcrumb"] a, [class*="breadcrumb"] span, [class*="crumb"] a, [class*="crumb"] span',
+      )].map((node) => node.textContent?.trim() ?? '').filter(Boolean),
     };
   });
   return {
     title,
-    supplierName: info.supplierName,
-    sellerLoginId: null,
-    sellerMemberId: null,
-    sellerUserId: null,
-    saledCount: null,
+    categoryPathZh: normalizeCategoryPathZh(info.categoryPathZh),
     mainImage: info.mainImage,
     images: info.mainImage ? [info.mainImage] : [],
-    sendArea: null,
-    province: null,
-    city: null,
-    categoryId: null,
     detailUrl: null,
     attributes: [],
     packageInfo: [],
@@ -709,23 +539,10 @@ function assemble(
         specs,
         price: parseFloatOrNull(v.discountPrice ?? v.price),
         multiPrice: parseFloatOrNull(v.multiPrice),
-        stock: parseIntOrNull(v.canBookCount),
-        saleCount:
-          typeof v.saleCount === 'number'
-            ? v.saleCount
-            : parseIntOrNull(v.saleCount) ?? 0,
         image: deriveSkuImage(specs),
       };
     },
   );
-
-  const freight = {
-    receiveAddress: sku?.extraInfo?.freightInfo?.receiveAddress ?? null,
-    sendArea: info.sendArea,
-    province: info.province,
-    city: info.city,
-    unitWeight: sku?.extraInfo?.freightInfo?.unitWeight ?? null,
-  };
 
   const fallbackImage =
     info.mainImage ?? options[0]?.values[0]?.imageUrl ?? null;
@@ -737,15 +554,11 @@ function assemble(
       price: parseFloatOrNull(String(t.price ?? '')) ?? 0,
     }))
     .filter((t) => t.minQty > 0 && t.price > 0);
-  const tradeSaleCount =
-    typeof trade?.saleCount === 'number'
-      ? trade.saleCount
-      : parseIntOrNull(trade?.saleCount as string | undefined);
-
   return {
     offerId,
     title: info.title,
     url,
+    categoryPathZh: info.categoryPathZh,
     priceRange,
     priceMin,
     priceMax,
@@ -756,25 +569,6 @@ function assemble(
     detailUrl: info.detailUrl,
     attributes: info.attributes,
     packageInfo: info.packageInfo,
-    supplier: {
-      name: info.supplierName,
-      loginId: info.sellerLoginId,
-      memberId: info.sellerMemberId,
-      // sellerUserId is exposed via SKU mtop freightInfo; window.context omits it.
-      userId:
-        info.sellerUserId ??
-        (sku?.extraInfo?.freightInfo?.sellerUserId != null
-          ? String(sku.extraInfo.freightInfo.sellerUserId)
-          : null),
-    },
-    freight,
-    saledCount:
-      tradeSaleCount ??
-      info.saledCount ??
-      (skus.length > 0
-        ? skus.reduce((s, x) => s + (x.saleCount || 0), 0)
-        : null),
-    categoryId: info.categoryId,
     options,
     skus,
     mainImage: fallbackImage,
@@ -893,15 +687,8 @@ function printOffer(o: OfferResult): void {
         : `¥${o.priceMin.toFixed(2)}`;
     process.stdout.write(`  price:    ${range}\n`);
   }
-  if (o.supplier.name) {
-    process.stdout.write(`  supplier: ${o.supplier.name}\n`);
-  }
-  if (o.freight.receiveAddress) {
-    process.stdout.write(
-      `  freight:  to ${o.freight.receiveAddress}` +
-        (o.freight.unitWeight ? `, ${o.freight.unitWeight}kg/unit` : '') +
-        '\n',
-    );
+  if (o.categoryPathZh.length > 0) {
+    process.stdout.write(`  category: ${o.categoryPathZh.join(' > ')}\n`);
   }
   process.stdout.write(`  url:      ${o.url}\n`);
   if (o.options.length) {
@@ -920,10 +707,31 @@ function printOffer(o: OfferResult): void {
     process.stdout.write(`\nSKUs (${o.skus.length} total, showing ${sample.length}):\n`);
     for (const s of sample) {
       const price = s.price !== null ? `¥${s.price.toFixed(2)}` : '?';
-      const stock = s.stock !== null ? `${s.stock} in stock` : '';
-      process.stdout.write(`  ${price.padEnd(10)} ${stock.padEnd(15)} ${s.specs}\n`);
+      process.stdout.write(`  ${price.padEnd(10)} ${s.specs}\n`);
     }
   }
+}
+
+export function normalizeCategoryPathZh(values: readonly string[]): string[] {
+  const ignored = new Set([
+    '首页',
+    '阿里巴巴',
+    '阿里巴巴首页',
+    '1688',
+    '1688首页',
+    '所有分类',
+    '商品分类',
+  ]);
+  const normalized: string[] = [];
+  for (const raw of values) {
+    for (const part of raw.split(/\s*(?:>|›|»|→)\s*/u)) {
+      const value = part.replace(/^[\s/|·-]+|[\s/|·-]+$/gu, '').trim();
+      if (!value || ignored.has(value) || /^\d+$/.test(value)) continue;
+      if (/^https?:\/\//i.test(value) || value.length > 80) continue;
+      if (normalized.at(-1) !== value) normalized.push(value);
+    }
+  }
+  return normalized;
 }
 
 function printBatch(result: OfferBatchResult): void {

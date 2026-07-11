@@ -47,6 +47,11 @@ auto-ozon ozon workflows get cabinet_health_check --json --pretty
 
 Global output flags are available on subcommands: `--json`, `--json-v2`, `--pretty`, `--get`, `--pick`.
 
+Keyword search supports `--sort relevance|price-asc|price-desc` and optional
+`--price-min`/`--price-max`. Supplier location, verification, turnover,
+best-selling, and ad filters are intentionally absent because those source
+fields are outside the retained-facts collection boundary.
+
 ## CanonicalProductV2 source commands
 
 V1 remains the default. Add `--schema-version 2` to any of the four collection
@@ -93,8 +98,10 @@ Options:
 - `--output <path>`: write the complete command result as UTF-8 JSON;
 - `--save-dir <directory>`: create the standard non-overwriting audit directory.
 
-Offline replay does not start a browser or access the network. Unknown input
-fields are not copied into raw artifacts.
+Offline replay does not start a browser or access the network. Current files
+use the reduced OfferResult contract. Older files containing supplier, freight,
+numeric category, stock, sales, or volume fields remain accepted; those keys
+are ignored and never copied into output or raw artifacts.
 
 Not supported: `serve`, background management, `research`, `compare`, `supplier`, `cart`, `checkout`, `order`, `seller`, `feedback`.
 

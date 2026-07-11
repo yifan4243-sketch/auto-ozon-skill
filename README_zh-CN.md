@@ -16,6 +16,14 @@
 
 已彻底删除 daemon / 后台常驻进程逻辑，不支持 `serve` 或后台管理命令。
 
+### 商品事实采集边界
+
+1688 详情采集层只保留后续选品、类目判断和上架准备需要的事实：offerId 与链接、
+页面可见的中文类目路径、中文标题、属性、图片/详情内容、价格与起订量、SKU ID/
+规格/价格/图片，以及包装长宽高和原始重量。采集层不再采集或输出 1688 数字类目
+ID、供应商身份、收货/发货地区、物流重量、库存、销量和来源体积。V1 与 V2 使用
+同一精简边界。
+
 ## 不支持
 
 不支持 cart、checkout、order、seller、supplier、research、compare、feedback，不支持自动下单、购物车操作、订单或物流管理、旺旺聊天。
@@ -66,10 +74,10 @@ pnpm --filter @auto-ozon/cli dev -- source normalize-v2 --input C:/path/to/saved
 `OfferResult` 或 `OfferBatchResult`，无需浏览器、登录或网络即可离线回放。
 
 V2 保存 keyword 搜索词和 similar 种子 offerId，为后续类目处理提供来源上下文。
-未来类目 Agent 只能从 `data/ozon/categories/ozon-category-tree.json` 选择真实
-类目 ID 和路径；本阶段不运行 Agent，也不读取类目树做匹配。1688 原始品牌属性
-会保留，但系统不判断品牌归属或授权。禁售和物流禁运规则将在后续阶段读取用户
-提供的知识库，本阶段不硬编码规则。
+未来类目 Agent 将使用搜索词、中文标题、1688 中文类目路径、商品属性和 SKU 规格，
+去匹配已经保存的 Ozon 中文类目表；本阶段不实现或运行该 Agent。1688 原始品牌
+属性仅作为普通商品属性保留，系统不判断品牌归属或授权。禁售和物流禁运规则仍由
+后续用户知识库阶段处理。
 
 人工真实数据验证流程见 `docs/CANONICAL_V2_REAL_VALIDATION.md`。本地验证结果目录
 `data/validation/canonical-v2-runs/` 已加入 `.gitignore`。

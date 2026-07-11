@@ -8,7 +8,6 @@ export interface CanonicalSkuPackageV2 {
   height_cm: number | null;
   raw_weight: number | null;
   weight_unit: CanonicalWeightUnitV2;
-  volume_cm3: number | null;
   source: '1688';
   matched_by: 'sku_id' | 'exact_spec' | 'none';
 }
@@ -20,8 +19,6 @@ export interface CanonicalSkuV2 {
   unparsed_spec_segments: string[];
   price_cny: number | null;
   multi_price_cny: number | null;
-  supplier_stock: number | null;
-  sale_count: number | null;
   image: string | null;
   package: CanonicalSkuPackageV2;
 }
@@ -61,18 +58,11 @@ export interface CanonicalProductV2 {
     collected_at: string;
     collection_method: CollectionMethod;
     detail_url: string | null;
-    source_category_id: string | null;
+    source_category_path_zh: string[];
     discovery_context: {
       search_term: string | null;
       seed_offer_id: string | null;
     };
-  };
-  supplier: {
-    name: string | null;
-    login_id: string | null;
-    member_id: string | null;
-    user_id: string | null;
-    location: string | null;
   };
   product: {
     title_zh: string;

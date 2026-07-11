@@ -8,15 +8,13 @@ import {
   normalizePositivePackageValue,
   normalizeRawWeight,
 } from './package-value-normalizer.js';
-import { normalizeSpecForMatch } from './sku-spec-parser.js';
+import { normalizeSpecForMatch, parseSkuSpec } from './sku-spec-parser.js';
 
 export interface IntegritySourceSku {
   skuId: string;
   specs: string;
   price: number | null;
   multiPrice: number | null;
-  stock: number | null;
-  saleCount: number | null;
   image: string | null;
 }
 
@@ -27,19 +25,24 @@ export interface IntegritySourcePackage {
   width: number | null;
   height: number | null;
   weight: number | null;
-  volume: number | null;
 }
 
 export interface IntegritySourceOffer {
   offerId: string;
   title: string;
+  url: string;
   detailUrl: string | null;
-  categoryId: string | null;
+  categoryPathZh: string[];
   attributes: Array<{ name: string; value: string }>;
   priceMin: number | null;
+  minOrderQty: number | null;
   priceTiers: Array<{ minQty: number; price: number }>;
   mainImage: string | null;
   images: string[];
+  options: Array<{
+    prop: string;
+    values: Array<{ name: string; imageUrl: string | null }>;
+  }>;
   skus: IntegritySourceSku[];
   packageInfo: IntegritySourcePackage[];
 }
@@ -165,12 +168,21 @@ export function checkCanonicalV2Integrity(
         productCodes,
       );
     }
-    if (product.source.source_category_id !== offer.categoryId) {
+    if (product.source.offer_url !== offer.url) {
+      addViolation(
+        'OFFER_URL_MISMATCH',
+        offer.offerId,
+        null,
+        '1688 offer URL changed during canonical conversion.',
+        productCodes,
+      );
+    }
+    if (!arraysEqual(product.source.source_category_path_zh, offer.categoryPathZh)) {
       addViolation(
         'SOURCE_CATEGORY_MISMATCH',
         offer.offerId,
         null,
-        '1688 source category changed during canonical conversion.',
+        '1688 Chinese category path changed during canonical conversion.',
         productCodes,
       );
     }
@@ -214,6 +226,39 @@ export function checkCanonicalV2Integrity(
         offer.offerId,
         null,
         '1688 gallery images changed during canonical conversion.',
+        productCodes,
+      );
+    }
+    const expectedPriceTiers = offer.priceTiers.length > 0
+      ? offer.priceTiers.map((tier) => ({
+          min_qty: tier.minQty,
+          price_cny: tier.price,
+        }))
+      : offer.priceMin !== null
+        ? [{ min_qty: offer.minOrderQty ?? 1, price_cny: offer.priceMin }]
+        : [];
+    if (JSON.stringify(product.product.price_tiers) !== JSON.stringify(expectedPriceTiers)) {
+      addViolation(
+        'PRICE_TIERS_MISMATCH',
+        offer.offerId,
+        null,
+        '1688 price tiers changed during canonical conversion.',
+        productCodes,
+      );
+    }
+    const expectedOptions = offer.options.map((option) => ({
+      source_name: option.prop,
+      values: option.values.map((value) => ({
+        value: value.name,
+        image_url: value.imageUrl,
+      })),
+    }));
+    if (JSON.stringify(product.product.sku_options) !== JSON.stringify(expectedOptions)) {
+      addViolation(
+        'SKU_OPTIONS_MISMATCH',
+        offer.offerId,
+        null,
+        '1688 SKU options changed during canonical conversion.',
         productCodes,
       );
     }
@@ -292,7 +337,7 @@ export function checkCanonicalV2Integrity(
           return;
         }
         compareSkuFacts(
-          offer.offerId,
+          offer,
           sourceSku,
           canonicalSku,
           productCodes,
@@ -379,7 +424,7 @@ function checkSourceSkuIds(
 }
 
 function compareSkuFacts(
-  offerId: string,
+  offer: IntegritySourceOffer,
   source: IntegritySourceSku,
   canonical: CanonicalProductV2['skus'][number],
   productCodes: Set<string>,
@@ -392,9 +437,21 @@ function compareSkuFacts(
     canonical.multi_price_cny,
     'multiPrice',
   );
-  compare('SKU_STOCK_MISMATCH', source.stock, canonical.supplier_stock, 'stock');
-  compare('SKU_SALE_COUNT_MISMATCH', source.saleCount, canonical.sale_count, 'saleCount');
   compare('SKU_IMAGE_MISMATCH', source.image, canonical.image, 'image');
+  compare('SKU_RAW_SPEC_MISMATCH', source.specs, canonical.raw_spec_text, 'raw specs');
+  const parsed = parseSkuSpec({
+    raw_spec_text: source.specs,
+    options: offer.options,
+  });
+  if (!recordsEqual(canonical.specs, parsed.specs)) {
+    addViolation(
+      'SKU_PARSED_SPEC_MISMATCH',
+      offer.offerId,
+      source.skuId.trim() || null,
+      'Source SKU parsed specs changed during canonical conversion.',
+      productCodes,
+    );
+  }
 
   function compare(
     code: string,
@@ -405,7 +462,7 @@ function compareSkuFacts(
     if (Object.is(expected, actual)) return;
     addViolation(
       code,
-      offerId,
+      offer.offerId,
       source.skuId.trim() || null,
       `Source SKU ${field} changed during canonical conversion.`,
       productCodes,
@@ -461,8 +518,7 @@ function checkPackage(
       canonicalSku.package.width_cm !== null ||
       canonicalSku.package.height_cm !== null ||
       canonicalSku.package.raw_weight !== null ||
-      canonicalSku.package.volume_cm3 !== null
-      || canonicalSku.package.weight_unit !== 'unknown'
+      canonicalSku.package.weight_unit !== 'unknown'
     ) {
       addViolation(
         'UNMATCHED_PACKAGE_INHERITED',
@@ -517,7 +573,6 @@ function checkPackage(
     width_cm: normalizePositivePackageValue(expected.item.width),
     height_cm: normalizePositivePackageValue(expected.item.height),
     raw_weight: normalizeRawWeight(expected.item.weight),
-    volume_cm3: normalizePositivePackageValue(expected.item.volume),
   };
   for (const [field, expectedValue] of Object.entries(expectedValues)) {
     const actual = canonicalSku.package[field as keyof typeof expectedValues];

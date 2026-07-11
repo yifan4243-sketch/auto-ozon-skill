@@ -9,6 +9,7 @@ import type {
   SkuPackage,
   SkuVariant,
 } from '../engine/commands/offers.js';
+import { normalizeCategoryPathZh } from '../engine/commands/offers.js';
 
 export type OfflineOfferInput =
   | { kind: 'single'; offer: OfferResult }
@@ -32,15 +33,23 @@ export function sanitizeOfferResult(value: OfferResult): OfferResult {
   return parseOfferResult(value, 'offer');
 }
 
+export function sanitizeOfferBatchResult(value: OfferBatchResult): OfferBatchResult {
+  return parseOfferBatchResult(value, 'batch');
+}
+
 export function parseOfferResult(value: unknown, label = 'offer'): OfferResult {
   const input = expectRecord(value, label);
-  const supplier = expectRecord(input.supplier, `${label}.supplier`);
-  const freight = expectRecord(input.freight, `${label}.freight`);
 
   return {
     offerId: expectString(input.offerId, `${label}.offerId`),
     title: expectString(input.title, `${label}.title`),
     url: expectString(input.url, `${label}.url`),
+    categoryPathZh: normalizeCategoryPathZh(
+      expectOptionalArray(input.categoryPathZh, `${label}.categoryPathZh`).map(
+        (item, index) =>
+          expectString(item, `${label}.categoryPathZh[${index}]`),
+      ),
+    ),
     priceRange: expectNullableString(input.priceRange, `${label}.priceRange`),
     priceMin: expectNullableNumber(input.priceMin, `${label}.priceMin`),
     priceMax: expectNullableNumber(input.priceMax, `${label}.priceMax`),
@@ -76,31 +85,9 @@ export function parseOfferResult(value: unknown, label = 'offer'): OfferResult {
           width: expectNullableNumber(pkg.width, `${label}.packageInfo[${index}].width`),
           height: expectNullableNumber(pkg.height, `${label}.packageInfo[${index}].height`),
           weight: expectNullableNumber(pkg.weight, `${label}.packageInfo[${index}].weight`),
-          volume: expectNullableNumber(pkg.volume, `${label}.packageInfo[${index}].volume`),
         };
       },
     ),
-    supplier: {
-      name: expectNullableString(supplier.name, `${label}.supplier.name`),
-      loginId: expectNullableString(supplier.loginId, `${label}.supplier.loginId`),
-      memberId: expectNullableString(supplier.memberId, `${label}.supplier.memberId`),
-      userId: expectNullableString(supplier.userId, `${label}.supplier.userId`),
-    },
-    freight: {
-      receiveAddress: expectNullableString(
-        freight.receiveAddress,
-        `${label}.freight.receiveAddress`,
-      ),
-      sendArea: expectNullableString(freight.sendArea, `${label}.freight.sendArea`),
-      province: expectNullableString(freight.province, `${label}.freight.province`),
-      city: expectNullableString(freight.city, `${label}.freight.city`),
-      unitWeight: expectNullableNumber(
-        freight.unitWeight,
-        `${label}.freight.unitWeight`,
-      ),
-    },
-    saledCount: expectNullableNumber(input.saledCount, `${label}.saledCount`),
-    categoryId: expectNullableString(input.categoryId, `${label}.categoryId`),
     options: expectArray(input.options, `${label}.options`).map(
       (item, optionIndex): SkuOption => {
         const option = expectRecord(item, `${label}.options[${optionIndex}]`);
@@ -139,8 +126,6 @@ export function parseOfferResult(value: unknown, label = 'offer'): OfferResult {
             sku.multiPrice,
             `${label}.skus[${index}].multiPrice`,
           ),
-          stock: expectNullableNumber(sku.stock, `${label}.skus[${index}].stock`),
-          saleCount: expectNumber(sku.saleCount, `${label}.skus[${index}].saleCount`),
           image: expectNullableString(sku.image, `${label}.skus[${index}].image`),
         };
       },
@@ -191,6 +176,10 @@ function expectRecord(value: unknown, path: string): Record<string, unknown> {
 function expectArray(value: unknown, path: string): unknown[] {
   if (!Array.isArray(value)) throw badInput(`${path} must be an array.`);
   return value;
+}
+
+function expectOptionalArray(value: unknown, path: string): unknown[] {
+  return value === undefined ? [] : expectArray(value, path);
 }
 
 function expectString(value: unknown, path: string): string {

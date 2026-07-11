@@ -24,9 +24,25 @@ Errors are structured and mark recoverability.
 
 - `source.platform = "1688"`
 - `source.collectionMethod = "keyword" | "image" | "offers" | "similar"`
-- supplier identity and location
+- `source.sourceCategoryPathZh` with the visible broad-to-specific Chinese path
 - Chinese title, images, attributes, price tiers, SKUs, package info
+- raw package weight with unknown unit; no numeric-unit guessing or conversion
 - validation status, warnings, and errors
+
+V1 has no supplier, freight/region, SKU stock, sales, source volume, or numeric
+1688 category ID fields.
+
+## OfferResult retained facts
+
+The collection-layer `OfferResult` contains offer identity/title/URL,
+`categoryPathZh`, price range/min/max, unit and order quantities, price tiers,
+detail URL, attributes, package length/width/height/raw weight, SKU options,
+SKU ID/raw spec/price/multi-price/image, main image, and gallery images.
+
+The contract does not define empty compatibility placeholders for `supplier`,
+`freight`, `categoryId`, `saledCount`, SKU `stock`/`saleCount`, or package
+`volume`. Legacy offline files may contain those keys, but the input codec
+ignores them and reconstructs a current OfferResult without mutating the input.
 
 ## SourcingResult
 
@@ -66,13 +82,12 @@ interface CanonicalProductV2 {
     collected_at: string;
     collection_method: "keyword" | "image" | "offers" | "similar";
     detail_url: string | null;
-    source_category_id: string | null;
+    source_category_path_zh: string[];
     discovery_context: {
       search_term: string | null;
       seed_offer_id: string | null;
     };
   };
-  supplier: SupplierSourceFacts;
   product: ProductSourceFacts;
   skus: CanonicalSkuV2[];
   sku_analysis: SkuAnalysisV2;
@@ -80,14 +95,15 @@ interface CanonicalProductV2 {
 }
 ```
 
-Every `CanonicalSkuV2` retains its own price, multi-price, supplier stock,
-sale count, image, parsed source specifications, unparsed specification
-segments, and package object. Package dimensions and raw weight are never
+Every `CanonicalSkuV2` retains its own price, multi-price, image, parsed source
+specifications, unparsed specification segments, and package object. Package
+dimensions and raw weight are never
 promoted out of the SKU. `weight_unit` is `"g"`, `"kg"`, or `"unknown"` and
 is not inferred from the numeric weight. A raw source weight below `3` is not
 considered valid package weight and is stored as `null` with unit `"unknown"`.
-Package length, width, height, and volume must be positive; zero, negative, or
-non-finite values are stored as `null`.
+Package length, width, and height must be positive; zero, negative, or
+non-finite values are stored as `null`. Source volume is not collected or
+represented.
 
 `sku_analysis` is a non-destructive summary containing:
 
@@ -103,6 +119,7 @@ source facts. The contract contains no Ozon category IDs, Ozon attribute IDs,
 Russian content, shipping or sale-price calculations, Agent output, Ozon draft,
 or final `items[]` request.
 
+`sku_analysis` never analyzes supplier stock, sales count, or package volume.
 Source SKU IDs are validated before the product can be considered usable. Empty
 or duplicate IDs add validation errors and block the product. For an invalid ID
 set, `values_by_sku` uses deterministic positional suffixes so no comparison

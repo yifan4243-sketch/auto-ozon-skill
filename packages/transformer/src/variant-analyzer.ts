@@ -113,6 +113,5 @@ function packageHasNoFacts(sku: CanonicalSkuV2): boolean {
   return sku.package.length_cm === null &&
     sku.package.width_cm === null &&
     sku.package.height_cm === null &&
-    sku.package.raw_weight === null &&
-    sku.package.volume_cm3 === null;
+    sku.package.raw_weight === null;
 }

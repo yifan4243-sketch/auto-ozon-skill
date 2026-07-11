@@ -27,7 +27,8 @@ packages/adapters-1688
   engine/session
   engine/commands
   mappers
-  V2 offline codec, runtime result builder, and safe run artifacts
+  reduced retained-facts OfferResult boundary
+  V2 legacy-input codec, runtime result builder, and safe run artifacts
   client.ts
 
 packages/adapters-ozon
@@ -89,6 +90,13 @@ keyword / image / offerIds / similar
 
 `search` always performs detail collection by default. The former optional deep mode is now the normal behavior needed for Ozon listing preparation.
 
+The detail collector's public boundary intentionally excludes supplier
+identity, freight/region data, stock, sales, numeric 1688 category IDs, and
+source volume. Search candidates are also reduced to offer identity, title,
+price, URL, and image; supplier/region/turnover-dependent search controls are
+not available. Both V1 and V2 are built from the same retained OfferResult
+facts, so deprecated data cannot reappear through a second model.
+
 ## CanonicalProductV2 source-fact pipeline
 
 V1 remains the contract used by the current source commands. The independent V2
@@ -108,7 +116,7 @@ facts with `matched_by = "none"`. Raw weights retain their source value and use
 unit.
 
 This layer stops before marketplace interpretation. Agent classification, Ozon
-category and attribute retrieval, missing-package policy, freight, pricing,
+category and attribute retrieval, missing-package policy, shipping, pricing,
 Russian copy, Ozon internal drafts, and final `items[]` are downstream work.
 
 ## V2 runtime and validation
@@ -119,9 +127,10 @@ CanonicalProductV2, calculate a run summary, and execute deterministic integrity
 checks. Keyword `sku-max` filtering now counts source SKUs directly and shares
 the same selected OfferResult batch between both contract versions.
 
-Offline replay accepts only explicit OfferResult or OfferBatchResult shapes.
-The codec reconstructs known fields, preventing arbitrary input keys from
-flowing into audit artifacts. Audit persistence is separate from browser failure
+Offline replay accepts explicit current or legacy OfferResult/OfferBatchResult
+shapes. The codec reconstructs only current retained fields, so legacy supplier,
+freight, numeric category, stock, sales, and volume keys never flow into V1,
+V2, or audit artifacts. Audit persistence is separate from browser failure
 diagnostics and writes a unique run directory without overwriting prior runs.
 
 The V2 integrity layer verifies product/SKU cardinality, stable IDs and SKU
@@ -131,8 +140,9 @@ warnings remain source-data observations.
 
 No category Agent, Ozon attribute mapping, prohibited/logistics knowledge base,
 pricing, Russian content, draft, or publishing behavior is part of this layer.
-Future category selection is constrained to real entries from
-`data/ozon/categories/ozon-category-tree.json`.
+The future category Agent will match the saved Ozon Chinese category table from
+the search term, Chinese title, 1688 Chinese category path, attributes, and SKU
+specifications.
 
 ## Removed scope
 
