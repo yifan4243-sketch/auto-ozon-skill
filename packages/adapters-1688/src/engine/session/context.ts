@@ -12,6 +12,50 @@ import {
 } from './artifacts.js';
 
 /**
+ * Browser-side compatibility bootstrap.
+ *
+ * `tsx`/esbuild may preserve names for functions nested inside callbacks by
+ * rewriting them to `__name(fn, "fn")`. Playwright serializes the callback
+ * passed to `page.evaluate()` but not esbuild's Node-side helper, so the page
+ * would otherwise throw `ReferenceError: __name is not defined`.
+ *
+ * Keep this as a raw script string: defining the helper inside a TypeScript
+ * callback could itself be transformed into another `__name(...)` call.
+ */
+export const BROWSER_RUNTIME_INIT_SCRIPT = String.raw`
+(() => {
+  const root = globalThis;
+
+  if (typeof root.__name !== 'function') {
+    Object.defineProperty(root, '__name', {
+      configurable: true,
+      value: (target, value) => {
+        try {
+          Object.defineProperty(target, 'name', {
+            configurable: true,
+            value,
+          });
+        } catch {
+          // Naming is best-effort; returning the original target matches the
+          // esbuild helper contract required by serialized evaluate callbacks.
+        }
+        return target;
+      },
+    });
+  }
+
+  try {
+    Object.defineProperty(navigator, 'languages', {
+      configurable: true,
+      get: () => ['zh-CN', 'zh', 'en'],
+    });
+  } catch {
+    // Best-effort browser fingerprint normalization.
+  }
+})();
+`;
+
+/**
  * Remove Chrome's stale SingletonLock / SingletonCookie / SingletonSocket files
  * from our profile dir. Safe because our `proper-lockfile` already guarantees
  * no other 1688 process is using this profile.
@@ -53,17 +97,7 @@ export async function withSession<T>(
   let ctx: BrowserContext | null = null;
   try {
     ctx = await launchContext(dir, opts.headless);
-    // Stealth plugin defaults navigator.languages to en-US — override back to
-    // Chinese so we look like a real CN user.
-    await ctx.addInitScript(() => {
-      try {
-        Object.defineProperty(navigator, 'languages', {
-          get: () => ['zh-CN', 'zh', 'en'],
-        });
-      } catch {
-        /* ignore */
-      }
-    });
+    await ctx.addInitScript(BROWSER_RUNTIME_INIT_SCRIPT);
     return await fn(ctx);
   } catch (e) {
     if (ctx && meta) {
