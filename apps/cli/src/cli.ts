@@ -27,6 +27,7 @@ import {
   setOutputFlags,
 } from '../../../packages/adapters-1688/src/engine/io/output.js';
 import { registerOzonCommands } from './commands/ozon.js';
+import { runCategoryInspect } from './workflows/category-inspect.js';
 
 export function buildProgram(): Command {
   const program = new Command();
@@ -262,6 +263,8 @@ export function buildProgram(): Command {
 
   registerOzonCommands(program, emitCommandResult, parseJsonParams, parseNumber);
 
+  registerWorkflowCommands(program, emitCommandResult, parseNumber, parseSkuMax);
+
   addOutputFlagsToAll(program);
   program.hook('preAction', (_thisCmd, actionCmd) => {
     const opts = actionCmd.optsWithGlobals() as {
@@ -301,6 +304,41 @@ function emitCommandResult(result: CommandResult<unknown>): void {
     data: result,
   });
   if (!result.ok) process.exitCode = 1;
+}
+
+function registerWorkflowCommands(
+  program: Command,
+  emitCommandResult: (result: CommandResult<unknown>) => void,
+  parseNumber: (raw: string | undefined) => number | undefined,
+  parseSkuMax: (raw: string | undefined) => number | undefined,
+): void {
+  const workflow = program
+    .command('workflow')
+    .description('End-to-end automation workflows');
+
+  const categoryCmd = workflow
+    .command('category')
+    .description('Category-related workflows: sourcing → decision → attributes');
+
+  categoryCmd
+    .command('inspect')
+    .description('Source 1688 product → load CategoryDecision → fetch Ozon attributes')
+    .argument('<keyword>', 'Search keyword for 1688 sourcing')
+    .option('--max <n>', 'Maximum products to source', '1')
+    .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
+    .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON file')
+    .option('--refresh', 'Force refresh, bypass category attributes cache')
+    .action(async (keyword, opts) => {
+      emitCommandResult(
+        await runCategoryInspect({
+          keyword,
+          max: parseNumber(opts.max) ?? 1,
+          skuMax: parseSkuMax(opts.skuMax),
+          decisionFile: opts.decisionFile,
+          forceRefresh: opts.refresh === true,
+        }),
+      );
+    });
 }
 
 function printCommandResult(result: CommandResult<unknown>): void {

@@ -9,3 +9,4 @@ __pycache__/
 
 tmp/
 data/validation/canonical-v2-runs/
+data/cache/ozon/category-attributes/

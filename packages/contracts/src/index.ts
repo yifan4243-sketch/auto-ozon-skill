@@ -5,3 +5,4 @@ export * from './canonical-product-v2.js';
 export * from './sourcing-result.js';
 export * from './sourcing-result-v2.js';
 export * from './category-decision.js';
+export * from './category-attributes.js';

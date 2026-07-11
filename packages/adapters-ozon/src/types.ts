@@ -99,4 +99,13 @@ export interface OzonListMethodsForSubscriptionOptions {
   tier: string;
 }
 
+export interface GetCategoryAttributesOptions {
+  descriptionCategoryId: number;
+  typeId: number;
+  categoryName?: string;
+  typeName?: string;
+  categoryPathZh?: string[];
+  forceRefresh?: boolean;
+}
+
 export type OzonCommandResult<T = unknown> = CommandResult<T>;
