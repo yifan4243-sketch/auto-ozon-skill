@@ -47,6 +47,62 @@ auto-ozon ozon workflows get cabinet_health_check --json --pretty
 
 Global output flags are available on subcommands: `--json`, `--json-v2`, `--pretty`, `--get`, `--pick`.
 
+Keyword search supports `--sort relevance|price-asc|price-desc` and optional
+`--price-min`/`--price-max`. Supplier location, verification, turnover,
+best-selling, and ad filters are intentionally absent because those source
+fields are outside the retained-facts collection boundary.
+
+## CanonicalProductV2 source commands
+
+V1 remains the default. Add `--schema-version 2` to any of the four collection
+commands to return `SourcingResultV2` and `CanonicalProductV2`:
+
+```bash
+auto-ozon source keyword "修枝剪" --max 10 --schema-version 2
+auto-ozon source image ./product.jpg --max 10 --schema-version 2
+auto-ozon source offers 123456789 987654321 --schema-version 2
+auto-ozon source similar 123456789 --max 10 --schema-version 2
+```
+
+`--schema-version` accepts only `1` or `2`; its default is `1`. It controls the
+product contract and is independent from `--json-v2`, which controls the outer
+response envelope:
+
+```bash
+auto-ozon source offers 123456789 \
+  --schema-version 2 \
+  --json-v2 \
+  --pretty
+```
+
+All four V2 collection commands accept `--save-dir <directory>`. Each run gets
+a unique child directory containing typed raw offers, canonical products,
+failures, an integrity report, and a manifest. `--save-dir` is rejected on V1.
+
+## Offline V2 replay
+
+```bash
+auto-ozon source normalize-v2 \
+  --input saved-offer-or-batch.json \
+  --method keyword \
+  --search-term "修枝剪" \
+  --output normalized-result.json \
+  --save-dir data/validation/canonical-v2-runs
+```
+
+Options:
+
+- `--input <path>`: required typed `OfferResult` or `OfferBatchResult` JSON;
+- `--method <keyword|image|offers|similar>`: defaults to `offers`;
+- `--search-term <text>` and `--seed-offer-id <id>`: optional discovery context;
+- `--output <path>`: write the complete command result as UTF-8 JSON;
+- `--save-dir <directory>`: create the standard non-overwriting audit directory.
+
+Offline replay does not start a browser or access the network. Current files
+use the reduced OfferResult contract. Older files containing supplier, freight,
+numeric category, stock, sales, or volume fields remain accepted; those keys
+are ignored and never copied into output or raw artifacts.
+
 Not supported: `serve`, background management, `research`, `compare`, `supplier`, `cart`, `checkout`, `order`, `seller`, `feedback`.
 
 `source keyword` always performs deep detail collection. The old external `--deeppro` flags are not exposed.

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/category-decision-v1.json",
+  "title": "CategoryDecisionV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_offer_id",
+    "product_understanding",
+    "representative_sku_ids",
+    "product_structure",
+    "category_groups",
+    "unassigned_sku_ids",
+    "status",
+    "warnings",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "source_offer_id": { "type": "string", "minLength": 1 },
+    "product_understanding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary_zh", "product_family_zh", "evidence"],
+      "properties": {
+        "summary_zh": { "type": "string", "minLength": 1 },
+        "product_family_zh": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+      }
+    },
+    "representative_sku_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "product_structure": {
+      "enum": ["single_sku", "normal_variants", "mixed_product", "unclear"]
+    },
+    "category_groups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/categoryGroup" }
+    },
+    "unassigned_sku_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "status": { "enum": ["decided", "needs_review", "blocked"] },
+    "warnings": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+    "errors": { "type": "array", "items": { "$ref": "#/$defs/issue" } }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "value"],
+      "properties": {
+        "source": {
+          "enum": ["search_term", "title_zh", "source_category_path_zh", "attribute", "sku_spec"]
+        },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    },
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "description_category_id",
+        "description_category_name",
+        "type_id",
+        "type_name",
+        "category_path_zh"
+      ],
+      "properties": {
+        "description_category_id": { "type": "integer", "minimum": 1 },
+        "description_category_name": { "type": "string", "minLength": 1 },
+        "type_id": { "type": "integer", "minimum": 1 },
+        "type_name": { "type": "string", "minLength": 1 },
+        "category_path_zh": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "categoryGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group_id",
+        "source_sku_ids",
+        "group_summary_zh",
+        "evidence",
+        "selected_category",
+        "alternative_categories",
+        "confidence",
+        "rationale_zh"
+      ],
+      "properties": {
+        "group_id": { "type": "string", "minLength": 1 },
+        "source_sku_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "group_summary_zh": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "selected_category": {
+          "oneOf": [{ "$ref": "#/$defs/category" }, { "type": "null" }]
+        },
+        "alternative_categories": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/category" }
+        },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "rationale_zh": { "type": "string", "minLength": 1 }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "sku_ids"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "sku_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

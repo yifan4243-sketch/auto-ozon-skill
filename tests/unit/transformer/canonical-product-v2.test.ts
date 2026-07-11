@@ -9,10 +9,7 @@ import {
 import { assembleCanonicalSkus } from '../../../packages/transformer/src/sku-assembler.js';
 import { parseSkuSpec } from '../../../packages/transformer/src/sku-spec-parser.js';
 
-type OfferFixtureOverride = Partial<Omit<OfferResult, 'supplier' | 'freight'>> & {
-  supplier?: Partial<OfferResult['supplier']>;
-  freight?: Partial<OfferResult['freight']>;
-};
+type OfferFixtureOverride = Partial<OfferResult>;
 
 describe('CanonicalProductV2 SKU normalization fixtures', () => {
   it('no-sku-product creates one DEFAULT SKU without claiming a source SKU', () => {
@@ -25,8 +22,6 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       specs: {},
       price_cny: 3.2,
       multi_price_cny: null,
-      supplier_stock: null,
-      sale_count: null,
       image: 'https://img.example.com/default.jpg',
       package: { length_cm: 12, raw_weight: 120, matched_by: 'none' },
     });
@@ -44,8 +39,6 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
     expect(result.skus[0]).toMatchObject({
       source_sku_id: 'real-sku-1',
       specs: { 规格: '标准款' },
-      supplier_stock: 88,
-      sale_count: 9,
       package: {
         length_cm: 20,
         raw_weight: null,
@@ -88,7 +81,6 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
     expect(result.sku_analysis.common_fields).toMatchObject({
       'package.length_cm': 30,
       'package.raw_weight': 500,
-      'package.volume_cm3': 6000,
     });
   });
 
@@ -110,7 +102,6 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       height_cm: null,
       raw_weight: null,
       weight_unit: 'unknown',
-      volume_cm3: null,
       source: '1688',
       matched_by: 'none',
     });
@@ -120,13 +111,11 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
     });
   });
 
-  it('multi-price preserves source multiPrice, saleCount, and stock', () => {
+  it('multi-price preserves source multiPrice without deprecated stock or sales', () => {
     const result = convert('multi-price');
-    expect(result.skus[0]).toMatchObject({
-      multi_price_cny: 9.5,
-      supplier_stock: 100,
-      sale_count: 80,
-    });
+    expect(result.skus[0]).toMatchObject({ multi_price_cny: 9.5 });
+    expect(result.skus[0]).not.toHaveProperty('supplier_stock');
+    expect(result.skus[0]).not.toHaveProperty('sale_count');
   });
 
   it('sku-order-changed matches packages by skuId instead of array index', () => {
@@ -163,7 +152,12 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
   it('detail-url-is-not-image keeps detail, gallery, and SKU image roles separate', () => {
     const result = convert('detail-url-is-not-image');
     expect(result.source.detail_url).toBe('https://cbu01.alicdn.com/detail-only.html');
-    expect(result.source.source_category_id).toBe('201128');
+    expect(result.source.source_category_path_zh).toEqual([
+      '家居百货',
+      '收纳整理',
+      '收纳箱',
+    ]);
+    expect(result.source).not.toHaveProperty('source_category_id');
     expect(result.product.gallery_images).toEqual([
       'https://img.example.com/main.jpg',
       'https://img.example.com/gallery.jpg',
@@ -213,7 +207,6 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       height_cm: null,
       raw_weight: null,
       weight_unit: 'unknown',
-      volume_cm3: null,
     });
     expect(result.sku_analysis.missing_fields).toContainEqual({
       field: 'package',
@@ -237,7 +230,6 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       length_cm: null,
       width_cm: null,
       height_cm: null,
-      volume_cm3: null,
       matched_by: 'sku_id',
     });
     expect(result.sku_analysis.missing_fields).toContainEqual({
@@ -260,10 +252,9 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       field: 'package.height_cm',
       sku_ids: ['weight-0'],
     });
-    expect(result.sku_analysis.missing_fields).toContainEqual({
-      field: 'package.volume_cm3',
-      sku_ids: ['weight-0'],
-    });
+    expect(result.sku_analysis.missing_fields).not.toContainEqual(
+      expect.objectContaining({ field: 'package.volume_cm3' }),
+    );
     expect(result.validation.status).toBe('warning');
     expect(result.validation.warnings).toContain(
       'Missing valid package raw weight for SKU(s): weight-0, weight-0.5, weight-1, weight-2.99.',
@@ -282,6 +273,18 @@ describe('CanonicalProductV2 SKU normalization fixtures', () => {
       raw_weight: 3.01,
       weight_unit: 'unknown',
     });
+  });
+
+  it('brand-source-attribute preserves the raw brand without risk blocking', () => {
+    const result = convert('brand-source-attribute');
+
+    expect(result.product.attributes).toMatchObject({
+      品牌: '测试品牌',
+      材质: '钢',
+    });
+    expect(result.product.attributes).not.toHaveProperty('brand_id');
+    expect(result.validation.errors).toEqual([]);
+    expect(result.validation.status).not.toBe('blocked');
   });
 });
 
@@ -338,7 +341,6 @@ describe('source package value normalization', () => {
           width: 10,
           height: 10,
           weight: 2.99,
-          volume: 1000,
         },
       ],
       options: [],
@@ -352,7 +354,7 @@ describe('source package value normalization', () => {
     });
   });
 
-  it('accepts only positive package dimensions and volume', () => {
+  it('accepts only positive package dimensions', () => {
     expect([-1, 0, 0.01].map(normalizePositivePackageValue)).toEqual([
       null,
       null,
@@ -382,8 +384,6 @@ function loadOfferFixture(name: string): OfferResult {
     url:
       fixture.offer.url ??
       `https://detail.1688.com/offer/${encodeURIComponent(offerId)}.html`,
-    supplier: { ...base.supplier, ...fixture.offer.supplier },
-    freight: { ...base.freight, ...fixture.offer.freight },
   };
 }
 

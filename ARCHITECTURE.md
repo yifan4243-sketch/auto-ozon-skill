@@ -12,19 +12,23 @@ apps/cli
   complete Ozon MCP command registration
 
 packages/contracts
-  CommandResult, CanonicalProduct V1, CanonicalProductV2, SourcingResult
+  CommandResult, CanonicalProduct V1, CanonicalProductV2
+  SourcingResult V1, SourcingResultV2, V2 summary/integrity contracts
 
 packages/transformer
   deterministic SKU specification parsing
   per-SKU package assembly
   common/varying source-field comparison
   source variant-dimension analysis
+  V2 run summary and OfferResult-to-canonical integrity checks
 
 packages/adapters-1688
   engine/auth
   engine/session
   engine/commands
   mappers
+  reduced retained-facts OfferResult boundary
+  V2 legacy-input codec, runtime result builder, and safe run artifacts
   client.ts
 
 packages/adapters-ozon
@@ -34,6 +38,11 @@ packages/adapters-ozon
   subscription tools
   workflows
   guarded read-only execution
+
+packages/category-intelligence
+  Ozon category decision Skill and fixed CategoryDecisionV1 output
+  read-only lookup over the committed Chinese Ozon category tree
+  exact description-category/type pair and SKU coverage validation
 ```
 
 The session layer is inline-only. It uses Playwright persistent browser contexts, profiles, cookies, locks, events, artifacts, response capture, mtop capture, and recovery. The daemon logic from the source project is intentionally deleted.
@@ -86,6 +95,13 @@ keyword / image / offerIds / similar
 
 `search` always performs detail collection by default. The former optional deep mode is now the normal behavior needed for Ozon listing preparation.
 
+The detail collector's public boundary intentionally excludes supplier
+identity, freight/region data, stock, sales, numeric 1688 category IDs, and
+source volume. Search candidates are also reduced to offer identity, title,
+price, URL, and image; supplier/region/turnover-dependent search controls are
+not available. Both V1 and V2 are built from the same retained OfferResult
+facts, so deprecated data cannot reappear through a second model.
+
 ## CanonicalProductV2 source-fact pipeline
 
 V1 remains the contract used by the current source commands. The independent V2
@@ -105,8 +121,43 @@ facts with `matched_by = "none"`. Raw weights retain their source value and use
 unit.
 
 This layer stops before marketplace interpretation. Agent classification, Ozon
-category and attribute retrieval, missing-package policy, freight, pricing,
+category and attribute retrieval, missing-package policy, shipping, pricing,
 Russian copy, Ozon internal drafts, and final `items[]` are downstream work.
+
+## V2 runtime and validation
+
+The client first produces a typed internal collection run. The default mapper
+returns SourcingResult V1. Explicit V2 calls map the same OfferResult objects to
+CanonicalProductV2, calculate a run summary, and execute deterministic integrity
+checks. Keyword `sku-max` filtering now counts source SKUs directly and shares
+the same selected OfferResult batch between both contract versions.
+
+Offline replay accepts explicit current or legacy OfferResult/OfferBatchResult
+shapes. The codec reconstructs only current retained fields, so legacy supplier,
+freight, numeric category, stock, sales, and volume keys never flow into V1,
+V2, or audit artifacts. Audit persistence is separate from browser failure
+diagnostics and writes a unique run directory without overwriting prior runs.
+
+The V2 integrity layer verifies product/SKU cardinality, stable IDs and SKU
+facts, package matching and numeric normalization, gallery separation, and
+blocked invalid-ID handling. Integrity failure is a program error; validation
+warnings remain source-data observations.
+
+No category Agent, Ozon attribute mapping, prohibited/logistics knowledge base,
+pricing, Russian content, draft, or publishing behavior is part of this layer.
+The downstream category decision Skill matches the saved Ozon Chinese category table from
+the search term, Chinese title, 1688 Chinese category path, attributes, and SKU
+specifications.
+
+## Ozon category decision V0
+
+Category decision consumes one `CanonicalProductV2`, distinguishes normal SKU
+variants from mixed products, groups every source SKU exactly once, and produces
+`CategoryDecisionV1`. AI makes the semantic choice; deterministic code searches
+`data/ozon/categories/ozon-category-tree.json`, validates the exact
+`description_category_id + type_id` pair, rejects disabled nodes, and validates
+SKU coverage. Category analytics, Ozon attributes, Russian content, pricing,
+drafting, and publishing are outside this stage.
 
 ## Removed scope
 

@@ -18,8 +18,6 @@ export interface SourceSkuForAssembly {
   specs: string;
   price: number | null;
   multiPrice: number | null;
-  stock: number | null;
-  saleCount: number | null;
   image: string | null;
   structuredSpecs?: Record<string, string> | null;
 }
@@ -31,7 +29,6 @@ export interface SourcePackageForAssembly {
   width: number | null;
   height: number | null;
   weight: number | null;
-  volume: number | null;
   weightUnit?: string | null;
 }
 
@@ -61,8 +58,6 @@ export function assembleCanonicalSkus(input: SkuAssemblyInput): CanonicalSkuV2[]
       unparsed_spec_segments: parsed.unparsed_spec_segments,
       price_cny: finiteOrNull(sourceSku.price),
       multi_price_cny: finiteOrNull(sourceSku.multiPrice),
-      supplier_stock: finiteOrNull(sourceSku.stock),
-      sale_count: finiteOrNull(sourceSku.saleCount),
       image: sourceSku.image || null,
       package: sourcePackage
         ? toCanonicalPackage(sourcePackage.item, sourcePackage.matchedBy)
@@ -80,8 +75,6 @@ function assembleDefaultSku(input: SkuAssemblyInput): CanonicalSkuV2 {
     unparsed_spec_segments: [],
     price_cny: determineDefaultPrice(input),
     multi_price_cny: null,
-    supplier_stock: null,
-    sale_count: null,
     image: input.mainImage,
     package: uniquePackage ? toCanonicalPackage(uniquePackage, 'none') : emptyPackage(),
   };
@@ -121,7 +114,6 @@ function toCanonicalPackage(
     height_cm: normalizePositivePackageValue(input.height),
     raw_weight: rawWeight,
     weight_unit: rawWeight === null ? 'unknown' : normalizeWeightUnit(input.weightUnit),
-    volume_cm3: normalizePositivePackageValue(input.volume),
     source: '1688',
     matched_by: matchedBy,
   };
@@ -134,7 +126,6 @@ function emptyPackage(): CanonicalSkuPackageV2 {
     height_cm: null,
     raw_weight: null,
     weight_unit: 'unknown',
-    volume_cm3: null,
     source: '1688',
     matched_by: 'none',
   };

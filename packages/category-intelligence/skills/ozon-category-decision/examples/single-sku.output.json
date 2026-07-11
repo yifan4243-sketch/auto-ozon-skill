@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source_offer_id": "example-phone-case",
+  "product_understanding": {
+    "summary_zh": "用于智能手机防摔保护的TPU保护壳。",
+    "product_family_zh": "智能手机壳",
+    "evidence": [
+      { "source": "search_term", "value": "手机壳" },
+      { "source": "title_zh", "value": "透明防摔智能手机保护壳" },
+      { "source": "attribute", "value": "材质: TPU" }
+    ]
+  },
+  "representative_sku_ids": ["case-default"],
+  "product_structure": "single_sku",
+  "category_groups": [{
+    "group_id": "phone-case",
+    "source_sku_ids": ["case-default"],
+    "group_summary_zh": "智能手机保护壳",
+    "evidence": [{ "source": "title_zh", "value": "透明防摔智能手机保护壳" }],
+    "selected_category": {
+      "description_category_id": 17028650,
+      "description_category_name": "保护套",
+      "type_id": 97011,
+      "type_name": "智能手机壳",
+      "category_path_zh": ["电子产品", "保护套", "智能手机壳"]
+    },
+    "alternative_categories": [],
+    "confidence": "high",
+    "rationale_zh": "标题、搜索词和材质共同表明它是手机保护壳，不是支架或保护膜。"
+  }],
+  "unassigned_sku_ids": [],
+  "status": "decided",
+  "warnings": [],
+  "errors": []
+}

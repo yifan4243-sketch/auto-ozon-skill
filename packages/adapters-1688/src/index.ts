@@ -7,3 +7,5 @@ export * from './engine/commands/offers.js';
 export type { SearchResult, Offer } from './engine/commands/search.js';
 export type { ImageSearchResult } from './engine/commands/image-search.js';
 export type { SimilarResult } from './engine/commands/similar.js';
+export * from './v2/offline-normalize.js';
+export * from './v2/sourcing-runtime.js';

@@ -167,25 +167,12 @@ function printSimilar(r: SimilarResult): void {
   const w = String(sorted.length).length;
   sorted.forEach((o, i) => {
     const idx = String(i + 1).padStart(w, ' ');
-    const ad = o.isP4P ? ' [广告]' : '';
-    const verified = o.verified.superFactory
-      ? ' [超级工厂]'
-      : o.verified.factory
-      ? ' [验厂]'
-      : '';
     process.stdout.write(
-      `${idx}. ${o.price.text || '(n/a)'}${ad}${verified}  ${o.title.slice(
+      `${idx}. ${o.price.text || '(n/a)'}  ${o.title.slice(
         0,
         50,
       )}\n`,
     );
-    const supplier = o.supplier.name ?? '?';
-    const years = o.supplier.years ? ` · ${o.supplier.years}年` : '';
-    const loc = [o.location.province, o.location.city]
-      .filter(Boolean)
-      .join(' ');
-    process.stdout.write(
-      `   ${supplier}${years}${loc ? ` · ${loc}` : ''}  (${o.offerId})\n`,
-    );
+    process.stdout.write(`   ${o.url}  (${o.offerId})\n`);
   });
 }

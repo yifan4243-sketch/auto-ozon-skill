@@ -8,3 +8,4 @@ coverage/
 __pycache__/
 
 tmp/
+data/validation/canonical-v2-runs/

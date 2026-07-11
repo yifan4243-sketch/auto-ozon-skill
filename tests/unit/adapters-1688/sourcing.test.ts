@@ -43,10 +43,13 @@ describe('1688 mappers', () => {
       offerUrl: 'https://detail.1688.com/offer/123456789.html',
       collectedAt: '2026-07-09T00:00:00.000Z',
       collectionMethod: 'offers',
+      sourceCategoryPathZh: ['家居百货', '收纳整理', '收纳箱'],
     });
     expect(canonical.product.chineseTitle).toContain('收纳盒');
     expect(canonical.product.priceTiers[0]).toEqual({ minQty: 2, priceCny: 4.5 });
-    expect(canonical.product.skus[0]?.attributes).toEqual({ spec1: '透明', spec2: '小号' });
+    expect(canonical.product.skus[0]?.attributes).toEqual({ 颜色: '透明' });
+    expect(canonical).not.toHaveProperty('supplier');
+    expect(canonical.product.skus[0]).not.toHaveProperty('stock');
     expect(canonical.validation.status).toBe('valid');
   });
 
@@ -58,7 +61,7 @@ describe('1688 mappers', () => {
     expect(result.mode).toBe('keyword');
     expect(result.total).toBe(1);
     expect(result.items[0]?.source.collectionMethod).toBe('keyword');
-    expect(result.raw).toMatchObject({ keyword: '收纳盒', details: { mode: 'offers' } });
+    expect(result.raw).toMatchObject({ mode: 'offers', offers: [{ offerId: offer.offerId }] });
   });
 
   it('maps image search candidates plus details to SourcingResult', () => {
@@ -88,6 +91,22 @@ describe('CLI registration', () => {
     const dropped = ['serve', 'research', 'compare', 'supplier', 'cart', 'checkout', 'order', 'seller', 'feedback'];
     for (const name of dropped) {
       expect(findCommand(program, name)).toBeUndefined();
+    }
+  });
+
+  it('does not expose search controls that require discarded supplier or sales facts', () => {
+    const keyword = findCommand(buildProgram(), 'keyword');
+    expect(keyword).toBeDefined();
+    const help = keyword!.helpInformation();
+    for (const removed of [
+      '--province',
+      '--city',
+      '--verified',
+      '--min-turnover',
+      '--exclude-ads',
+      'best-selling',
+    ]) {
+      expect(help).not.toContain(removed);
     }
   });
 });

@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "source": {
+    "platform": "1688",
+    "offer_id": "example-mixed",
+    "offer_url": "https://detail.1688.com/offer/example-mixed.html",
+    "collected_at": "2026-07-11T00:00:00.000Z",
+    "collection_method": "offers",
+    "detail_url": null,
+    "source_category_path_zh": ["混合链接"],
+    "discovery_context": { "search_term": null, "seed_offer_id": null }
+  },
+  "product": {
+    "title_zh": "手机壳与纯棉T恤混合选项",
+    "main_image": "https://img.example.com/mixed.jpg",
+    "gallery_images": ["https://img.example.com/mixed.jpg"],
+    "attributes": {},
+    "price_tiers": [],
+    "sku_options": []
+  },
+  "skus": [
+    {
+      "source_sku_id": "mixed-case",
+      "raw_spec_text": "手机壳",
+      "specs": { "商品": "手机壳" },
+      "unparsed_spec_segments": [],
+      "price_cny": 5,
+      "multi_price_cny": null,
+      "image": "https://img.example.com/case.jpg",
+      "package": { "length_cm": 17, "width_cm": 9, "height_cm": 2, "raw_weight": 60, "weight_unit": "unknown", "source": "1688", "matched_by": "sku_id" }
+    },
+    {
+      "source_sku_id": "mixed-shirt",
+      "raw_spec_text": "T恤",
+      "specs": { "商品": "T恤" },
+      "unparsed_spec_segments": [],
+      "price_cny": 20,
+      "multi_price_cny": null,
+      "image": "https://img.example.com/tshirt.jpg",
+      "package": { "length_cm": 30, "width_cm": 20, "height_cm": 2, "raw_weight": 180, "weight_unit": "unknown", "source": "1688", "matched_by": "sku_id" }
+    }
+  ],
+  "sku_analysis": {
+    "has_source_skus": true,
+    "is_multi_sku": true,
+    "sku_count": 2,
+    "common_fields": {},
+    "varying_fields": [],
+    "variant_dimensions": [],
+    "missing_fields": [],
+    "duplicate_spec_combinations": [],
+    "warnings": []
+  },
+  "validation": { "status": "valid", "warnings": [], "errors": [] }
+}

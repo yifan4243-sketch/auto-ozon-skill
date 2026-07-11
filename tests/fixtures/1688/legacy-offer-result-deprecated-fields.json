@@ -1,0 +1,73 @@
+{
+  "offerId": "987654321",
+  "title": "园林修枝剪 园艺工具",
+  "url": "https://detail.1688.com/offer/987654321.html",
+  "categoryPathZh": ["首页", "园林工具", "园林工具", "修剪工具", "修枝剪"],
+  "categoryId": "1034678",
+  "priceRange": "12.80-15.00",
+  "priceMin": 12.8,
+  "priceMax": 15,
+  "unitName": "把",
+  "minOrderQty": 2,
+  "mixOrderQty": 10,
+  "priceTiers": [
+    { "minQty": 2, "price": 12.8 },
+    { "minQty": 100, "price": 10.5 }
+  ],
+  "detailUrl": "https://cbu01.alicdn.com/detail-pruner.html",
+  "attributes": [
+    { "name": "材质", "value": "高碳钢" },
+    { "name": "适用范围", "value": "园林修剪" }
+  ],
+  "packageInfo": [
+    {
+      "skuId": "pruner-red-m",
+      "spec": "颜色:红色>尺码:M",
+      "length": 25,
+      "width": 8,
+      "height": 3,
+      "weight": 320,
+      "volume": 600
+    }
+  ],
+  "supplier": {
+    "name": "测试园林工具厂",
+    "loginId": "legacy-login",
+    "memberId": "legacy-member",
+    "userId": "legacy-user"
+  },
+  "freight": {
+    "receiveAddress": "浙江省杭州市测试地址",
+    "sendArea": "浙江金华",
+    "province": "浙江",
+    "city": "金华",
+    "unitWeight": 0.32
+  },
+  "saledCount": 9999,
+  "options": [
+    {
+      "prop": "颜色",
+      "values": [{ "name": "红色", "imageUrl": "https://img.example.com/red.jpg" }]
+    },
+    {
+      "prop": "尺码",
+      "values": [{ "name": "M", "imageUrl": null }]
+    }
+  ],
+  "skus": [
+    {
+      "skuId": "pruner-red-m",
+      "specs": "颜色:红色>尺码:M",
+      "price": 12.8,
+      "multiPrice": 10.5,
+      "stock": 888,
+      "saleCount": 666,
+      "image": "https://img.example.com/red.jpg"
+    }
+  ],
+  "mainImage": "https://img.example.com/pruner-main.jpg",
+  "images": [
+    "https://img.example.com/pruner-main.jpg",
+    "https://img.example.com/pruner-gallery.jpg"
+  ]
+}

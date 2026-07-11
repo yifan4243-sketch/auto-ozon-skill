@@ -3,7 +3,6 @@ import { dispatch } from '../session/dispatch.js';
 import { emit, info } from '../io/output.js';
 import { CliError } from '../io/errors.js';
 import { encodeGbkPercent } from '../util/encoding.js';
-import { debugTmpPath } from '../util/temp.js';
 import { withRecovery } from '../session/recovery.js';
 import { clickSearchNextPage } from '../session/search-locators.js';
 import { startSearchOfferCapture } from '../session/search-capture.js';
@@ -24,7 +23,6 @@ import {
   hasActiveFilters,
   normalizeFilters,
   normalizeSearchSort,
-  normalizeVerifiedFilter,
   parseOptionalNumber,
   parsePositiveInt,
   type SearchFilterSummary,
@@ -36,11 +34,6 @@ export interface SearchOpts {
   sort?: string;
   priceMin?: string;
   priceMax?: string;
-  province?: string;
-  city?: string;
-  verified?: string;
-  minTurnover?: string;
-  excludeAds?: boolean;
   profile?: string;
   headed?: boolean;
 }
@@ -127,11 +120,6 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
   const filters = normalizeFilters({
     priceMin: parseOptionalNumber(opts.priceMin, '--price-min'),
     priceMax: parseOptionalNumber(opts.priceMax, '--price-max'),
-    province: opts.province,
-    city: opts.city,
-    verified: normalizeVerifiedFilter(opts.verified),
-    minTurnover: parseOptionalNumber(opts.minTurnover, '--min-turnover'),
-    excludeAds: opts.excludeAds,
   });
 
   const data = await dispatch<SearchArgs, SearchResult>(
@@ -158,8 +146,6 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
   });
 }
 
-let HTML_SEQ = 0;
-let MTOP_SEQ = 0;
 
 export { SEARCH_APP_ID, SEARCH_MTOP_API, mapOffer };
 export const SEARCH_WARMUP_URL = 'https://www.1688.com/';
@@ -256,8 +242,6 @@ async function fetchSearch(
   if (process.env.BB1688_PROBE === '1') {
     const log = (line: string) => process.stderr.write(line + '\n');
     log('[probe] active');
-    HTML_SEQ = 0;
-    MTOP_SEQ = 0;
     page.on('response', async (resp) => {
       const u = resp.url();
       const ct = resp.headers()['content-type'] ?? '';
@@ -297,17 +281,6 @@ async function fetchSearch(
           log(
             `[mtop] ${m[0]} appId=${appId} bodyLen=${body.length} offerId×${offerHitCount}`,
           );
-          if (offerHitCount > 5) {
-            try {
-              const fs = await import('node:fs/promises');
-              const seq = (++MTOP_SEQ).toString().padStart(2, '0');
-              const file = debugTmpPath(`1688-mtop-${seq}-${appId || 'unknown'}.json`);
-              await fs.writeFile(file, body);
-              log(`[mtop] saved → ${file}`);
-            } catch {
-              /* ignore */
-            }
-          }
           return;
         }
         // Broaden: ANY response after this point gets logged as [other].
@@ -325,27 +298,6 @@ async function fetchSearch(
           /text\/html/i.test(ct)
         ) {
           const body = await resp.text();
-          // Save each response to a separate file so we don't overwrite
-          // earlier ones (the actual results page may be one of several).
-          try {
-            const fs = await import('node:fs/promises');
-            const seq = (++HTML_SEQ).toString().padStart(2, '0');
-            const tag = /punish/.test(u)
-              ? 'punish'
-              : /\.html\b/.test(u)
-              ? 'html'
-              : 'htm';
-            const tmpPath = debugTmpPath(`1688-search-page-${seq}-${tag}.html`);
-            await fs.writeFile(tmpPath, body);
-            const offerHrefCount = (
-              body.match(/detail\.[m.]*1688\.com\/offer\//g) ?? []
-            ).length;
-            log(
-              `[html] saved → ${tmpPath} (${body.length} bytes, offerHref×${offerHrefCount})`,
-            );
-          } catch {
-            /* ignore */
-          }
           // Probe key patterns and print context where they appear.
           const probes = [
             'offerId":',
@@ -571,7 +523,6 @@ const HOMEPAGE_SEARCH_BUTTON_SELECTORS = [
 ] as const;
 
 const SEARCH_SORT_TEXT: Record<Exclude<SearchSort, 'relevance'>, string[]> = {
-  'best-selling': ['成交额', '成交', '销量'],
   'price-asc': ['价格'],
   'price-desc': ['价格'],
 };
@@ -701,7 +652,6 @@ async function waitForLikelySearchNavigation(
 }
 
 function remoteSortType(sort: SearchSort): string | null {
-  if (sort === 'best-selling') return 'va_rmdarkgmv30';
   if (sort === 'price-asc') return 'va_price_asc';
   if (sort === 'price-desc') return 'va_price_desc';
   return null;
@@ -918,30 +868,6 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
       return { text: '', min: null, max: null };
     }
 
-    function extractSupplier(card: HTMLElement): {
-      name: string | null;
-      shopUrl: string | null;
-      years: number | null;
-    } {
-      // 1688 supplier shops use subdomains like shop4c1183j536987.1688.com,
-      // winportXXXX.1688.com, or qm.1688.com/winport/...
-      const links = Array.from(
-        card.querySelectorAll<HTMLAnchorElement>('a[href*="1688.com"]'),
-      ).filter((a) => {
-        const h = a.href ?? '';
-        if (/detail\.1688\.com|detail\.m\.1688\.com|m\.1688\.com\/offer/.test(h))
-          return false;
-        return /shop\w*\.1688\.com|winport|1688\.com\/page\/c/.test(h);
-      });
-      const link = links[0] ?? null;
-      const name = link?.textContent?.trim().slice(0, 80) ?? null;
-      const shopUrl = link?.href ?? null;
-      const text = card.textContent ?? '';
-      const ym = text.match(/(\d{1,2})\s*年/);
-      const years = ym ? parseInt(ym[1]!, 10) : null;
-      return { name, shopUrl, years };
-    }
-
     const anchors = Array.from(
       document.querySelectorAll<HTMLAnchorElement>(ANCHOR_SEL),
     );
@@ -956,7 +882,6 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
       const card = findCardForAnchor(a);
       const title = extractTitle(card, a);
       const price = extractPrice(card);
-      const supplier = extractSupplier(card);
       const img =
         a.querySelector<HTMLImageElement>('img') ??
         card.querySelector<HTMLImageElement>('img');
@@ -967,13 +892,6 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
         offerId,
         title,
         price,
-        supplier,
-        location: { province: null, city: null },
-        bizType: null,
-        verified: { factory: false, business: false, superFactory: false },
-        tags: [],
-        isP4P: false,
-        turnover: null,
         url: `https://detail.m.1688.com/page/index.html?offerId=${offerId}`,
         image,
       });
@@ -1135,15 +1053,7 @@ function printOffers(result: SearchResult): void {
       process.stdout.write(`${idx}. ${o.title}\n`);
       const pad = ' '.repeat(w + 2);
       process.stdout.write(`${pad}${price}`);
-      if (o.turnover) process.stdout.write(`  ·  ${o.turnover}`);
       process.stdout.write('\n');
-      const supBits = [
-        o.supplier.name,
-        o.supplier.years ? `${o.supplier.years}年` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      if (supBits) process.stdout.write(`${pad}${supBits}\n`);
       process.stdout.write(`${pad}${o.url}\n`);
       if (i < offers.length - 1) process.stdout.write('\n');
     });

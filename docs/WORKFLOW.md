@@ -10,7 +10,8 @@ source keyword
 -> map to CanonicalProduct[]
 ```
 
-Keyword search is deep by default because Ozon draft creation needs title, images, attributes, price tiers, SKUs, supplier info, and package data.
+Keyword search is deep by default because later listing preparation needs title,
+Chinese category path, images, attributes, prices, SKUs, and package dimensions/weight.
 
 ## Image sourcing
 
@@ -70,7 +71,8 @@ keeps its source ID.
 
 After matching, an empty package record is still reported as missing. Raw weight
 must be at least `3` to be retained; smaller values become `null` without unit
-conversion. Package length, width, height, and volume must be positive. Empty or
+conversion. Package length, width, and height must be positive; source volume is
+not collected. Empty or
 duplicate source SKU IDs are validation errors and block the V2 product; field
 comparison uses collision-free positional keys so invalid IDs cannot overwrite
 one another in `values_by_sku`.
@@ -84,3 +86,72 @@ Later phases, not this normalization path, are responsible for Agent category
 classification, Ozon `GetAttributes`, attribute-dictionary resolution, missing
 package policy, shipping and pricing, Russian content, internal Ozon drafts,
 and final Ozon `items[]` requests.
+
+## Ozon category decision V0
+
+```text
+CanonicalProductV2
+-> Agent identifies single SKU, normal variants, mixed product, or unclear structure
+-> read-only lexical search of the committed Chinese Ozon category tree
+-> Agent selects a description-category/type pair for each SKU group
+-> deterministic category-pair and complete SKU-coverage validation
+-> CategoryDecisionV1
+```
+
+The category tree under `data/ozon/categories` is the only category source. A
+`type_id` is never validated alone because the tree contains repeated type IDs.
+All source SKUs must appear exactly once in a category group or in the unassigned
+list. Unassigned SKUs, invalid pairs, or blocked source products block the
+decision. This stage does not use category analytics and does not retrieve Ozon
+attributes or create listing drafts.
+
+## V2 runtime sourcing
+
+```text
+keyword / image / offers / similar
+-> collect candidate details once as typed OfferResult records
+-> apply sku-max directly to OfferResult when requested
+-> map the same selected batch to V1 (default) or V2 (explicit)
+-> summarize V2 facts
+-> compare OfferResult against CanonicalProductV2
+-> optionally save an auditable run
+```
+
+`--schema-version 2` chooses the product contract. `--json-v2` independently
+chooses the existing response envelope. No command performs a V1 collection and
+then tries to recover OfferResult from an unknown `raw` shape.
+
+Keyword runs store the same original search term on every returned product.
+Similar runs store the seed offer ID. Offers and image runs store null discovery
+context, and the image path is not included in CanonicalProductV2.
+
+## Audit runs and offline replay
+
+`--save-dir` creates a unique run directory:
+
+```text
+<save-dir>/<run_id>/
+  manifest.json
+  raw/<offer_id>.json
+  canonical-v2/<offer_id>.json
+  integrity-report.json
+  failures.json
+```
+
+Only reconstructed retained OfferResult fields are written to `raw`; unknown
+fields, browser responses, cookies, tokens, credentials, image paths, supplier
+facts, freight/regions, numeric category IDs, stock, sales, and volume are not
+copied. `source normalize-v2` accepts a current or legacy OfferResult or
+OfferBatchResult for deterministic replay without network access. Legacy-only
+keys are accepted and ignored without mutating the input object.
+
+Validation warnings describe source-data gaps. Integrity violations describe
+conversion bugs. The latter fail the command but still allow completed
+diagnostic artifacts to remain on disk.
+
+Original brand attributes are source facts and are not interpreted as ownership
+or authorization claims. Category selection, prohibited-category rules, and
+logistics restrictions remain future stages. The future category Agent will use
+the search term, Chinese title, 1688 Chinese category path, attributes, and SKU
+specifications to match the saved Ozon Chinese category table; this runtime does
+not implement that matching.

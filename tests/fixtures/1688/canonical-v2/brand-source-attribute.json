@@ -1,0 +1,9 @@
+{
+  "offer": {
+    "offerId": "200000019",
+    "attributes": [
+      { "name": "品牌", "value": "测试品牌" },
+      { "name": "材质", "value": "钢" }
+    ]
+  }
+}
