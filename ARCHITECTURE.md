@@ -38,6 +38,11 @@ packages/adapters-ozon
   subscription tools
   workflows
   guarded read-only execution
+
+packages/category-intelligence
+  Ozon category decision Skill and fixed CategoryDecisionV1 output
+  read-only lookup over the committed Chinese Ozon category tree
+  exact description-category/type pair and SKU coverage validation
 ```
 
 The session layer is inline-only. It uses Playwright persistent browser contexts, profiles, cookies, locks, events, artifacts, response capture, mtop capture, and recovery. The daemon logic from the source project is intentionally deleted.
@@ -140,9 +145,19 @@ warnings remain source-data observations.
 
 No category Agent, Ozon attribute mapping, prohibited/logistics knowledge base,
 pricing, Russian content, draft, or publishing behavior is part of this layer.
-The future category Agent will match the saved Ozon Chinese category table from
+The downstream category decision Skill matches the saved Ozon Chinese category table from
 the search term, Chinese title, 1688 Chinese category path, attributes, and SKU
 specifications.
+
+## Ozon category decision V0
+
+Category decision consumes one `CanonicalProductV2`, distinguishes normal SKU
+variants from mixed products, groups every source SKU exactly once, and produces
+`CategoryDecisionV1`. AI makes the semantic choice; deterministic code searches
+`data/ozon/categories/ozon-category-tree.json`, validates the exact
+`description_category_id + type_id` pair, rejects disabled nodes, and validates
+SKU coverage. Category analytics, Ozon attributes, Russian content, pricing,
+drafting, and publishing are outside this stage.
 
 ## Removed scope
 

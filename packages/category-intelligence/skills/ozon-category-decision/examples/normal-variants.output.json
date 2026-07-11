@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "source_offer_id": "example-tshirt",
+  "product_understanding": {
+    "summary_zh": "同款纯棉圆领短袖T恤，SKU仅颜色和尺码不同。",
+    "product_family_zh": "T恤",
+    "evidence": [
+      { "source": "search_term", "value": "纯棉T恤" },
+      { "source": "title_zh", "value": "纯棉圆领短袖T恤" },
+      { "source": "sku_spec", "value": "颜色和尺码变化" }
+    ]
+  },
+  "representative_sku_ids": ["shirt-black-m"],
+  "product_structure": "normal_variants",
+  "category_groups": [{
+    "group_id": "tshirt",
+    "source_sku_ids": ["shirt-black-m", "shirt-white-l"],
+    "group_summary_zh": "圆领短袖T恤的颜色和尺码变体",
+    "evidence": [
+      { "source": "title_zh", "value": "纯棉圆领短袖T恤" },
+      { "source": "sku_spec", "value": "黑色/M；白色/L" }
+    ],
+    "selected_category": {
+      "description_category_id": 200000933,
+      "description_category_name": "服装",
+      "type_id": 93244,
+      "type_name": "T恤",
+      "category_path_zh": ["服装", "服装", "T恤"]
+    },
+    "alternative_categories": [],
+    "confidence": "high",
+    "rationale_zh": "所有SKU功能相同，仅颜色和尺码变化，应共用T恤类目。"
+  }],
+  "unassigned_sku_ids": [],
+  "status": "decided",
+  "warnings": [],
+  "errors": []
+}

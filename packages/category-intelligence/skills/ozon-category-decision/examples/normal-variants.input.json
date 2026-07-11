@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "source": {
+    "platform": "1688",
+    "offer_id": "example-tshirt",
+    "offer_url": "https://detail.1688.com/offer/example-tshirt.html",
+    "collected_at": "2026-07-11T00:00:00.000Z",
+    "collection_method": "keyword",
+    "detail_url": null,
+    "source_category_path_zh": ["服装", "T恤"],
+    "discovery_context": { "search_term": "纯棉T恤", "seed_offer_id": null }
+  },
+  "product": {
+    "title_zh": "纯棉圆领短袖T恤",
+    "main_image": "https://img.example.com/tshirt.jpg",
+    "gallery_images": ["https://img.example.com/tshirt.jpg"],
+    "attributes": { "面料": "棉" },
+    "price_tiers": [],
+    "sku_options": []
+  },
+  "skus": [
+    {
+      "source_sku_id": "shirt-black-m",
+      "raw_spec_text": "颜色:黑色>尺码:M",
+      "specs": { "颜色": "黑色", "尺码": "M" },
+      "unparsed_spec_segments": [],
+      "price_cny": 19.9,
+      "multi_price_cny": null,
+      "image": "https://img.example.com/tshirt-black.jpg",
+      "package": { "length_cm": 30, "width_cm": 20, "height_cm": 2, "raw_weight": 180, "weight_unit": "unknown", "source": "1688", "matched_by": "sku_id" }
+    },
+    {
+      "source_sku_id": "shirt-white-l",
+      "raw_spec_text": "颜色:白色>尺码:L",
+      "specs": { "颜色": "白色", "尺码": "L" },
+      "unparsed_spec_segments": [],
+      "price_cny": 19.9,
+      "multi_price_cny": null,
+      "image": "https://img.example.com/tshirt-white.jpg",
+      "package": { "length_cm": 32, "width_cm": 22, "height_cm": 2, "raw_weight": 200, "weight_unit": "unknown", "source": "1688", "matched_by": "sku_id" }
+    }
+  ],
+  "sku_analysis": {
+    "has_source_skus": true,
+    "is_multi_sku": true,
+    "sku_count": 2,
+    "common_fields": { "price_cny": 19.9 },
+    "varying_fields": [],
+    "variant_dimensions": [],
+    "missing_fields": [],
+    "duplicate_spec_combinations": [],
+    "warnings": []
+  },
+  "validation": { "status": "valid", "warnings": [], "errors": [] }
+}

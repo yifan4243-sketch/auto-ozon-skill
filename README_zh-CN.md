@@ -24,6 +24,14 @@
 ID、供应商身份、收货/发货地区、物流重量、库存、销量和来源体积。V1 与 V2 使用
 同一精简边界。
 
+### Ozon 类目决策 V0
+
+类目决策位于 `packages/category-intelligence`。它读取
+`CanonicalProductV2`，由 Agent 区分普通变体与混合商品，并从仓库现有的
+Ozon 中文类目树选择类目。程序负责验证 description category/type ID 组合、
+disabled 状态和完整 SKU 覆盖，输出固定的 `CategoryDecisionV1`。本阶段不获取
+Ozon 属性，也不生成或发布商品草稿。
+
 ## 不支持
 
 不支持 cart、checkout、order、seller、supplier、research、compare、feedback，不支持自动下单、购物车操作、订单或物流管理、旺旺聊天。

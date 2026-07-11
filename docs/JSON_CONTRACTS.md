@@ -164,3 +164,18 @@ methods, missing packages/weights, unparsed specs, and duplicate spec groups.
 instead detects program conversion damage such as missing SKUs, changed prices,
 incorrect package normalization, or detail URLs entering the gallery. An
 integrity failure returns `V2_INTEGRITY_FAILED` and a non-zero process exit code.
+
+## CategoryDecisionV1
+
+`CategoryDecisionV1` is the downstream Agent decision contract. It records the
+source offer, evidence-backed product understanding, representative SKUs,
+product structure, category groups, unassigned SKUs, status, warnings, and
+errors. Each selected category contains the exact
+`description_category_id + type_id`, names, and full Chinese path copied from
+the committed Ozon category tree.
+
+Decision status is `decided`, `needs_review`, or `blocked`. Every source SKU must
+be covered exactly once. Invalid or disabled category pairs, duplicate or
+missing SKU coverage, unassigned SKUs, and blocked source input prevent a
+`decided` result. The contract contains no Ozon attributes, Russian copy,
+pricing, logistics, draft, or publishing fields.

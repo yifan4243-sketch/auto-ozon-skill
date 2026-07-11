@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "source_offer_id": "example-mixed",
+  "product_understanding": {
+    "summary_zh": "同一链接包含手机壳和T恤两种不同功能的商品。",
+    "product_family_zh": "混合商品",
+    "evidence": [
+      { "source": "title_zh", "value": "手机壳与纯棉T恤混合选项" },
+      { "source": "sku_spec", "value": "商品:手机壳；商品:T恤" }
+    ]
+  },
+  "representative_sku_ids": ["mixed-case", "mixed-shirt"],
+  "product_structure": "mixed_product",
+  "category_groups": [
+    {
+      "group_id": "phone-case",
+      "source_sku_ids": ["mixed-case"],
+      "group_summary_zh": "智能手机保护壳",
+      "evidence": [{ "source": "sku_spec", "value": "商品:手机壳" }],
+      "selected_category": {
+        "description_category_id": 17028650,
+        "description_category_name": "保护套",
+        "type_id": 97011,
+        "type_name": "智能手机壳",
+        "category_path_zh": ["电子产品", "保护套", "智能手机壳"]
+      },
+      "alternative_categories": [],
+      "confidence": "high",
+      "rationale_zh": "该SKU明确是手机壳。"
+    },
+    {
+      "group_id": "tshirt",
+      "source_sku_ids": ["mixed-shirt"],
+      "group_summary_zh": "T恤",
+      "evidence": [{ "source": "sku_spec", "value": "商品:T恤" }],
+      "selected_category": {
+        "description_category_id": 200000933,
+        "description_category_name": "服装",
+        "type_id": 93244,
+        "type_name": "T恤",
+        "category_path_zh": ["服装", "服装", "T恤"]
+      },
+      "alternative_categories": [],
+      "confidence": "high",
+      "rationale_zh": "该SKU明确是T恤，与手机壳不是普通变体。"
+    }
+  ],
+  "unassigned_sku_ids": [],
+  "status": "decided",
+  "warnings": [],
+  "errors": []
+}

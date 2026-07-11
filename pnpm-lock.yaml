@@ -68,7 +68,11 @@ importers:
 
   packages/analytics: {}
 
-  packages/category-intelligence: {}
+  packages/category-intelligence:
+    dependencies:
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
 
   packages/config: {}
 

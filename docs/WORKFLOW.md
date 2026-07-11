@@ -87,6 +87,24 @@ classification, Ozon `GetAttributes`, attribute-dictionary resolution, missing
 package policy, shipping and pricing, Russian content, internal Ozon drafts,
 and final Ozon `items[]` requests.
 
+## Ozon category decision V0
+
+```text
+CanonicalProductV2
+-> Agent identifies single SKU, normal variants, mixed product, or unclear structure
+-> read-only lexical search of the committed Chinese Ozon category tree
+-> Agent selects a description-category/type pair for each SKU group
+-> deterministic category-pair and complete SKU-coverage validation
+-> CategoryDecisionV1
+```
+
+The category tree under `data/ozon/categories` is the only category source. A
+`type_id` is never validated alone because the tree contains repeated type IDs.
+All source SKUs must appear exactly once in a category group or in the unassigned
+list. Unassigned SKUs, invalid pairs, or blocked source products block the
+decision. This stage does not use category analytics and does not retrieve Ozon
+attributes or create listing drafts.
+
 ## V2 runtime sourcing
 
 ```text

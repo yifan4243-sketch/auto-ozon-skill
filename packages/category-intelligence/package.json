@@ -6,6 +6,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p ../../tsconfig.base.json"
+    "build": "tsc -p ../../tsconfig.base.json",
+    "category:lookup": "tsx src/category-lookup-cli.ts",
+    "category:decision": "tsx src/category-decision-cli.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
   }
 }

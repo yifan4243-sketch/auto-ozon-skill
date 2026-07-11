@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "source": {
+    "platform": "1688",
+    "offer_id": "example-phone-case",
+    "offer_url": "https://detail.1688.com/offer/example-phone-case.html",
+    "collected_at": "2026-07-11T00:00:00.000Z",
+    "collection_method": "keyword",
+    "detail_url": null,
+    "source_category_path_zh": ["数码配件", "手机保护套"],
+    "discovery_context": { "search_term": "手机壳", "seed_offer_id": null }
+  },
+  "product": {
+    "title_zh": "透明防摔智能手机保护壳",
+    "main_image": "https://img.example.com/case.jpg",
+    "gallery_images": ["https://img.example.com/case.jpg"],
+    "attributes": { "材质": "TPU" },
+    "price_tiers": [],
+    "sku_options": []
+  },
+  "skus": [{
+    "source_sku_id": "case-default",
+    "raw_spec_text": "透明款",
+    "specs": { "款式": "透明款" },
+    "unparsed_spec_segments": [],
+    "price_cny": 3.5,
+    "multi_price_cny": null,
+    "image": "https://img.example.com/case.jpg",
+    "package": {
+      "length_cm": 17,
+      "width_cm": 9,
+      "height_cm": 2,
+      "raw_weight": 60,
+      "weight_unit": "unknown",
+      "source": "1688",
+      "matched_by": "sku_id"
+    }
+  }],
+  "sku_analysis": {
+    "has_source_skus": true,
+    "is_multi_sku": false,
+    "sku_count": 1,
+    "common_fields": {},
+    "varying_fields": [],
+    "variant_dimensions": [],
+    "missing_fields": [],
+    "duplicate_spec_combinations": [],
+    "warnings": []
+  },
+  "validation": { "status": "valid", "warnings": [], "errors": [] }
+}
