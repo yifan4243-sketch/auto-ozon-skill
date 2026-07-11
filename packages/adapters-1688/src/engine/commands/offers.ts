@@ -210,7 +210,17 @@ interface PageInfo {
  * Falls back to DOM scraping if the inline data isn't available for some
  * reason (e.g. server rendered a fallback view).
  */
-async function readPageInfo(page: Page): Promise<PageInfo> {
+export interface ReadPageInfoOptions {
+  contextTimeoutMs?: number;
+  scrollDelayMs?: number;
+}
+
+export async function readPageInfo(
+  page: Page,
+  options: ReadPageInfoOptions = {},
+): Promise<PageInfo> {
+  const contextTimeoutMs = options.contextTimeoutMs ?? 8000;
+  const scrollDelayMs = options.scrollDelayMs ?? 1000;
   const debug = process.env.BB1688_DEBUG === '1';
   if (debug) {
     page.on('console', (msg) => {
@@ -230,7 +240,8 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         };
         return !!w.context?.result?.data?.productTitle?.fields;
       },
-      { timeout: 8000 },
+      undefined,
+      { timeout: contextTimeoutMs },
     );
   } catch {
     return scrapeDomFallback(page);
@@ -240,15 +251,14 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
   // products there, which can hang the renderer.
   try {
     await page.evaluate(() => window.scrollTo(0, 1500));
-    await sleep(1000);
+    await sleep(scrollDelayMs);
     await page.evaluate(() => window.scrollTo(0, 3000));
-    await sleep(1000);
+    await sleep(scrollDelayMs);
   } catch {
     /* best-effort */
   }
 
-  const fromContext = await page
-    .evaluate(() => {
+  const fromContext = await page.evaluate(() => {
       type ImageEntry =
         | string
         | {
@@ -395,25 +405,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         }
       }
       const categoryCandidates: string[][] = [];
-      const readCategoryCandidate = (value: unknown, depth = 0): string[] => {
-        if (depth > 4 || value === null || value === undefined) return [];
-        if (typeof value === 'string') return [value];
-        if (Array.isArray(value)) {
-          return value.flatMap((item) => readCategoryCandidate(item, depth + 1));
-        }
-        if (typeof value !== 'object') return [];
-        const entry = value as Record<string, unknown>;
-        for (const key of ['name', 'title', 'text', 'categoryName', 'label']) {
-          if (typeof entry[key] === 'string') return [entry[key] as string];
-        }
-        for (const key of ['fields', 'items', 'list', 'categories', 'path', 'children']) {
-          if (entry[key] !== undefined) {
-            const values = readCategoryCandidate(entry[key], depth + 1);
-            if (values.length > 0) return values;
-          }
-        }
-        return [];
-      };
       for (const key of [
         'breadcrumb',
         'breadcrumbs',
@@ -421,7 +412,62 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         'categoryPath',
         'categoryNavigation',
       ]) {
-        const candidate = readCategoryCandidate(d[key]);
+        const candidate: string[] = [];
+        const pending: Array<{ value: unknown; depth: number }> = [
+          { value: d[key], depth: 0 },
+        ];
+        while (pending.length > 0) {
+          const current = pending.shift()!;
+          if (
+            current.depth > 4 ||
+            current.value === null ||
+            current.value === undefined
+          ) {
+            continue;
+          }
+          if (typeof current.value === 'string') {
+            candidate.push(current.value);
+            continue;
+          }
+          if (Array.isArray(current.value)) {
+            for (const item of current.value) {
+              pending.push({ value: item, depth: current.depth + 1 });
+            }
+            continue;
+          }
+          if (typeof current.value !== 'object') continue;
+          const entry = current.value as Record<string, unknown>;
+          let foundLabel = false;
+          for (const labelKey of [
+            'name',
+            'title',
+            'text',
+            'categoryName',
+            'label',
+          ]) {
+            if (typeof entry[labelKey] === 'string') {
+              candidate.push(entry[labelKey] as string);
+              foundLabel = true;
+              break;
+            }
+          }
+          if (foundLabel) continue;
+          for (const containerKey of [
+            'fields',
+            'items',
+            'list',
+            'categories',
+            'path',
+            'children',
+          ]) {
+            if (entry[containerKey] !== undefined) {
+              pending.push({
+                value: entry[containerKey],
+                depth: current.depth + 1,
+              });
+            }
+          }
+        }
         if (candidate.length > 0) categoryCandidates.push(candidate);
       }
       for (const selector of [
@@ -449,8 +495,7 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         mainImage: imgs[0] ?? null,
         images: imgs,
       };
-    })
-    .catch(() => null);
+    });
 
   if (!fromContext) return scrapeDomFallback(page);
 
@@ -471,15 +516,21 @@ async function scrapeDomFallback(page: Page): Promise<PageInfo> {
   const raw = await page.title();
   const title = raw.replace(/\s*-\s*阿里巴巴\s*$/, '').trim();
   const info = await page.evaluate(() => {
-    function imgSrc(sel: string): string | null {
-      const e = document.querySelector(sel) as HTMLImageElement | null;
-      return e?.src ?? e?.getAttribute('data-src') ?? null;
-    }
+    const primaryImage = document.querySelector(
+      '.v-image-wrap img',
+    ) as HTMLImageElement | null;
+    const antImage = document.querySelector(
+      '.ant-image-img',
+    ) as HTMLImageElement | null;
+    const altImage = document.querySelector(
+      'img[alt*="主图"]',
+    ) as HTMLImageElement | null;
+    const mainImageElement = primaryImage ?? antImage ?? altImage;
     return {
       mainImage:
-        imgSrc('.v-image-wrap img') ??
-        imgSrc('.ant-image-img') ??
-        imgSrc('img[alt*="主图"]'),
+        mainImageElement?.src ??
+        mainImageElement?.getAttribute('data-src') ??
+        null,
       categoryPathZh: [...document.querySelectorAll(
         '[class*="breadcrumb"] a, [class*="breadcrumb"] span, [class*="crumb"] a, [class*="crumb"] span',
       )].map((node) => node.textContent?.trim() ?? '').filter(Boolean),
