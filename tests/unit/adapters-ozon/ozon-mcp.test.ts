@@ -226,6 +226,34 @@ describe('ozon CLI registration', () => {
     expect(output).toContain('INVALID_JSON_PARAMS');
     expect(output).toContain('"ok":false');
   });
+
+  it.each(['0', '-1', '1.5', '9007199254740992'])(
+    'rejects invalid Ozon category IDs before starting MCP: %s',
+    async (categoryId) => {
+      const writes: string[] = [];
+      vi.spyOn(process.stdout, 'write').mockImplementation(
+        (chunk: string | Uint8Array) => {
+          writes.push(String(chunk));
+          return true;
+        },
+      );
+
+      await buildProgram().parseAsync([
+        'node',
+        'auto-ozon',
+        'ozon',
+        'category',
+        'attributes',
+        '--category-id',
+        categoryId,
+        '--type-id',
+        '92499',
+        '--json',
+      ]);
+
+      expect(writes.join('')).toContain('BAD_INPUT');
+    },
+  );
 });
 
 describe('withPcdckClient', () => {

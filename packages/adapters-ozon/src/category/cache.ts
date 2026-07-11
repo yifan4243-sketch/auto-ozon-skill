@@ -48,8 +48,12 @@ export async function writeCategoryAttributesCache(
   const tmpName = `${finalName}.tmp-${process.pid}-${Date.now()}`;
   const tmpPath = path.join(cacheDir, tmpName);
 
-  await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf8');
-  await fs.rename(tmpPath, finalPath);
+  try {
+    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+    await fs.rename(tmpPath, finalPath);
+  } finally {
+    await fs.rm(tmpPath, { force: true });
+  }
 }
 
 export async function deleteCategoryAttributesCache(

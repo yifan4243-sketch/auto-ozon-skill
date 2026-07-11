@@ -263,7 +263,7 @@ export function buildProgram(): Command {
 
   registerOzonCommands(program, emitCommandResult, parseJsonParams, parseNumber);
 
-  registerWorkflowCommands(program, emitCommandResult, parseNumber);
+  registerWorkflowCommands(program, emitCommandResult, parseNumber, parseSkuMax);
 
   addOutputFlagsToAll(program);
   program.hook('preAction', (_thisCmd, actionCmd) => {
@@ -310,6 +310,7 @@ function registerWorkflowCommands(
   program: Command,
   emitCommandResult: (result: CommandResult<unknown>) => void,
   parseNumber: (raw: string | undefined) => number | undefined,
+  parseSkuMax: (raw: string | undefined) => number | undefined,
 ): void {
   const workflow = program
     .command('workflow')
@@ -324,6 +325,7 @@ function registerWorkflowCommands(
     .description('Source 1688 product → load CategoryDecision → fetch Ozon attributes')
     .argument('<keyword>', 'Search keyword for 1688 sourcing')
     .option('--max <n>', 'Maximum products to source', '1')
+    .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
     .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON file')
     .option('--refresh', 'Force refresh, bypass category attributes cache')
     .action(async (keyword, opts) => {
@@ -331,6 +333,7 @@ function registerWorkflowCommands(
         await runCategoryInspect({
           keyword,
           max: parseNumber(opts.max) ?? 1,
+          skuMax: parseSkuMax(opts.skuMax),
           decisionFile: opts.decisionFile,
           forceRefresh: opts.refresh === true,
         }),

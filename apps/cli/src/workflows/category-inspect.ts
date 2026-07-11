@@ -12,6 +12,7 @@ import { validateCategoryDecision } from '../../../../packages/category-intellig
 export interface CategoryInspectOptions {
   keyword: string;
   max: number;
+  skuMax?: number;
   decisionFile?: string;
   decisionProvider?: CategoryDecisionProvider;
   forceRefresh?: boolean;
@@ -53,6 +54,7 @@ export async function runCategoryInspect(
   const sourceResult = await search1688ByKeywordV2({
     keyword: options.keyword,
     max: options.max,
+    skuMax: options.skuMax,
     sort: 'relevance',
   });
 

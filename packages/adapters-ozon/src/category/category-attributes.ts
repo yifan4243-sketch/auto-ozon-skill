@@ -6,6 +6,7 @@ import {
   errorResult,
   executionToolsDisabled,
   extractToolNames,
+  isRecord,
   isOzonErrorPayload,
   mcpToolError,
   okResult,
@@ -30,6 +31,17 @@ const GET_VALUES_OP = 'DescriptionCategoryAPI_GetAttributeValues';
 export async function getCategoryAttributes(
   options: GetCategoryAttributesOptions,
 ): Promise<OzonCommandResult<CategoryAttributesV1>> {
+  if (
+    !isPositiveSafeInteger(options.descriptionCategoryId) ||
+    !isPositiveSafeInteger(options.typeId)
+  ) {
+    return errorResult('category.attributes', {
+      code: 'BAD_INPUT',
+      message: 'descriptionCategoryId and typeId must be positive safe integers.',
+      recoverable: false,
+    }) as OzonCommandResult<CategoryAttributesV1>;
+  }
+
   const forceRefresh = options.forceRefresh === true;
 
   // Check cache first (unless --refresh; never delete pre-emptively)
@@ -83,10 +95,19 @@ export async function getCategoryAttributes(
         return mcpToolError('category.attributes', attrsParsed.data) as OzonCommandResult<CategoryAttributesV1>;
       }
 
-      const rawAttributes = attrsParsed.data;
+      const unwrappedAttributes = unwrapOzonCallResponse(attrsParsed.data);
+      if (!unwrappedAttributes.ok) {
+        return invalidResponseResult(unwrappedAttributes.error);
+      }
+      const rawAttributes = unwrappedAttributes.data;
 
       // Step 2: Identify dictionary attributes
       const attributeList = extractAttributeList(rawAttributes);
+      if (attributeList === null) {
+        return invalidResponseResult(
+          `Attributes response for category ${options.descriptionCategoryId}/${options.typeId} does not contain result[].`,
+        );
+      }
       const dictionaryAttrs = attributeList.filter(
         (attr) => Number((attr as Record<string, unknown>).dictionary_id) > 0,
       );
@@ -194,23 +215,50 @@ async function fetchAllAttributeValues(
       };
     }
 
-    const raw = parsed.data as Record<string, unknown>;
+    const unwrapped = unwrapOzonCallResponse(parsed.data);
+    if (!unwrapped.ok || !isRecord(unwrapped.data)) {
+      return {
+        ok: false,
+        error: unwrapped.ok
+          ? `Invalid dictionary response at attribute_id=${attributeId}, last_value_id=${lastValueId}, category=${descriptionCategoryId}/${typeId}`
+          : `${unwrapped.error} at attribute_id=${attributeId}, last_value_id=${lastValueId}, category=${descriptionCategoryId}/${typeId}`,
+        lastValueId,
+      };
+    }
+    const raw = unwrapped.data;
+    if (!Array.isArray(raw.result) || typeof raw.has_next !== 'boolean') {
+      return {
+        ok: false,
+        error: `Dictionary response must contain result[] and boolean has_next at attribute_id=${attributeId}, last_value_id=${lastValueId}, category=${descriptionCategoryId}/${typeId}`,
+        lastValueId,
+      };
+    }
     const batch = normalizeAttributeValues(raw);
     pages.push({ last_value_id: lastValueId, response: raw });
 
-    // Dead-loop prevention: if we get the same IDs back, cursor isn't advancing
-    const batchIds = batch.map((v) => v.id);
-    const newIds = batchIds.filter((id) => !seenValueIds.has(id));
-    if (batch.length > 0 && newIds.length === 0) {
+    const newValues: CategoryAttributeValueV1[] = [];
+    for (const value of batch) {
+      if (!isPositiveSafeInteger(value.id)) {
+        return {
+          ok: false,
+          error: `Dictionary response contains an invalid value ID at attribute_id=${attributeId}, last_value_id=${lastValueId}, category=${descriptionCategoryId}/${typeId}`,
+          lastValueId,
+        };
+      }
+      if (seenValueIds.has(value.id)) continue;
+      seenValueIds.add(value.id);
+      newValues.push(value);
+    }
+
+    // Dead-loop prevention: if we get only IDs seen on earlier pages, the cursor stalled.
+    if (batch.length > 0 && newValues.length === 0) {
       return {
         ok: false,
         error: `Dictionary cursor stalled at attribute_id=${attributeId}, last_value_id=${lastValueId} — no new value IDs returned`,
         lastValueId,
       };
     }
-    for (const id of newIds) seenValueIds.add(id);
-
-    allValues.push(...batch);
+    allValues.push(...newValues);
 
     hasNext = Boolean(raw?.has_next);
 
@@ -240,10 +288,38 @@ async function fetchAllAttributeValues(
   return { ok: true, values: allValues, pages };
 }
 
-function extractAttributeList(raw: unknown): Record<string, unknown>[] {
-  if (!raw || typeof raw !== 'object') return [];
+function extractAttributeList(raw: unknown): Record<string, unknown>[] | null {
+  if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
   if (Array.isArray(obj.result)) return obj.result as Record<string, unknown>[];
   if (Array.isArray(obj)) return obj as Record<string, unknown>[];
-  return [];
+  return null;
+}
+
+type UnwrappedOzonResponse =
+  | { ok: true; data: unknown }
+  | { ok: false; error: string };
+
+function unwrapOzonCallResponse(value: unknown): UnwrappedOzonResponse {
+  if (!isRecord(value) || !Object.hasOwn(value, 'ok')) {
+    return { ok: true, data: value };
+  }
+  if (value.ok !== true || !Object.hasOwn(value, 'response')) {
+    return { ok: false, error: 'Malformed ozon-mcp response envelope.' };
+  }
+  return { ok: true, data: value.response };
+}
+
+function invalidResponseResult(
+  message: string,
+): OzonCommandResult<CategoryAttributesV1> {
+  return errorResult('category.attributes', {
+    code: 'OZON_RESPONSE_INVALID',
+    message,
+    recoverable: true,
+  }) as OzonCommandResult<CategoryAttributesV1>;
+}
+
+function isPositiveSafeInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
 }

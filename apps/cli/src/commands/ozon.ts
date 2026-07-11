@@ -246,7 +246,14 @@ export function registerOzonCommands(
     .action(async (opts) => {
       const categoryId = parseNumber(opts.categoryId);
       const typeId = parseNumber(opts.typeId);
-      if (categoryId === undefined || typeId === undefined) {
+      if (
+        categoryId === undefined ||
+        typeId === undefined ||
+        !Number.isSafeInteger(categoryId) ||
+        !Number.isSafeInteger(typeId) ||
+        categoryId <= 0 ||
+        typeId <= 0
+      ) {
         emitCommandResult({
           ok: false,
           command: 'category.attributes',
@@ -255,7 +262,7 @@ export function registerOzonCommands(
             {
               code: 'BAD_INPUT',
               message: '--category-id and --type-id must be valid integers.',
-              recoverable: true,
+              recoverable: false,
             },
           ],
           nextActions: [],
