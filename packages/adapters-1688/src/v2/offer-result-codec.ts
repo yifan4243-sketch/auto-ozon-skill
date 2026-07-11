@@ -79,7 +79,10 @@ export function parseOfferResult(value: unknown, label = 'offer'): OfferResult {
       (item, index): SkuPackage => {
         const pkg = expectRecord(item, `${label}.packageInfo[${index}]`);
         return {
-          skuId: expectString(pkg.skuId, `${label}.packageInfo[${index}].skuId`),
+          skuId: expectIdentifierString(
+            pkg.skuId,
+            `${label}.packageInfo[${index}].skuId`,
+          ),
           spec: expectString(pkg.spec, `${label}.packageInfo[${index}].spec`),
           length: expectNullableNumber(pkg.length, `${label}.packageInfo[${index}].length`),
           width: expectNullableNumber(pkg.width, `${label}.packageInfo[${index}].width`),
@@ -119,7 +122,7 @@ export function parseOfferResult(value: unknown, label = 'offer'): OfferResult {
       (item, index): SkuVariant => {
         const sku = expectRecord(item, `${label}.skus[${index}]`);
         return {
-          skuId: expectString(sku.skuId, `${label}.skus[${index}].skuId`),
+          skuId: expectIdentifierString(sku.skuId, `${label}.skus[${index}].skuId`),
           specs: expectString(sku.specs, `${label}.skus[${index}].specs`),
           price: expectNullableNumber(sku.price, `${label}.skus[${index}].price`),
           multiPrice: expectNullableNumber(
@@ -185,6 +188,13 @@ function expectOptionalArray(value: unknown, path: string): unknown[] {
 function expectString(value: unknown, path: string): string {
   if (typeof value !== 'string') throw badInput(`${path} must be a string.`);
   return value;
+}
+
+/** 1688 emits SKU identifiers as either JSON strings or integers. */
+function expectIdentifierString(value: unknown, path: string): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  throw badInput(`${path} must be a string or finite number.`);
 }
 
 function expectNullableString(value: unknown, path: string): string | null {
