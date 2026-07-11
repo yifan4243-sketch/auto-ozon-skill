@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import type { CommandResult } from '../../../../packages/contracts/src/command-result.js';
 import {
+  getCategoryAttributes,
   ozonCallMethod,
   ozonDescribeMethod,
   ozonDoctor,
@@ -230,5 +231,41 @@ export function registerOzonCommands(
     .argument('<name>', 'Workflow name')
     .action(async (name) => {
       emitCommandResult(await ozonGetWorkflow({ name }));
+    });
+
+  const category = ozon
+    .command('category')
+    .description('Ozon category tools: tree, search, attributes');
+
+  category
+    .command('attributes')
+    .description('Fetch all attributes (ZH_HANS) for an Ozon category via MCP')
+    .requiredOption('--category-id <n>', 'Ozon description_category_id')
+    .requiredOption('--type-id <n>', 'Ozon type_id')
+    .action(async (opts) => {
+      const categoryId = parseNumber(opts.categoryId);
+      const typeId = parseNumber(opts.typeId);
+      if (categoryId === undefined || typeId === undefined) {
+        emitCommandResult({
+          ok: false,
+          command: 'category.attributes',
+          warnings: [],
+          errors: [
+            {
+              code: 'BAD_INPUT',
+              message: '--category-id and --type-id must be valid integers.',
+              recoverable: true,
+            },
+          ],
+          nextActions: [],
+        });
+        return;
+      }
+      emitCommandResult(
+        await getCategoryAttributes({
+          descriptionCategoryId: categoryId,
+          typeId,
+        }),
+      );
     });
 }

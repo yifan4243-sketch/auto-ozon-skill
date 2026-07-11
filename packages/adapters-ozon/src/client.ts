@@ -1,3 +1,4 @@
+export { getCategoryAttributes } from './category/category-attributes.js';
 export { ozonDoctor } from './commands/doctor.js';
 export { ozonSearchMethods, ozonDescribeMethod } from './commands/methods.js';
 export {
@@ -19,6 +20,7 @@ export {
   ozonListMethodsForSubscription,
 } from './commands/subscription.js';
 export type {
+  GetCategoryAttributesOptions,
   OzonCallMethodOptions,
   OzonCommandResult,
   OzonDescribeMethodOptions,
