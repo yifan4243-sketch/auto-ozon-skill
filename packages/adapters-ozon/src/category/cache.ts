@@ -1,28 +1,26 @@
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { CategoryAttributesV1 } from '../../../contracts/src/category-attributes.js';
 
-const CACHE_DIR = 'data/cache/ozon/category-attributes';
+function resolveRepoRoot(): string {
+  let current = process.cwd();
+  while (true) {
+    if (fsSync.existsSync(path.join(current, 'pnpm-workspace.yaml'))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return process.cwd();
+    current = parent;
+  }
+}
+
+const CACHE_RELATIVE_DIR = 'data/cache/ozon/category-attributes';
+
+function resolveCacheDir(): string {
+  return path.join(resolveRepoRoot(), CACHE_RELATIVE_DIR);
+}
 
 function buildCacheKey(descriptionCategoryId: number, typeId: number): string {
   return `${descriptionCategoryId}_${typeId}_ZH_HANS.json`;
-}
-
-function resolveCacheDir(): string {
-  const candidates = [
-    path.resolve(process.cwd(), CACHE_DIR),
-    path.resolve(process.cwd(), '..', '..', CACHE_DIR),
-    path.resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', '..', CACHE_DIR),
-  ];
-  // Use the first candidate that is inside an existing parent directory tree.
-  // Prefer the cwd-based path as that's where CLI commands run from.
-  return candidates[0];
-}
-
-function resolveProjectRoot(cacheDir: string): string {
-  // cacheDir is <root>/data/cache/ozon/category-attributes, root is 4 levels up
-  return path.resolve(cacheDir, '..', '..', '..', '..');
 }
 
 export async function readCategoryAttributesCache(
@@ -49,4 +47,17 @@ export async function writeCategoryAttributesCache(
     buildCacheKey(data.category.description_category_id, data.category.type_id),
   );
   await fs.writeFile(cacheFile, JSON.stringify(data, null, 2), 'utf8');
+}
+
+export async function deleteCategoryAttributesCache(
+  descriptionCategoryId: number,
+  typeId: number,
+): Promise<void> {
+  const cacheDir = resolveCacheDir();
+  const cacheFile = path.join(cacheDir, buildCacheKey(descriptionCategoryId, typeId));
+  try {
+    await fs.unlink(cacheFile);
+  } catch {
+    // ignore if not cached
+  }
 }

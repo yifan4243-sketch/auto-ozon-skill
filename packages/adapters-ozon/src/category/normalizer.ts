@@ -2,6 +2,7 @@ import type {
   CategoryAttributesV1,
   CategoryAttributeV1,
   CategoryAttributeValueV1,
+  DictionaryPageRawV1,
 } from '../../../contracts/src/category-attributes.js';
 import type { GetCategoryAttributesOptions } from '../types.js';
 
@@ -29,6 +30,7 @@ interface OzonRawAttributeValue {
 export function normalizeCategoryAttributes(
   rawAttributes: unknown,
   dictionaryValues: Map<number, CategoryAttributeValueV1[]>,
+  dictionaryRawResponses: Record<number, DictionaryPageRawV1[]>,
   options: GetCategoryAttributesOptions,
 ): CategoryAttributesV1 {
   const attributes = normalizeAttributeList(rawAttributes, dictionaryValues);
@@ -37,15 +39,18 @@ export function normalizeCategoryAttributes(
     source: 'ozon',
     language: 'ZH_HANS',
     ok: true,
+    fetched_at: new Date().toISOString(),
     category: {
       description_category_id: options.descriptionCategoryId,
       type_id: options.typeId,
       description_category_name: options.categoryName,
       type_name: options.typeName,
       category_path_zh: options.categoryPathZh,
+      group_id: options.groupId,
     },
     attributes,
     raw_response: rawAttributes,
+    dictionary_raw_responses: dictionaryRawResponses,
   };
 }
 

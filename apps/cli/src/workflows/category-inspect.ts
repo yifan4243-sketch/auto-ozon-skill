@@ -1,6 +1,6 @@
 import { search1688ByKeywordV2 } from '../../../../packages/adapters-1688/src/client.js';
 import { getCategoryAttributes } from '../../../../packages/adapters-ozon/src/category/category-attributes.js';
-import type { CategoryDecisionV1 } from '../../../../packages/contracts/src/category-decision.js';
+import type { CategoryDecisionV1, OzonCategorySelectionV1 } from '../../../../packages/contracts/src/category-decision.js';
 import type { CategoryAttributesV1 } from '../../../../packages/contracts/src/category-attributes.js';
 import type { CommandResult } from '../../../../packages/contracts/src/command-result.js';
 import type { CategoryDecisionProvider } from './category-decision-provider.js';
@@ -18,7 +18,16 @@ export interface CategoryInspectOptions {
 export interface CategoryInspectResult {
   source: unknown;
   category_decision?: CategoryDecisionV1;
-  category_attributes?: unknown;
+  category_attributes?: CategoryAttributesV1[];
+}
+
+interface CategoryPairKey {
+  description_category_id: number;
+  type_id: number;
+}
+
+function pairKey(cat: OzonCategorySelectionV1): string {
+  return `${cat.description_category_id}:${cat.type_id}`;
 }
 
 export async function runCategoryInspect(
@@ -51,7 +60,6 @@ export async function runCategoryInspect(
     provider = new FileDecisionProvider(options.decisionFile);
   }
 
-  // If no decision provider, return source only
   if (!provider) {
     return {
       ok: true,
@@ -61,7 +69,7 @@ export async function runCategoryInspect(
         {
           code: 'NO_DECISION_PROVIDER',
           message:
-            'No --decision-file or decision provider supplied. Category attributes were not fetched. Provide --decision-file to complete the pipeline.',
+            'No --decision-file or decision provider supplied. Provide --decision-file to complete the pipeline.',
         },
       ],
       errors: [],
@@ -93,11 +101,62 @@ export async function runCategoryInspect(
     };
   }
 
-  // Step 3: Extract first decided category
-  const decidedGroup = decision.category_groups.find(
+  // Validate decision matches source product
+  const srcAny = sourceData as unknown as { items?: Array<{ source?: { offer_id?: string } }> };
+  const sourceOfferId = srcAny?.items?.[0]?.source?.offer_id;
+  if (sourceOfferId && decision.source_offer_id && decision.source_offer_id !== sourceOfferId) {
+    return {
+      ok: false,
+      command: 'workflow.category.inspect',
+      data: { source: sourceData, category_decision: decision },
+      warnings: [],
+      errors: [
+        {
+          code: 'DECISION_OFFER_ID_MISMATCH',
+          message: `Decision offer_id (${decision.source_offer_id}) does not match sourced product (${sourceOfferId}).`,
+          recoverable: true,
+        },
+      ],
+      nextActions: ['Ensure the --decision-file corresponds to the currently sourced product.'],
+    };
+  }
+
+  // Validate SKU coverage
+  const srcItem = srcAny?.items?.[0];
+  const sourceSkus = (srcItem as unknown as { skus?: Array<{ source_sku_id: string }> })?.skus;
+  if (sourceSkus) {
+    const sourceSkuIds = new Set(sourceSkus.map((s) => s.source_sku_id));
+    const decisionSkuIds = new Set<string>();
+    for (const group of decision.category_groups) {
+      for (const skuId of group.source_sku_ids) decisionSkuIds.add(skuId);
+    }
+    for (const skuId of decision.unassigned_sku_ids) decisionSkuIds.add(skuId);
+
+    const unknownSkus = [...decisionSkuIds].filter((id) => !sourceSkuIds.has(id));
+    if (unknownSkus.length > 0) {
+      return {
+        ok: false,
+        command: 'workflow.category.inspect',
+        data: { source: sourceData, category_decision: decision },
+        warnings: [],
+        errors: [
+          {
+            code: 'DECISION_SKU_MISMATCH',
+            message: `Decision references ${unknownSkus.length} SKU IDs not present in the sourced product (first 5: ${unknownSkus.slice(0, 5).join(', ')})`,
+            recoverable: true,
+          },
+        ],
+        nextActions: [],
+      };
+    }
+  }
+
+  // Step 3: Collect all unique category pairs from all groups
+  const decidedGroups = decision.category_groups.filter(
     (g) => g.selected_category !== null,
   );
-  if (!decidedGroup?.selected_category) {
+
+  if (!decidedGroups.length) {
     return {
       ok: false,
       command: 'workflow.category.inspect',
@@ -114,18 +173,38 @@ export async function runCategoryInspect(
     };
   }
 
-  const sel = decidedGroup.selected_category;
+  // Deduplicate by (description_category_id, type_id)
+  const uniquePairs = new Map<string, { selection: OzonCategorySelectionV1; groupId: string }>();
+  for (const group of decidedGroups) {
+    const sel = group.selected_category!;
+    const key = pairKey(sel);
+    if (!uniquePairs.has(key)) {
+      uniquePairs.set(key, { selection: sel, groupId: group.group_id });
+    }
+  }
 
-  // Step 4: Fetch category attributes via MCP
-  const attrsResult = await getCategoryAttributes({
-    descriptionCategoryId: sel.description_category_id,
-    typeId: sel.type_id,
-    categoryName: sel.description_category_name,
-    typeName: sel.type_name,
-    categoryPathZh: sel.category_path_zh,
-  });
+  // Step 4: Fetch category attributes for each unique pair
+  const allErrors: CommandResult<CategoryInspectResult>['errors'] = [];
+  const categoryAttributesResults: CategoryAttributesV1[] = [];
 
-  if (!attrsResult.ok) {
+  for (const [, { selection, groupId }] of uniquePairs) {
+    const attrsResult = await getCategoryAttributes({
+      descriptionCategoryId: selection.description_category_id,
+      typeId: selection.type_id,
+      categoryName: selection.description_category_name,
+      typeName: selection.type_name,
+      categoryPathZh: selection.category_path_zh,
+      groupId,
+    });
+
+    if (!attrsResult.ok) {
+      allErrors.push(...attrsResult.errors);
+    } else if (attrsResult.data) {
+      categoryAttributesResults.push(attrsResult.data);
+    }
+  }
+
+  if (allErrors.length > 0 && categoryAttributesResults.length === 0) {
     return {
       ok: false,
       command: 'workflow.category.inspect',
@@ -134,21 +213,28 @@ export async function runCategoryInspect(
         category_decision: decision,
       },
       warnings: [],
-      errors: attrsResult.errors,
+      errors: allErrors,
       nextActions: [],
     };
   }
 
+  const hasErrors = allErrors.length > 0;
+
   return {
-    ok: true,
+    ok: !hasErrors,
     command: 'workflow.category.inspect',
     data: {
       source: sourceData,
       category_decision: decision,
-      category_attributes: attrsResult.data,
+      category_attributes: categoryAttributesResults,
     },
-    warnings: [],
-    errors: [],
+    warnings: hasErrors
+      ? allErrors.map((e) => ({
+          code: `PARTIAL_${e.code}`,
+          message: e.message,
+        }))
+      : [],
+    errors: hasErrors ? allErrors : [],
     nextActions: [],
   };
 }

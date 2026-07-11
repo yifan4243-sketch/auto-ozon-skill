@@ -242,6 +242,7 @@ export function registerOzonCommands(
     .description('Fetch all attributes (ZH_HANS) for an Ozon category via MCP')
     .requiredOption('--category-id <n>', 'Ozon description_category_id')
     .requiredOption('--type-id <n>', 'Ozon type_id')
+    .option('--refresh', 'Force refresh, bypass cache')
     .action(async (opts) => {
       const categoryId = parseNumber(opts.categoryId);
       const typeId = parseNumber(opts.typeId);
@@ -265,6 +266,7 @@ export function registerOzonCommands(
         await getCategoryAttributes({
           descriptionCategoryId: categoryId,
           typeId,
+          forceRefresh: opts.refresh === true,
         }),
       );
     });
