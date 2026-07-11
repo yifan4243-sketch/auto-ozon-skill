@@ -143,7 +143,7 @@ function toErrorObject(error: unknown): ErrorObject {
       code: error.code,
       message: error.message,
       detail: error.details,
-      recoverable: error.code === 'BAD_INPUT',
+      recoverable: false,
     };
   }
   return {

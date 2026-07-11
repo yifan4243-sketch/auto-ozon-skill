@@ -124,7 +124,7 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      errors: [{ code: 'BAD_INPUT' }],
+      errors: [{ code: 'BAD_INPUT', recoverable: false }],
     });
     expect(result.errors[0]!.message).toContain('OfferResult or an OfferBatchResult');
   });

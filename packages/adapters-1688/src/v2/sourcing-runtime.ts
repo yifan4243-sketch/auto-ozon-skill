@@ -111,6 +111,17 @@ export async function finalizeCanonicalV2Run(
   );
   const errors: ErrorObject[] = [];
 
+  if (data.total > 0 && data.success === 0 && data.failed === data.total) {
+    errors.push({
+      code: 'SOURCE_COLLECTION_FAILED',
+      message: 'All 1688 offer detail collections failed.',
+      detail: data.failures,
+      recoverable:
+        data.failures.length > 0 &&
+        data.failures.every((failure) => failure.recoverable),
+    });
+  }
+
   if (data.integrity_report.status === 'fail') {
     errors.push({
       code: 'V2_INTEGRITY_FAILED',
@@ -146,10 +157,16 @@ export async function finalizeCanonicalV2Run(
     data,
     warnings: [],
     errors,
-    nextActions:
-      data.integrity_report.status === 'fail'
+    nextActions: [
+      ...(data.integrity_report.status === 'fail'
         ? ['Inspect integrity_report and saved artifacts before retrying.']
-        : [],
+        : []),
+      ...(errors.some(
+        (error) => error.code === 'SOURCE_COLLECTION_FAILED' && error.recoverable,
+      )
+        ? ['Retry the failed offer collection after reviewing failures.']
+        : []),
+    ],
   };
 }
 

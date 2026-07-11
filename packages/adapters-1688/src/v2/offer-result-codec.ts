@@ -193,8 +193,8 @@ function expectString(value: unknown, path: string): string {
 /** 1688 emits SKU identifiers as either JSON strings or integers. */
 function expectIdentifierString(value: unknown, path: string): string {
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  throw badInput(`${path} must be a string or finite number.`);
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return String(value);
+  throw badInput(`${path} must be a string or safe integer.`);
 }
 
 function expectNullableString(value: unknown, path: string): string | null {

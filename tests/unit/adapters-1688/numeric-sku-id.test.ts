@@ -22,4 +22,39 @@ describe('1688 numeric SKU identifier compatibility', () => {
     expect(parsed.skus[0]!.skuId).toBe('4958524658555');
     expect(parsed.packageInfo[0]!.skuId).toBe('4958524658555');
   });
+
+  it.each([
+    ['decimal', 1.5],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 1],
+  ])('rejects a %s numeric SKU identifier', (_label, skuId) => {
+    const fixture = readFixture();
+    fixture.skus[0]!.skuId = skuId;
+
+    expect(() => parseOfferResult(fixture)).toThrow(/safe integer/);
+  });
+
+  it.each([
+    ['decimal', 1.5],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 1],
+  ])('rejects a %s numeric package identifier', (_label, skuId) => {
+    const fixture = readFixture();
+    fixture.packageInfo[0]!.skuId = skuId;
+
+    expect(() => parseOfferResult(fixture)).toThrow(/safe integer/);
+  });
 });
+
+function readFixture(): {
+  skus: Array<{ skuId: string | number }>;
+  packageInfo: Array<{ skuId: string | number }>;
+} {
+  return JSON.parse(
+    fs.readFileSync(
+      new URL('../../fixtures/1688/offer-result.json', import.meta.url),
+      'utf8',
+    ),
+  ) as {
+    skus: Array<{ skuId: string | number }>;
+    packageInfo: Array<{ skuId: string | number }>;
+  };
+}

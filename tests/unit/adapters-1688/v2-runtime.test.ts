@@ -139,6 +139,22 @@ describe('CanonicalProductV2 sourcing runtime', () => {
     ]);
   });
 
+  it('returns a failed command result when every detail collection fails', async () => {
+    const result = await get1688OffersV2({ offerIds: ['bad-id'] });
+
+    expect(result).toMatchObject({
+      ok: false,
+      data: { total: 1, success: 0, failed: 1, items: [] },
+      errors: [
+        {
+          code: 'SOURCE_COLLECTION_FAILED',
+          recoverable: false,
+        },
+      ],
+    });
+    expect(result.errors[0]!.detail).toEqual(result.data?.failures);
+  });
+
   it('preserves needs_review products instead of filtering them', async () => {
     const offer = readFixture<OfferResult>('offer-result.json');
     const sourceSku = offer.skus[0]!;
