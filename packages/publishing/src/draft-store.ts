@@ -1,5 +1,9 @@
 import type { CategoryAttributesV1 } from '../../contracts/src/category-attributes.js';
 import type { CategoryDecisionV1 } from '../../contracts/src/category-decision.js';
+import type {
+  OzonDraftValidationV1,
+  OzonProductDraftV1,
+} from '../../contracts/src/ozon-product-draft.js';
 import type { ProductWorkspaceStageStatus } from '../../core/src/product-workspace.js';
 import { writeProductWorkspaceArtifact } from '../../core/src/product-workspace.js';
 
@@ -56,7 +60,7 @@ export async function saveCategoryAttributesSnapshot(
 
 export async function saveOzonDraft(
   options: ProductArtifactStoreOptions,
-  draft: unknown,
+  draft: OzonProductDraftV1,
   status: ProductWorkspaceStageStatus = 'needs_review',
 ): Promise<string> {
   return writeProductWorkspaceArtifact(options.offerId, 'ozon_draft', draft, {
@@ -67,7 +71,7 @@ export async function saveOzonDraft(
 
 export async function saveOzonDraftValidation(
   options: ProductArtifactStoreOptions,
-  validation: unknown,
+  validation: OzonDraftValidationV1,
   status: ProductWorkspaceStageStatus,
 ): Promise<string> {
   return writeProductWorkspaceArtifact(
@@ -79,6 +83,21 @@ export async function saveOzonDraftValidation(
       manifest: { stages: { ozon_draft: status } },
     },
   );
+}
+
+export async function saveOzonDraftBundle(
+  options: ProductArtifactStoreOptions,
+  draft: OzonProductDraftV1,
+  validation: OzonDraftValidationV1,
+): Promise<{ draftPath: string; validationPath: string }> {
+  const status = validation.status;
+  const draftPath = await saveOzonDraft(options, draft, status);
+  const validationPath = await saveOzonDraftValidation(
+    options,
+    validation,
+    status,
+  );
+  return { draftPath, validationPath };
 }
 
 export async function saveOzonUploadRequest(
