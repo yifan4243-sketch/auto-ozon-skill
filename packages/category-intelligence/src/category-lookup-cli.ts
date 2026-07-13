@@ -5,7 +5,7 @@ import {
   loadOzonCategoryTree,
   searchOzonCategories,
   validateOzonCategoryPair,
-} from './ozon-category-tree.js';
+} from '../../steps/category-decision/src/index.js';
 
 const [command, ...rest] = process.argv.slice(2);
 const { values, positionals } = parseArgs({

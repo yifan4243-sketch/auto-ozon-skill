@@ -11,6 +11,7 @@
     "category:decision": "tsx src/category-decision-cli.ts"
   },
   "dependencies": {
+    "@auto-ozon/step-category-decision": "workspace:*",
     "ajv": "^8.20.0"
   }
 }

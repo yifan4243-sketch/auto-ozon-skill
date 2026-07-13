@@ -30,16 +30,16 @@ export function resolveCategoryDecisionSchemaPath(): string {
   const candidates = [
     path.resolve(
       process.cwd(),
-      'packages/category-intelligence/skills/ozon-category-decision/output.schema.json',
+      'packages/steps/category-decision/output.schema.json',
     ),
     path.resolve(
       process.cwd(),
       'skills/ozon-category-decision/output.schema.json',
     ),
-    path.resolve(moduleDir, '../skills/ozon-category-decision/output.schema.json'),
+    path.resolve(moduleDir, '../output.schema.json'),
     path.resolve(
       moduleDir,
-      '../../../../packages/category-intelligence/skills/ozon-category-decision/output.schema.json',
+      '../../../../packages/steps/category-decision/output.schema.json',
     ),
   ];
   const found = candidates.find((candidate) => fs.existsSync(candidate));

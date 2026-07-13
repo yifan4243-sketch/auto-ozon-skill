@@ -1,3 +1,2 @@
-export * from './ozon-category-tree.js';
-export * from './category-decision-validator.js';
-export * from './category-decision-schema.js';
+// Compatibility facade. New code must import @auto-ozon/step-category-decision.
+export * from '../../steps/category-decision/src/index.js';

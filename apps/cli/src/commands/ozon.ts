@@ -1,7 +1,6 @@
 import type { Command } from 'commander';
 import type { CommandResult } from '../../../../packages/contracts/src/command-result.js';
 import {
-  getCategoryAttributes,
   ozonCallMethod,
   ozonDescribeMethod,
   ozonDoctor,
@@ -19,6 +18,7 @@ import {
   ozonListWorkflows,
   ozonSearchMethods,
 } from '../../../../packages/adapters-ozon/src/client.js';
+import { runCategoryAttributes } from '@auto-ozon/step-category-attributes';
 import { saveCategoryAttributesSnapshot } from '../../../../packages/publishing/src/draft-store.js';
 
 type EmitCommandResult = (result: CommandResult<unknown>) => void;
@@ -274,15 +274,21 @@ export function registerOzonCommands(
         });
         return;
       }
-      const result = await getCategoryAttributes({
-        descriptionCategoryId: categoryId,
-        typeId,
+      const stepResult = await runCategoryAttributes({
+        selections: [{
+          group_ids: [],
+          category: { descriptionCategoryId: categoryId, typeId },
+        }],
       });
-      if (result.ok && result.data) {
+      const schema = stepResult.data?.[0]?.attributes_schema;
+      const result: CommandResult<unknown> = stepResult.ok && schema
+        ? { ...stepResult, data: schema }
+        : stepResult;
+      if (result.ok && schema) {
         try {
           await saveCategoryAttributesSnapshot(
             { offerId, productsDir: opts.productsDir },
-            [{ group_ids: [], attributes_schema: result.data }],
+            [{ group_ids: [], attributes_schema: schema }],
           );
         } catch (error) {
           emitCommandResult({

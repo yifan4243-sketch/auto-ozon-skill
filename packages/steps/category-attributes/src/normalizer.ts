@@ -3,8 +3,8 @@ import type {
   CategoryAttributeV1,
   CategoryAttributeValueV1,
   DictionaryPageRawV1,
-} from '../../../contracts/src/category-attributes.js';
-import type { GetCategoryAttributesOptions } from '../types.js';
+} from '@auto-ozon/contracts';
+import type { CategoryAttributesSelectionInput } from './service.js';
 
 interface OzonRawAttribute {
   id: number;
@@ -31,7 +31,7 @@ export function normalizeCategoryAttributes(
   rawAttributes: unknown,
   dictionaryValues: Map<number, CategoryAttributeValueV1[]>,
   dictionaryRawResponses: Record<number, DictionaryPageRawV1[]>,
-  options: GetCategoryAttributesOptions,
+  options: CategoryAttributesSelectionInput,
 ): CategoryAttributesV1 {
   const attributes = normalizeAttributeList(rawAttributes, dictionaryValues);
   return {

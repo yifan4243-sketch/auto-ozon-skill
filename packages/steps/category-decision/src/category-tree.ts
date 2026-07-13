@@ -2,7 +2,7 @@ import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { OzonCategorySelectionV1 } from '../../contracts/src/category-decision.js';
+import type { OzonCategorySelectionV1 } from '@auto-ozon/contracts';
 
 interface OzonCategoryNode {
   description_category_id?: number;
@@ -216,10 +216,10 @@ export function resolveDefaultCategoryTreePath(): string {
 
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    path.resolve(process.cwd(), 'data/ozon/categories/ozon-category-tree.json'),
-    path.resolve(process.cwd(), '../../data/ozon/categories/ozon-category-tree.json'),
-    path.resolve(moduleDir, '../../../data/ozon/categories/ozon-category-tree.json'),
-    path.resolve(moduleDir, '../../../../data/ozon/categories/ozon-category-tree.json'),
+    path.resolve(process.cwd(), 'data/reference/ozon/categories/ozon-category-tree.json'),
+    path.resolve(process.cwd(), '../../data/reference/ozon/categories/ozon-category-tree.json'),
+    path.resolve(moduleDir, '../../../../data/reference/ozon/categories/ozon-category-tree.json'),
+    path.resolve(moduleDir, '../../../../../data/reference/ozon/categories/ozon-category-tree.json'),
   ];
   const found = candidates.find((candidate) => fsSync.existsSync(candidate));
   if (!found) {

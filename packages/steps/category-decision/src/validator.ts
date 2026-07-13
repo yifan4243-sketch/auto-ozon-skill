@@ -1,12 +1,12 @@
 import type {
   CategoryDecisionV1,
   OzonCategorySelectionV1,
-} from '../../contracts/src/category-decision.js';
-import type { CanonicalProductV2 } from '../../contracts/src/canonical-product-v2.js';
+  CanonicalProductV2,
+} from '@auto-ozon/contracts';
 import {
   validateOzonCategoryPair,
   type OzonCategoryRecord,
-} from './ozon-category-tree.js';
+} from './category-tree.js';
 
 export interface CategoryDecisionViolation {
   code: string;

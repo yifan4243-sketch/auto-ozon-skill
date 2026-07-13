@@ -42,3 +42,15 @@ export interface CategoryAttributesV1 {
   raw_response: unknown;
   dictionary_raw_responses: Record<number, DictionaryPageRawV1[]>;
 }
+
+export interface CategoryAttributesGroupV1 {
+  group_ids: string[];
+  category: {
+    description_category_id: number;
+    description_category_name: string;
+    type_id: number;
+    type_name: string;
+    category_path_zh: string[];
+  };
+  attributes_schema: CategoryAttributesV1;
+}
