@@ -10,15 +10,13 @@ import {
   finalizeCanonicalV2Run,
   type CollectedSourcingRun,
 } from './sourcing-runtime.js';
-import { writeCanonicalV2OutputFile } from './run-artifacts.js';
 
 export interface NormalizeV2OfflineInput {
   inputPath: string;
   method?: CollectionMethod;
   searchTerm?: string | null;
   seedOfferId?: string | null;
-  outputPath?: string;
-  saveDir?: string;
+  productsDir?: string;
 }
 
 export async function normalizeV2Offline(
@@ -49,18 +47,9 @@ export async function normalizeV2Offline(
         searchTerm: input.searchTerm ?? null,
         seedOfferId: input.seedOfferId ?? null,
       },
-      saveDir: input.saveDir,
+      productsDir: input.productsDir,
     });
 
-    if (input.outputPath) {
-      try {
-        await writeCanonicalV2OutputFile(input.outputPath, result);
-      } catch (error) {
-        const outputError = toErrorObject(error);
-        result.ok = false;
-        result.errors.push(outputError);
-      }
-    }
     return result;
   } catch (error) {
     const err = toErrorObject(error);

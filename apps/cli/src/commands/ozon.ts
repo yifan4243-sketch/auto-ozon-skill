@@ -19,6 +19,7 @@ import {
   ozonListWorkflows,
   ozonSearchMethods,
 } from '../../../../packages/adapters-ozon/src/client.js';
+import { saveCategoryAttributesSnapshot } from '../../../../packages/publishing/src/draft-store.js';
 
 type EmitCommandResult = (result: CommandResult<unknown>) => void;
 type ParseNumber = (raw: string | undefined) => number | undefined;
@@ -240,13 +241,17 @@ export function registerOzonCommands(
   category
     .command('attributes')
     .description('Fetch all attributes (ZH_HANS) for an Ozon category via MCP')
+    .requiredOption('--offer-id <id>', '1688 offer ID owning this category snapshot')
     .requiredOption('--category-id <n>', 'Ozon description_category_id')
     .requiredOption('--type-id <n>', 'Ozon type_id')
-    .option('--refresh', 'Force refresh, bypass cache')
+    .option('--products-dir <directory>', 'Product workspace root', 'data/products')
     .action(async (opts) => {
       const categoryId = parseNumber(opts.categoryId);
       const typeId = parseNumber(opts.typeId);
+      const offerId = String(opts.offerId ?? '').trim();
       if (
+        !/^\d+$/.test(offerId) ||
+        offerId === '0' ||
         categoryId === undefined ||
         typeId === undefined ||
         !Number.isSafeInteger(categoryId) ||
@@ -261,7 +266,7 @@ export function registerOzonCommands(
           errors: [
             {
               code: 'BAD_INPUT',
-              message: '--category-id and --type-id must be valid integers.',
+              message: '--offer-id, --category-id and --type-id must be valid positive integers.',
               recoverable: false,
             },
           ],
@@ -269,12 +274,34 @@ export function registerOzonCommands(
         });
         return;
       }
-      emitCommandResult(
-        await getCategoryAttributes({
-          descriptionCategoryId: categoryId,
-          typeId,
-          forceRefresh: opts.refresh === true,
-        }),
-      );
+      const result = await getCategoryAttributes({
+        descriptionCategoryId: categoryId,
+        typeId,
+      });
+      if (result.ok && result.data) {
+        try {
+          await saveCategoryAttributesSnapshot(
+            { offerId, productsDir: opts.productsDir },
+            [{ group_ids: [], attributes_schema: result.data }],
+          );
+        } catch (error) {
+          emitCommandResult({
+            ok: false,
+            command: 'category.attributes',
+            data: result.data,
+            warnings: [],
+            errors: [
+              {
+                code: 'PRODUCT_WORKSPACE_WRITE_FAILED',
+                message: error instanceof Error ? error.message : String(error),
+                recoverable: false,
+              },
+            ],
+            nextActions: [],
+          });
+          return;
+        }
+      }
+      emitCommandResult(result);
     });
 }

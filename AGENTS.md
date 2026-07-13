@@ -18,3 +18,14 @@ Do not add cart, checkout, order, seller chat, supplier research, research, comp
 ## Safety
 
 Do not bypass 1688 risk control, sliders, or captchas. Do not use captcha-solving services. Do not log cookies, tokens, account secrets, or hard-coded credentials.
+
+## Repository skills
+
+- For Ozon category selection and SKU category grouping, read
+  `packages/category-intelligence/skills/ozon-category-decision/SKILL.md`.
+- For mapping collected product facts and Ozon category attributes into a
+  validated draft, read
+  `packages/transformer/skills/ozon-draft-generation/SKILL.md`.
+- Keep skills in their owning packages. Resolve product artifacts through
+  `data/products/<offer_id>/manifest.json`; do not copy skill files into product
+  workspaces.

@@ -75,9 +75,10 @@ auto-ozon source offers 123456789 \
   --pretty
 ```
 
-All four V2 collection commands accept `--save-dir <directory>`. Each run gets
-a unique child directory containing typed raw offers, canonical products,
-failures, an integrity report, and a manifest. `--save-dir` is rejected on V1.
+All four V2 collection commands accept `--products-dir <directory>`. Every
+offer is stored under `<directory>/<offer_id>` with `1688_data`,
+`1688_data_v2`, `ozon_draft`, and `ozon_upload` subdirectories.
+`--products-dir` is rejected on V1.
 
 ## Offline V2 replay
 
@@ -86,8 +87,7 @@ auto-ozon source normalize-v2 \
   --input saved-offer-or-batch.json \
   --method keyword \
   --search-term "修枝剪" \
-  --output normalized-result.json \
-  --save-dir data/validation/canonical-v2-runs
+  --products-dir data/products
 ```
 
 Options:
@@ -95,8 +95,7 @@ Options:
 - `--input <path>`: required typed `OfferResult` or `OfferBatchResult` JSON;
 - `--method <keyword|image|offers|similar>`: defaults to `offers`;
 - `--search-term <text>` and `--seed-offer-id <id>`: optional discovery context;
-- `--output <path>`: write the complete command result as UTF-8 JSON;
-- `--save-dir <directory>`: create the standard non-overwriting audit directory.
+- `--products-dir <directory>`: create or update the standard offer workspace.
 
 Offline replay does not start a browser or access the network. Current files
 use the reduced OfferResult contract. Older files containing supplier, freight,

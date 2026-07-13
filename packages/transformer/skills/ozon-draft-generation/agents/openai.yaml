@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ozon Draft Generation"
+  short_description: "Generate validated Ozon drafts from 1688 product data"
+  default_prompt: "Use $ozon-draft-generation to generate and validate an Ozon draft from this product workspace."

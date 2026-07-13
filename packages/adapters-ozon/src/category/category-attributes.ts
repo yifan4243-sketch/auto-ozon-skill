@@ -19,10 +19,6 @@ import type {
   DictionaryPageRawV1,
 } from '../../../contracts/src/category-attributes.js';
 import { normalizeCategoryAttributes, normalizeAttributeValues } from './normalizer.js';
-import {
-  readCategoryAttributesCache,
-  writeCategoryAttributesCache,
-} from './cache.js';
 import { ensureExecutionToolAndReadSafety } from '../commands/call.js';
 
 const GET_ATTRS_OP = 'DescriptionCategoryAPI_GetAttributes';
@@ -40,19 +36,6 @@ export async function getCategoryAttributes(
       message: 'descriptionCategoryId and typeId must be positive safe integers.',
       recoverable: false,
     }) as OzonCommandResult<CategoryAttributesV1>;
-  }
-
-  const forceRefresh = options.forceRefresh === true;
-
-  // Check cache first (unless --refresh; never delete pre-emptively)
-  if (!forceRefresh) {
-    const cached = await readCategoryAttributesCache(
-      options.descriptionCategoryId,
-      options.typeId,
-    );
-    if (cached) {
-      return okResult('category.attributes', cached);
-    }
   }
 
   try {
@@ -151,9 +134,6 @@ export async function getCategoryAttributes(
         dictionaryRawResponses,
         options,
       );
-
-      // Step 5: Cache the result
-      await writeCategoryAttributesCache(data);
 
       return okResult('category.attributes', data);
     });

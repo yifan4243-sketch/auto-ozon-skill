@@ -1,24 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CategoryAttributesV1 } from '../../../packages/contracts/src/category-attributes.js';
 import { validateCategoryDecisionSchema } from '../../../packages/category-intelligence/src/category-decision-schema.js';
 
 const mcp = vi.hoisted(() => ({
   listTools: vi.fn(),
   callTool: vi.fn(),
 }));
-const cache = vi.hoisted(() => ({
-  read: vi.fn(),
-  write: vi.fn(),
-}));
-
 vi.mock('../../../packages/adapters-ozon/src/mcp/pcdck-client.js', () => ({
   withPcdckClient: async <T>(fn: (client: unknown) => Promise<T>) =>
     fn({ listTools: mcp.listTools, callTool: mcp.callTool }),
-}));
-
-vi.mock('../../../packages/adapters-ozon/src/category/cache.js', () => ({
-  readCategoryAttributesCache: cache.read,
-  writeCategoryAttributesCache: cache.write,
 }));
 
 import { getCategoryAttributes } from '../../../packages/adapters-ozon/src/category/category-attributes.js';
@@ -26,8 +15,6 @@ import { normalizeAttributeValues } from '../../../packages/adapters-ozon/src/ca
 
 beforeEach(() => {
   vi.clearAllMocks();
-  cache.read.mockResolvedValue(null);
-  cache.write.mockResolvedValue(undefined);
   mcp.listTools.mockResolvedValue({ tools: [{ name: 'ozon_call_method' }] });
 });
 
@@ -88,7 +75,6 @@ describe('getCategoryAttributes MCP response and pagination', () => {
         limit: 200,
       },
     });
-    expect(cache.write).toHaveBeenCalledOnce();
   });
 
   it('rejects an empty page that claims another page exists', async () => {
@@ -103,7 +89,6 @@ describe('getCategoryAttributes MCP response and pagination', () => {
     });
     expect(result.errors[0]?.message).toContain('attribute 100');
     expect(result.errors[0]?.message).toContain('17028741/92499');
-    expect(cache.write).not.toHaveBeenCalled();
   });
 
   it('rejects a repeated dictionary page instead of looping', async () => {
@@ -119,10 +104,9 @@ describe('getCategoryAttributes MCP response and pagination', () => {
       errors: [{ code: 'DICTIONARY_FETCH_FAILED' }],
     });
     expect(result.errors[0]?.message).toContain('cursor stalled');
-    expect(cache.write).not.toHaveBeenCalled();
   });
 
-  it('rejects malformed success envelopes instead of caching empty attributes', async () => {
+  it('rejects malformed success envelopes instead of returning empty attributes', async () => {
     mockReadSafety();
     mcp.callTool.mockResolvedValueOnce({ structuredContent: { ok: true } });
 
@@ -132,32 +116,10 @@ describe('getCategoryAttributes MCP response and pagination', () => {
       ok: false,
       errors: [{ code: 'OZON_RESPONSE_INVALID' }],
     });
-    expect(cache.write).not.toHaveBeenCalled();
-  });
-
-  it('returns a cache hit without starting MCP and bypasses it on refresh', async () => {
-    const cached = cachedAttributes();
-    cache.read.mockResolvedValue(cached);
-
-    const hit = await getCategoryAttributes({
-      descriptionCategoryId: 17028741,
-      typeId: 92499,
-    });
-
-    expect(hit.data).toEqual(cached);
-    expect(mcp.listTools).not.toHaveBeenCalled();
-    expect(cache.read).toHaveBeenCalledOnce();
-
-    vi.clearAllMocks();
-    mockReadSafetyAndAttributes(false);
-    const refreshed = await getCategoryAttributes(validOptions());
-    expect(refreshed.ok).toBe(true);
-    expect(cache.read).not.toHaveBeenCalled();
-    expect(cache.write).toHaveBeenCalledOnce();
   });
 
   it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid category identifier %s before cache or MCP access',
+    'rejects invalid category identifier %s before MCP access',
     async (descriptionCategoryId) => {
       const result = await getCategoryAttributes({
         descriptionCategoryId,
@@ -168,7 +130,6 @@ describe('getCategoryAttributes MCP response and pagination', () => {
         ok: false,
         errors: [{ code: 'BAD_INPUT', recoverable: false }],
       });
-      expect(cache.read).not.toHaveBeenCalled();
       expect(mcp.listTools).not.toHaveBeenCalled();
     },
   );
@@ -245,23 +206,5 @@ function validOptions() {
   return {
     descriptionCategoryId: 17028741,
     typeId: 92499,
-    forceRefresh: true,
-  };
-}
-
-function cachedAttributes(): CategoryAttributesV1 {
-  return {
-    schema_version: 1,
-    source: 'ozon',
-    language: 'ZH_HANS',
-    ok: true,
-    fetched_at: '2026-07-11T00:00:00.000Z',
-    category: {
-      description_category_id: 17028741,
-      type_id: 92499,
-    },
-    attributes: [],
-    raw_response: { result: [] },
-    dictionary_raw_responses: {},
   };
 }

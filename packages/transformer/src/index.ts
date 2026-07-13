@@ -6,3 +6,5 @@ export * from './sku-field-comparator.js';
 export * from './variant-analyzer.js';
 export * from './canonical-v2-summary.js';
 export * from './canonical-v2-integrity.js';
+export * from './attribute-mapper.js';
+export * from './validation/category-attribute-rules.js';

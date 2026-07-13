@@ -75,7 +75,7 @@ summary, and deterministic integrity report:
 ```bash
 pnpm --filter @auto-ozon/cli dev -- source keyword "修枝剪" --max 10 --schema-version 2
 pnpm --filter @auto-ozon/cli dev -- source offers 123456789 --schema-version 2 --json-v2 --pretty
-pnpm --filter @auto-ozon/cli dev -- source offers 123456789 --schema-version 2 --save-dir ../../data/validation/canonical-v2-runs
+pnpm --filter @auto-ozon/cli dev -- source offers 123456789 --schema-version 2 --products-dir data/products
 pnpm --filter @auto-ozon/cli dev -- source normalize-v2 --input C:/path/to/saved-offer.json --method offers
 ```
 
@@ -93,8 +93,7 @@ authorization are not inferred. Prohibited-category and logistics restrictions
 remain later user-knowledge-base work.
 
 See `docs/CANONICAL_V2_REAL_VALIDATION.md` for the manual real-data validation
-procedure. Local validation runs under `data/validation/canonical-v2-runs/` are
-gitignored.
+procedure. Product workspaces under `data/products/<offer_id>/` are gitignored.
 
 ## Safety
 

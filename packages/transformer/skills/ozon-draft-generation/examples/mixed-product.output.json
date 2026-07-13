@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "source_offer_id": "900000000003",
+  "status": "completed",
+  "items": [
+    {
+      "source_sku_id": "mixed-filter",
+      "group_id": "water-filter",
+      "description_category_id": 17027931,
+      "type_id": 94600,
+      "name": "Походный фильтр для воды",
+      "attributes": [
+        { "id": 85, "complex_id": 0, "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.85.default", "value": "无品牌" }] },
+        { "id": 4180, "complex_id": 0, "values": [{ "value": "Походный фильтр для воды" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "canonical_v2", "field": "skus.mixed-filter.specs", "value": "净水器" }] },
+        { "id": 4191, "complex_id": 0, "values": [{ "value": "Походный фильтр предназначен для очистки воды во время поездок и отдыха на природе." }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "canonical_v2", "field": "product.attributes", "value": "户外便携净水" }] },
+        { "id": 4383, "complex_id": 0, "values": [{ "value": "300" }], "provenance": "source", "confidence": "high", "evidence": [{ "source": "1688_raw", "field": "package.weight", "value": "300 g" }] },
+        { "id": 4389, "complex_id": 0, "values": [{ "dictionary_value_id": 90296, "value": "中国" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.4389.default", "value": "中国" }] },
+        { "id": 4497, "complex_id": 0, "values": [{ "value": "350" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.4497.formula", "value": "300 + 50" }] },
+        { "id": 8229, "complex_id": 0, "values": [{ "dictionary_value_id": 94600, "value": "野外过滤器" }], "provenance": "source", "confidence": "high", "evidence": [{ "source": "category_attributes", "field": "attribute.8229", "value": "野外过滤器" }] },
+        { "id": 9048, "complex_id": 0, "values": [{ "value": "900000000003-water-filter" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "category_decision", "field": "group_id", "value": "water-filter" }] },
+        { "id": 10096, "complex_id": 0, "values": [{ "dictionary_value_id": 369939085, "value": "多色" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.10096.fallback", "value": "多色" }] },
+        { "id": 11650, "complex_id": 0, "values": [{ "value": "1" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.11650.fallback", "value": "1" }] },
+        { "id": 23171, "complex_id": 0, "values": [{ "value": "#поход #туризм #фильтр_для_воды #чистая_вода #путешествие #кемпинг #природа #активный_отдых #снаряжение #выживание #питьевая_вода #очистка_воды #походная_кухня #рыбалка #охота #дача #пикник #рюкзак #дорога #безопасная_вода" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "canonical_v2", "field": "product.title_zh", "value": "户外净水器" }] }
+      ]
+    },
+    {
+      "source_sku_id": "mixed-case",
+      "group_id": "phone-case",
+      "description_category_id": 17028650,
+      "type_id": 97011,
+      "name": "Чехол для смартфона, многоцветный",
+      "attributes": [
+        { "id": 85, "complex_id": 0, "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.85.default", "value": "无品牌" }] },
+        { "id": 4180, "complex_id": 0, "values": [{ "value": "Чехол для смартфона, многоцветный" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "canonical_v2", "field": "skus.mixed-case.specs", "value": "手机壳" }] },
+        { "id": 4191, "complex_id": 0, "values": [{ "value": "Чехол предназначен для защиты корпуса смартфона от повседневных царапин и загрязнений." }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "canonical_v2", "field": "product.attributes", "value": "手机保护壳" }] },
+        { "id": 4383, "complex_id": 0, "values": [{ "value": "80" }], "provenance": "source", "confidence": "high", "evidence": [{ "source": "1688_raw", "field": "package.weight", "value": "80 g" }] },
+        { "id": 4389, "complex_id": 0, "values": [{ "dictionary_value_id": 90296, "value": "中国" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.4389.default", "value": "中国" }] },
+        { "id": 4497, "complex_id": 0, "values": [{ "value": "130" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.4497.formula", "value": "80 + 50" }] },
+        { "id": 8229, "complex_id": 0, "values": [{ "dictionary_value_id": 97011, "value": "智能手机壳" }], "provenance": "source", "confidence": "high", "evidence": [{ "source": "category_attributes", "field": "attribute.8229", "value": "智能手机壳" }] },
+        { "id": 9048, "complex_id": 0, "values": [{ "value": "900000000003-phone-case" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "category_decision", "field": "group_id", "value": "phone-case" }] },
+        { "id": 10096, "complex_id": 0, "values": [{ "dictionary_value_id": 369939085, "value": "多色" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.10096.fallback", "value": "多色" }] },
+        { "id": 11650, "complex_id": 0, "values": [{ "value": "1" }], "provenance": "default", "confidence": "high", "evidence": [{ "source": "policy", "field": "attribute.11650.fallback", "value": "1" }] },
+        { "id": 23171, "complex_id": 0, "values": [{ "value": "#чехол #смартфон #защита_телефона #аксессуар #мобильный_телефон #повседневный_стиль #защита_корпуса #дом #офис #путешествие #подарок #удобство #дизайн #современный_стиль #легкий_чехол #защита_от_царапин #держать_в_руке #город #для_телефона #яркий_аксессуар" }], "provenance": "derived", "confidence": "high", "evidence": [{ "source": "canonical_v2", "field": "product.title_zh", "value": "手机保护壳" }] }
+      ]
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}

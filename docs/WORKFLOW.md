@@ -125,20 +125,30 @@ Keyword runs store the same original search term on every returned product.
 Similar runs store the seed offer ID. Offers and image runs store null discovery
 context, and the image path is not included in CanonicalProductV2.
 
-## Audit runs and offline replay
+## Product workspaces and offline replay
 
-`--save-dir` creates a unique run directory:
+`--products-dir` writes every stage under the stable 1688 offer ID:
 
 ```text
-<save-dir>/<run_id>/
+<products-dir>/<offer_id>/
   manifest.json
-  raw/<offer_id>.json
-  canonical-v2/<offer_id>.json
-  integrity-report.json
-  failures.json
+  1688_data/source.json
+  1688_data_v2/product.json
+  1688_data_v2/integrity-report.json
+  ozon_draft/category_decision.json
+  ozon_draft/category_attributes.json
+  ozon_draft/draft.json
+  ozon_draft/validation.json
+  ozon_upload/request.json
+  ozon_upload/result.json
 ```
 
-Only reconstructed retained OfferResult fields are written to `raw`; unknown
+Repeated collection of the same offer updates the same product workspace rather
+than creating duplicate run directories. Batch collection writes one workspace
+per offer. Ozon draft and upload directories are created up front but remain
+empty until their stages run.
+
+Only reconstructed retained OfferResult fields are written to `1688_data`; unknown
 fields, browser responses, cookies, tokens, credentials, image paths, supplier
 facts, freight/regions, numeric category IDs, stock, sales, and volume are not
 copied. `source normalize-v2` accepts a current or legacy OfferResult or
@@ -147,7 +157,7 @@ keys are accepted and ignored without mutating the input object.
 
 Validation warnings describe source-data gaps. Integrity violations describe
 conversion bugs. The latter fail the command but still allow completed
-diagnostic artifacts to remain on disk.
+diagnostic artifacts to remain in the product workspace.
 
 Original brand attributes are source facts and are not interpreted as ownership
 or authorization claims. Category selection, prohibited-category rules, and

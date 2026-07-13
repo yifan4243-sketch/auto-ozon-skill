@@ -244,6 +244,8 @@ describe('ozon CLI registration', () => {
         'ozon',
         'category',
         'attributes',
+        '--offer-id',
+        '123456789',
         '--category-id',
         categoryId,
         '--type-id',
