@@ -14,7 +14,7 @@ import { buildProgram } from '../../../apps/cli/src/cli.js';
 import {
   search1688ByKeyword,
   search1688ByKeywordV2,
-} from '../../../packages/adapters-1688/src/client.js';
+} from '../../helpers/source-api.js';
 
 describe('keyword SKU filtering', () => {
   beforeEach(() => {

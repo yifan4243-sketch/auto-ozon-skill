@@ -31,3 +31,8 @@ only for semantic selections that source facts cannot establish.
 - Block missing required attributes and invalid dictionary selections.
 - Do not generate Russian names, descriptions, hashtags, price, stock, media,
   logistics dimensions, or publishing requests in this step.
+- Leave attributes 4180, 4191, and 23171 to the downstream draft-generation
+  step even when Ozon marks them required.
+
+See `examples/common-and-variant.output.json` for the required relationship
+between common, variant, and per-SKU arrays.

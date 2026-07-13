@@ -1,0 +1,134 @@
+import type {
+  CategoryAttributesV1,
+  CategoryDecisionV1,
+  OzonDraftValidationV1,
+  OzonProductDraftV1,
+} from '@auto-ozon/contracts';
+import type { ProductWorkspaceStageStatus } from './product-workspace.js';
+import { writeProductWorkspaceArtifact } from './product-workspace.js';
+
+export interface ProductArtifactStoreOptions {
+  offerId: string;
+  productsDir?: string;
+}
+
+export interface StoredCategoryAttributesGroupV1 {
+  group_ids: string[];
+  category?: {
+    description_category_id: number;
+    type_id: number;
+    category_path_zh?: string[];
+  };
+  attributes_schema: CategoryAttributesV1;
+}
+
+export async function saveCategoryDecisionSnapshot(
+  options: ProductArtifactStoreOptions,
+  decision: CategoryDecisionV1,
+): Promise<string> {
+  return writeProductWorkspaceArtifact(
+    options.offerId,
+    'category_decision',
+    decision,
+    {
+      productsDir: options.productsDir,
+      manifest: {
+        stages: {
+          category_decision:
+            decision.status === 'decided' ? 'completed' : decision.status,
+        },
+      },
+    },
+  );
+}
+
+export async function saveCategoryAttributesSnapshot(
+  options: ProductArtifactStoreOptions,
+  groups: StoredCategoryAttributesGroupV1[],
+  status: ProductWorkspaceStageStatus = 'completed',
+): Promise<string> {
+  return writeProductWorkspaceArtifact(
+    options.offerId,
+    'category_attributes',
+    groups,
+    {
+      productsDir: options.productsDir,
+      manifest: { stages: { category_attributes: status } },
+    },
+  );
+}
+
+export async function saveOzonDraft(
+  options: ProductArtifactStoreOptions,
+  draft: OzonProductDraftV1,
+  status: ProductWorkspaceStageStatus = 'needs_review',
+): Promise<string> {
+  return writeProductWorkspaceArtifact(options.offerId, 'ozon_draft', draft, {
+    productsDir: options.productsDir,
+    manifest: { stages: { ozon_draft: status } },
+  });
+}
+
+export async function saveOzonDraftValidation(
+  options: ProductArtifactStoreOptions,
+  validation: OzonDraftValidationV1,
+  status: ProductWorkspaceStageStatus,
+): Promise<string> {
+  return writeProductWorkspaceArtifact(
+    options.offerId,
+    'draft_validation',
+    validation,
+    {
+      productsDir: options.productsDir,
+      manifest: { stages: { ozon_draft: status } },
+    },
+  );
+}
+
+export async function saveOzonDraftBundle(
+  options: ProductArtifactStoreOptions,
+  draft: OzonProductDraftV1,
+  validation: OzonDraftValidationV1,
+): Promise<{ draftPath: string; validationPath: string }> {
+  const status = validation.status;
+  const draftPath = await saveOzonDraft(options, draft, status);
+  const validationPath = await saveOzonDraftValidation(
+    options,
+    validation,
+    status,
+  );
+  return { draftPath, validationPath };
+}
+
+export async function saveOzonUploadRequest(
+  options: ProductArtifactStoreOptions,
+  request: unknown,
+): Promise<string> {
+  return writeProductWorkspaceArtifact(
+    options.offerId,
+    'upload_request',
+    request,
+    {
+      productsDir: options.productsDir,
+      manifest: { stages: { ozon_upload: 'needs_review' } },
+    },
+  );
+}
+
+export async function saveOzonUploadResult(
+  options: ProductArtifactStoreOptions,
+  result: unknown,
+  succeeded: boolean,
+): Promise<string> {
+  return writeProductWorkspaceArtifact(
+    options.offerId,
+    'upload_result',
+    result,
+    {
+      productsDir: options.productsDir,
+      manifest: {
+        stages: { ozon_upload: succeeded ? 'completed' : 'failed' },
+      },
+    },
+  );
+}

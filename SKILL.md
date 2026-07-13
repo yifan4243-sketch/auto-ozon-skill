@@ -5,15 +5,17 @@ description: Route the repository's 1688-to-Ozon workflow. Use when collecting a
 
 # Auto Ozon Skill Router
 
-Keep product artifacts under `data/products/<offer_id>/` and read that
-workspace's `manifest.json` before resolving stage files.
+Keep workflow artifacts under `data/runs/<run_id>/` and read that run's
+`manifest.json` before resolving stage files.
 
 Use the specialized skill for the requested stage:
 
 - Category selection or SKU grouping: read
-  `packages/category-intelligence/skills/ozon-category-decision/SKILL.md`.
-- Ozon attribute mapping or draft generation: read
-  `packages/transformer/skills/ozon-draft-generation/SKILL.md`.
+  `packages/steps/category-decision/SKILL.md`.
+- Factual Ozon attribute mapping: read
+  `packages/steps/attribute-mapping/SKILL.md`.
+- Russian copy and draft generation: read
+  `packages/steps/draft-generation/SKILL.md`.
 
-Do not copy either skill into a product workspace. Do not continue to draft
+Do not copy these skills into a run workspace. Do not continue to draft
 generation until the category decision and category-attribute snapshot exist.

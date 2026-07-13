@@ -1,6 +1,4 @@
-import type { CommandResult, ErrorObject } from '../../contracts/src/command-result.js';
-import type { SourcingResult } from '../../contracts/src/sourcing-result.js';
-import type { SourcingResultV2 } from '../../contracts/src/sourcing-result-v2.js';
+import type { CollectionMethod, CommandResult, ErrorObject } from '@auto-ozon/contracts';
 import { dispatch } from './engine/session/dispatch.js';
 import { CliError } from './engine/io/errors.js';
 import { run as loginRun, type LoginOpts } from './engine/commands/login.js';
@@ -24,11 +22,6 @@ import {
   type SearchFilterSummary,
   type SearchSort,
 } from './engine/commands/sourcing-utils.js';
-import {
-  collectedRunToV1,
-  finalizeCanonicalV2Run,
-  type CollectedSourcingRun,
-} from './v2/sourcing-runtime.js';
 
 export interface LoginInput extends LoginOpts {}
 export interface LogoutInput extends LogoutOpts {}
@@ -65,14 +58,13 @@ export interface SimilarInput {
   headed?: boolean;
 }
 
-export interface CanonicalV2RunInput {
-  productsDir?: string;
+export interface CollectedSourcingRun {
+  mode: CollectionMethod;
+  query: string | null;
+  imagePath: string | null;
+  details: OfferBatchResult;
+  filtering?: Record<string, unknown>;
 }
-
-export interface SearchKeywordV2Input extends SearchKeywordInput, CanonicalV2RunInput {}
-export interface SearchImageV2Input extends SearchImageInput, CanonicalV2RunInput {}
-export interface OffersV2Input extends OffersInput, CanonicalV2RunInput {}
-export interface SimilarV2Input extends SimilarInput, CanonicalV2RunInput {}
 
 interface SkuMaxFilteredOffer {
   offerId: string;
@@ -110,88 +102,7 @@ export async function doctor1688(input: DoctorInput): Promise<CommandResult<unkn
   });
 }
 
-export async function search1688ByKeyword(
-  input: SearchKeywordInput,
-): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.keyword', async () =>
-    collectedRunToV1(await collectKeywordSource(input)),
-  );
-}
-
-export async function search1688ByKeywordV2(
-  input: SearchKeywordV2Input,
-): Promise<CommandResult<SourcingResultV2>> {
-  return wrapCommandResult('source.keyword', async () => {
-    const run = await collectKeywordSource(input);
-    return finalizeCanonicalV2Run(run, {
-      command: 'source.keyword',
-      discoveryContext: { searchTerm: input.keyword, seedOfferId: null },
-      productsDir: input.productsDir,
-    });
-  });
-}
-
-export async function search1688ByImage(
-  input: SearchImageInput,
-): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.image', async () =>
-    collectedRunToV1(await collectImageSource(input)),
-  );
-}
-
-export async function search1688ByImageV2(
-  input: SearchImageV2Input,
-): Promise<CommandResult<SourcingResultV2>> {
-  return wrapCommandResult('source.image', async () =>
-    finalizeCanonicalV2Run(await collectImageSource(input), {
-      command: 'source.image',
-      discoveryContext: { searchTerm: null, seedOfferId: null },
-      productsDir: input.productsDir,
-    }),
-  );
-}
-
-export async function get1688Offers(
-  input: OffersInput,
-): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.offers', async () =>
-    collectedRunToV1(await collectOffersSource(input)),
-  );
-}
-
-export async function get1688OffersV2(
-  input: OffersV2Input,
-): Promise<CommandResult<SourcingResultV2>> {
-  return wrapCommandResult('source.offers', async () =>
-    finalizeCanonicalV2Run(await collectOffersSource(input), {
-      command: 'source.offers',
-      discoveryContext: { searchTerm: null, seedOfferId: null },
-      productsDir: input.productsDir,
-    }),
-  );
-}
-
-export async function get1688Similar(
-  input: SimilarInput,
-): Promise<CommandResult<SourcingResult>> {
-  return wrapCommand('source.similar', async () =>
-    collectedRunToV1(await collectSimilarSource(input)),
-  );
-}
-
-export async function get1688SimilarV2(
-  input: SimilarV2Input,
-): Promise<CommandResult<SourcingResultV2>> {
-  return wrapCommandResult('source.similar', async () =>
-    finalizeCanonicalV2Run(await collectSimilarSource(input), {
-      command: 'source.similar',
-      discoveryContext: { searchTerm: null, seedOfferId: input.offerId },
-      productsDir: input.productsDir,
-    }),
-  );
-}
-
-async function collectKeywordSource(
+export async function collectKeywordSource(
   input: SearchKeywordInput,
 ): Promise<CollectedSourcingRun> {
   const keyword = input.keyword.trim();
@@ -237,7 +148,7 @@ async function collectKeywordSource(
   };
 }
 
-async function collectImageSource(input: SearchImageInput): Promise<CollectedSourcingRun> {
+export async function collectImageSource(input: SearchImageInput): Promise<CollectedSourcingRun> {
   if (!input.imagePath) throw new CliError(2, 'BAD_INPUT', 'Image path is required.');
   const max = clampPositive(input.max ?? 20, 1, 200);
   const imageSearch = await dispatch<ImageSearchArgs, ImageSearchResult>(
@@ -257,7 +168,7 @@ async function collectImageSource(input: SearchImageInput): Promise<CollectedSou
   };
 }
 
-async function collectOffersSource(input: OffersInput): Promise<CollectedSourcingRun> {
+export async function collectOffersSource(input: OffersInput): Promise<CollectedSourcingRun> {
   const details = await collectOffersBatch(input.offerIds, input);
   return {
     mode: 'offers',
@@ -267,7 +178,7 @@ async function collectOffersSource(input: OffersInput): Promise<CollectedSourcin
   };
 }
 
-async function collectSimilarSource(input: SimilarInput): Promise<CollectedSourcingRun> {
+export async function collectSimilarSource(input: SimilarInput): Promise<CollectedSourcingRun> {
   if (!/^\d+$/.test(input.offerId)) {
     throw new CliError(2, 'BAD_INPUT', `Invalid offerId: ${input.offerId}`);
   }
@@ -446,24 +357,6 @@ async function wrapCommand<T>(
       errors: [],
       nextActions: [],
     };
-  } catch (error) {
-    const err = toErrorObject(error);
-    return {
-      ok: false,
-      command,
-      warnings: [],
-      errors: [err],
-      nextActions: nextActionsFor(err),
-    };
-  }
-}
-
-async function wrapCommandResult<T>(
-  command: string,
-  fn: () => Promise<CommandResult<T>>,
-): Promise<CommandResult<T>> {
-  try {
-    return await fn();
   } catch (error) {
     const err = toErrorObject(error);
     return {

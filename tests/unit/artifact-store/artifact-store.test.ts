@@ -2,7 +2,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FileArtifactStore } from '../../../packages/artifact-store/src/index.js';
+import {
+  FileArtifactStore,
+  createFileWorkflowLogger,
+} from '../../../packages/artifact-store/src/index.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -79,5 +82,21 @@ describe('FileArtifactStore', () => {
     await expect(store.writeCache('../cache', 'key', {})).rejects.toThrow(
       'Invalid cache namespace',
     );
+  });
+
+  it('writes secret-safe workflow logs under the run directory', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-logs-'));
+    temporaryDirectories.push(root);
+    const logger = createFileWorkflowLogger(root, 'logged-run');
+    logger.info('started', { offer_id: '123', token: 'must-not-leak' });
+
+    const text = await fs.readFile(
+      path.join(root, 'logged-run', 'logs', 'workflow.log'),
+      'utf8',
+    );
+    expect(text).toContain('started');
+    expect(text).toContain('offer_id');
+    expect(text).not.toContain('must-not-leak');
+    expect(text).not.toContain('token');
   });
 });

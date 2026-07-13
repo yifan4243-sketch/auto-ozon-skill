@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveRepoRoot } from '@auto-ozon/artifact-store';
 import {
   Ajv2020,
   type ErrorObject,
@@ -27,20 +28,10 @@ export function validateCategoryDecisionSchema(
 
 export function resolveCategoryDecisionSchemaPath(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolveRepoRoot(moduleDir);
   const candidates = [
-    path.resolve(
-      process.cwd(),
-      'packages/steps/category-decision/output.schema.json',
-    ),
-    path.resolve(
-      process.cwd(),
-      'skills/ozon-category-decision/output.schema.json',
-    ),
+    path.join(repoRoot, 'packages/steps/category-decision/output.schema.json'),
     path.resolve(moduleDir, '../output.schema.json'),
-    path.resolve(
-      moduleDir,
-      '../../../../packages/steps/category-decision/output.schema.json',
-    ),
   ];
   const found = candidates.find((candidate) => fs.existsSync(candidate));
   if (!found) {

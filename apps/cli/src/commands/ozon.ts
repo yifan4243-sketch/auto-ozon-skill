@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import type { CommandResult } from '../../../../packages/contracts/src/command-result.js';
+import type { CommandResult } from '@auto-ozon/contracts';
 import {
   ozonCallMethod,
   ozonDescribeMethod,
@@ -17,9 +17,8 @@ import {
   ozonListSections,
   ozonListWorkflows,
   ozonSearchMethods,
-} from '../../../../packages/adapters-ozon/src/client.js';
-import { runCategoryAttributes } from '@auto-ozon/step-category-attributes';
-import { saveCategoryAttributesSnapshot } from '../../../../packages/publishing/src/draft-store.js';
+} from '@auto-ozon/adapters-ozon';
+import { runStandaloneCategoryAttributes } from '@auto-ozon/workflows';
 
 type EmitCommandResult = (result: CommandResult<unknown>) => void;
 type ParseNumber = (raw: string | undefined) => number | undefined;
@@ -246,68 +245,11 @@ export function registerOzonCommands(
     .requiredOption('--type-id <n>', 'Ozon type_id')
     .option('--products-dir <directory>', 'Product workspace root', 'data/products')
     .action(async (opts) => {
-      const categoryId = parseNumber(opts.categoryId);
-      const typeId = parseNumber(opts.typeId);
-      const offerId = String(opts.offerId ?? '').trim();
-      if (
-        !/^\d+$/.test(offerId) ||
-        offerId === '0' ||
-        categoryId === undefined ||
-        typeId === undefined ||
-        !Number.isSafeInteger(categoryId) ||
-        !Number.isSafeInteger(typeId) ||
-        categoryId <= 0 ||
-        typeId <= 0
-      ) {
-        emitCommandResult({
-          ok: false,
-          command: 'category.attributes',
-          warnings: [],
-          errors: [
-            {
-              code: 'BAD_INPUT',
-              message: '--offer-id, --category-id and --type-id must be valid positive integers.',
-              recoverable: false,
-            },
-          ],
-          nextActions: [],
-        });
-        return;
-      }
-      const stepResult = await runCategoryAttributes({
-        selections: [{
-          group_ids: [],
-          category: { descriptionCategoryId: categoryId, typeId },
-        }],
-      });
-      const schema = stepResult.data?.[0]?.attributes_schema;
-      const result: CommandResult<unknown> = stepResult.ok && schema
-        ? { ...stepResult, data: schema }
-        : stepResult;
-      if (result.ok && schema) {
-        try {
-          await saveCategoryAttributesSnapshot(
-            { offerId, productsDir: opts.productsDir },
-            [{ group_ids: [], attributes_schema: schema }],
-          );
-        } catch (error) {
-          emitCommandResult({
-            ok: false,
-            command: 'category.attributes',
-            data: result.data,
-            warnings: [],
-            errors: [
-              {
-                code: 'PRODUCT_WORKSPACE_WRITE_FAILED',
-                message: error instanceof Error ? error.message : String(error),
-                recoverable: false,
-              },
-            ],
-            nextActions: [],
-          });
-          return;
-        }
-      }
-      emitCommandResult(result);
+      emitCommandResult(await runStandaloneCategoryAttributes({
+        offer_id: String(opts.offerId ?? ''),
+        description_category_id: parseNumber(opts.categoryId),
+        type_id: parseNumber(opts.typeId),
+        products_dir: opts.productsDir,
+      }));
     });
 }

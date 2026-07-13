@@ -15,6 +15,9 @@ import { classifyGroupAttributes } from './attribute-classifier.js';
 import { matchDeterministicAttribute } from './deterministic-matcher.js';
 import { validateAttributeMapping } from './validator.js';
 import { resolveGroupAttributeSnapshot } from './variant-mapper.js';
+import { validateAttributeMappingSchema } from './schema-validator.js';
+
+const DRAFT_OWNED_CONTENT_ATTRIBUTE_IDS = new Set([4180, 4191, 23171]);
 
 export interface RunAttributeMappingInput {
   product: CanonicalProductV2;
@@ -50,6 +53,14 @@ export async function runAttributeMapping(
       });
     }
     if (mapping.errors.length > 0) mapping.status = 'blocked';
+    const schema = validateAttributeMappingSchema(mapping);
+    if (!schema.valid) {
+      mapping.errors.push(issue(
+        'ATTRIBUTE_MAPPING_SCHEMA_INVALID',
+        `AttributeMappingV1 schema validation failed: ${schema.errors.join('; ')}`,
+      ));
+      mapping.status = 'blocked';
+    }
 
     if (context) {
       const output = await context.artifact_store.write(
@@ -147,6 +158,7 @@ function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
       }
       const attributes: MappedOzonAttributeV1[] = [];
       for (const schema of snapshot.attributes_schema.attributes) {
+        if (DRAFT_OWNED_CONTENT_ATTRIBUTE_IDS.has(schema.id)) continue;
         const deterministic = matchDeterministicAttribute(input.product, sku, schema);
         const agent = resolveAgentAttribute(input.agent_input, sourceSkuId, schema);
         const mapped = deterministic ?? agent.attribute;

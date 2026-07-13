@@ -11,7 +11,7 @@ import {
   saveOzonDraft,
   saveOzonUploadRequest,
   saveOzonUploadResult,
-} from '../../../packages/publishing/src/draft-store.js';
+} from '../../../packages/core/src/product-draft-artifacts.js';
 
 const roots: string[] = [];
 

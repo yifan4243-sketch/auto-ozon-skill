@@ -12,10 +12,8 @@ import {
   FileArtifactStore,
   silentWorkflowLogger,
 } from '../../../../packages/artifact-store/src/index.js';
-import {
-  runAttributeMapping,
-  validateAttributeMappingSchema,
-} from '../../../../packages/steps/attribute-mapping/src/index.js';
+import { runAttributeMapping } from '../../../../packages/steps/attribute-mapping/src/index.js';
+import { validateAttributeMappingSchema } from '../../../../packages/steps/attribute-mapping/src/schema-validator.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -28,6 +26,17 @@ afterEach(async () => {
 });
 
 describe('runAttributeMapping', () => {
+  it('keeps the documented common-and-variant example schema-valid', async () => {
+    const example = JSON.parse(await fs.readFile(
+      new URL('../../../../packages/steps/attribute-mapping/examples/common-and-variant.output.json', import.meta.url),
+      'utf8',
+    ));
+    expect(validateAttributeMappingSchema(example)).toEqual({ valid: true, errors: [] });
+    expect(example.common_attributes.length).toBeGreaterThan(0);
+    expect(example.variant_attributes.length).toBeGreaterThan(0);
+    expect(example.sku_attributes.length).toBeGreaterThan(1);
+  });
+
   it('produces common, variant, and complete per-SKU attributes', async () => {
     const fixture = inputFixture();
     const result = await runAttributeMapping(fixture);

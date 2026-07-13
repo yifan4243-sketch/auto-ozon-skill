@@ -5,8 +5,8 @@ import type {
   WorkflowStepName,
   WorkflowStepRecordV1,
   WorkflowStepStatus,
-} from '../../contracts/src/workflow-run.js';
-import { WORKFLOW_STEP_NAMES } from '../../contracts/src/workflow-run.js';
+} from '@auto-ozon/contracts';
+import { WORKFLOW_STEP_NAMES } from '@auto-ozon/contracts';
 import { resolveRepoRoot } from './repo-root.js';
 
 const STEP_DIRECTORIES: Record<WorkflowStepName, string> = {

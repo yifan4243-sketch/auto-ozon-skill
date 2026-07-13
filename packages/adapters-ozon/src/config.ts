@@ -1,4 +1,4 @@
-import type { ErrorObject, WarningObject } from '../../contracts/src/command-result.js';
+import type { ErrorObject, WarningObject } from '@auto-ozon/contracts';
 import type { OzonCredentialsStatus, OzonToolAvailability } from './types.js';
 
 export const OZON_MCP_TOOLS = {

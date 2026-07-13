@@ -10,8 +10,10 @@
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@auto-ozon/step-category-attributes": "workspace:*",
-    "@auto-ozon/step-category-decision": "workspace:*",
+    "@auto-ozon/workflows": "workspace:*",
+    "@auto-ozon/contracts": "workspace:*",
+    "@auto-ozon/adapters-1688": "workspace:*",
+    "@auto-ozon/adapters-ozon": "workspace:*",
     "commander": "^12.1.0"
   }
 }

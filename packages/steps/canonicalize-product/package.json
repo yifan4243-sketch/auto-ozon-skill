@@ -1,0 +1,20 @@
+{
+  "name": "@auto-ozon/step-canonicalize-product",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p ../../../tsconfig.base.json"
+  },
+  "dependencies": {
+    "@auto-ozon/adapters-1688": "workspace:*",
+    "@auto-ozon/artifact-store": "workspace:*",
+    "@auto-ozon/contracts": "workspace:*",
+    "@auto-ozon/core": "workspace:*"
+  }
+}

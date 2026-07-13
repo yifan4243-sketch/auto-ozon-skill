@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
 import { buildProgram } from '../../../apps/cli/src/cli.js';
 import type { OfferBatchResult, OfferResult } from '../../../packages/adapters-1688/src/engine/commands/offers.js';
-import { normalizeV2Offline } from '../../../packages/adapters-1688/src/v2/offline-normalize.js';
+import { normalizeV2Offline } from '../../helpers/source-api.js';
 
 const tempRoots: string[] = [];
 

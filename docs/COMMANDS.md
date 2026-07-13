@@ -43,6 +43,9 @@ auto-ozon ozon fetch-all ProductAPI_GetProductList --params '{"filter":{"visibil
 
 auto-ozon ozon workflows list --category catalog --json --pretty
 auto-ozon ozon workflows get cabinet_health_check --json --pretty
+
+auto-ozon workflow category inspect "收纳盒" --decision-file decision.json --json --pretty
+auto-ozon workflow listing prepare "收纳盒" --stop-after attribute-mapping --json --pretty
 ```
 
 Global output flags are available on subcommands: `--json`, `--json-v2`, `--pretty`, `--get`, `--pick`.
@@ -105,6 +108,33 @@ are ignored and never copied into output or raw artifacts.
 Not supported: `serve`, background management, `research`, `compare`, `supplier`, `cart`, `checkout`, `order`, `seller`, `feedback`.
 
 `source keyword` always performs deep detail collection. The old external `--deeppro` flags are not exposed.
+
+## Resumable listing preparation
+
+`workflow listing prepare` runs the numbered vertical steps and writes evidence
+under `data/runs/<run_id>`:
+
+```bash
+auto-ozon workflow listing prepare "收纳盒" \
+  --run-id listing-cup-001 \
+  --decision-file category-decision.json \
+  --stop-after attribute-mapping \
+  --json --pretty
+
+auto-ozon workflow listing prepare "收纳盒" \
+  --run-id listing-cup-001 \
+  --start-from category-attributes \
+  --force-step category-attributes \
+  --continue-on-review \
+  --json --pretty
+```
+
+The workflow reuses successful artifacts, stops on `needs_review` by default,
+and reruns downstream dependants when a step is forced. Supported step names
+are `source-1688`, `canonicalize-product`, `category-decision`,
+`category-attributes`, `attribute-mapping`, and `draft-generation`. The CLI
+defaults to stopping after `attribute-mapping`; programmatic callers can supply
+copy input and continue through `draft-generation`.
 
 ## Complete PCDCK/ozon-mcp bridge
 

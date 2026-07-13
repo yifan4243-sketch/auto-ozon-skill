@@ -11,12 +11,14 @@ import {
   loadOzonCategoryIndex,
   loadOzonCategoryTree,
   searchOzonCategories,
-  validateCategoryDecision,
-  validateCategoryDecisionSchema,
   validateOzonCategoryPair,
+  type OzonCategoryTreeDocument,
+} from '../../../../packages/steps/category-decision/src/category-tree.js';
+import { validateCategoryDecision } from '../../../../packages/steps/category-decision/src/validator.js';
+import { validateCategoryDecisionSchema } from '../../../../packages/steps/category-decision/src/schema-validator.js';
+import {
   runCategoryDecision,
   AgentDecisionProvider,
-  type OzonCategoryTreeDocument,
 } from '../../../../packages/steps/category-decision/src/index.js';
 
 const skillRoot = fileURLToPath(

@@ -1,6 +1,8 @@
 # auto-ozon-skill
 
-TypeScript monorepo for Ozon seller automation. The implemented foundation currently includes the 1688 sourcing adapter and a complete TypeScript bridge to `PCDCK/ozon-mcp`.
+TypeScript monorepo for Ozon seller automation. The implemented foundation
+includes a vertical, resumable 1688-to-Ozon listing-preparation workflow and a
+complete TypeScript bridge to `PCDCK/ozon-mcp`.
 
 ## 1688 sourcing
 
@@ -52,6 +54,7 @@ pnpm --filter @auto-ozon/cli dev -- source image ./product.jpg --max 5 --json
 pnpm --filter @auto-ozon/cli dev -- source offers 123456789 987654321 --json
 pnpm --filter @auto-ozon/cli dev -- source similar 123456789 --json
 pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
+pnpm --filter @auto-ozon/cli dev -- workflow listing prepare "收纳盒" --stop-after attribute-mapping --json --pretty
 ```
 
 See `docs/COMMANDS.md` for the full CLI surface.
@@ -84,16 +87,25 @@ independent response-envelope option; both may be used together. Offline replay
 accepts exactly one typed `OfferResult` or one typed `OfferBatchResult` and does
 not require a browser, login, or network.
 
-V2 preserves keyword/similar discovery context for later category work. A
-future category Agent will use the search term, Chinese title, 1688 Chinese
-category path, product attributes, and SKU specifications to match the saved
-Ozon Chinese category table. This phase does not implement or run that Agent.
+V2 preserves keyword/similar discovery context for category work. The category
+decision Skill uses the search term, Chinese title, 1688 Chinese category path,
+product attributes, and SKU specifications to match the saved Ozon Chinese
+category table. The resumable workflow then retrieves attributes and produces
+an independent AttributeMappingV1 before optional draft generation.
 Original brand attributes remain ordinary product attributes; ownership and
 authorization are not inferred. Prohibited-category and logistics restrictions
 remain later user-knowledge-base work.
 
 See `docs/CANONICAL_V2_REAL_VALIDATION.md` for the manual real-data validation
 procedure. Product workspaces under `data/products/<offer_id>/` are gitignored.
+
+## Vertical workflow architecture
+
+Business logic is organized under `packages/steps/*`; shared browser/MCP,
+contracts, storage, and product-workspace compatibility remain horizontal.
+`runListingPreparation` stores numbered evidence under `data/runs/<run_id>` and
+keeps reusable Ozon dictionaries under `data/cache`. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for package boundaries and the run layout.
 
 ## Safety
 

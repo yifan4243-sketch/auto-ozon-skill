@@ -12,6 +12,7 @@
     "build": "tsc -p ../../tsconfig.base.json"
   },
   "dependencies": {
+    "@auto-ozon/contracts": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.6.1"
   }
 }

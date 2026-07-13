@@ -11,12 +11,12 @@ const integrityMock = vi.hoisted(() => vi.fn());
 vi.mock('../../../packages/adapters-1688/src/engine/session/dispatch.js', () => ({
   dispatch: dispatchMock,
 }));
-vi.mock('../../../packages/transformer/src/canonical-v2-integrity.js', () => ({
+vi.mock('../../../packages/steps/canonicalize-product/src/canonical-v2-integrity.js', () => ({
   checkCanonicalV2Integrity: integrityMock,
 }));
 
 import { buildProgram } from '../../../apps/cli/src/cli.js';
-import { get1688OffersV2 } from '../../../packages/adapters-1688/src/client.js';
+import { get1688OffersV2 } from '../../helpers/source-api.js';
 
 const roots: string[] = [];
 

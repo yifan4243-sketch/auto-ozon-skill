@@ -5,10 +5,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "build": "tsc -p ../../tsconfig.base.json"
   },
   "dependencies": {
+    "@auto-ozon/contracts": "workspace:*",
     "iconv-lite": "^0.7.2",
     "playwright": "^1.48.0",
     "playwright-extra": "^4.3.6",

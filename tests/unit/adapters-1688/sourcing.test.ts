@@ -3,12 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { buildProgram } from '../../../apps/cli/src/cli.js';
 import type { OfferResult, OfferBatchResult } from '../../../packages/adapters-1688/src/engine/commands/offers.js';
 import { collectOffersBatch, normalizeOfferIds } from '../../../packages/adapters-1688/src/engine/commands/offers.js';
-import type { SearchResult } from '../../../packages/adapters-1688/src/engine/commands/search.js';
-import type { ImageSearchResult } from '../../../packages/adapters-1688/src/engine/commands/image-search.js';
-import { get1688Offers } from '../../../packages/adapters-1688/src/client.js';
-import { offerToCanonical } from '../../../packages/adapters-1688/src/mappers/offer-to-canonical.js';
-import { searchToSourcingResult } from '../../../packages/adapters-1688/src/mappers/search-to-sourcing-result.js';
-import { imageSearchToSourcingResult } from '../../../packages/adapters-1688/src/mappers/image-search-to-sourcing-result.js';
+import { get1688Offers } from '../../helpers/source-api.js';
+import { offerToCanonical } from '../../../packages/steps/canonicalize-product/src/offer-to-canonical.js';
+import { collectedRunToV1 } from '../../../packages/steps/canonicalize-product/src/sourcing-runtime.js';
 
 describe('1688 offers batching', () => {
   it('deduplicates offer ids while preserving input order', () => {
@@ -55,9 +52,13 @@ describe('1688 mappers', () => {
 
   it('maps search results plus details to SourcingResult', () => {
     const offer = readFixture<OfferResult>('offer-result.json');
-    const search = readFixture<SearchResult>('search-result-with-details.json');
     const details = makeDetails([offer]);
-    const result = searchToSourcingResult({ query: '收纳盒', search, details });
+    const result = collectedRunToV1({
+      mode: 'keyword',
+      query: '收纳盒',
+      imagePath: null,
+      details,
+    });
     expect(result.mode).toBe('keyword');
     expect(result.total).toBe(1);
     expect(result.items[0]?.source.collectionMethod).toBe('keyword');
@@ -66,11 +67,11 @@ describe('1688 mappers', () => {
 
   it('maps image search candidates plus details to SourcingResult', () => {
     const offer = readFixture<OfferResult>('offer-result.json');
-    const imageSearch = readFixture<ImageSearchResult>('image-search-result.json');
     const details = makeDetails([offer]);
-    const result = imageSearchToSourcingResult({
+    const result = collectedRunToV1({
+      mode: 'image',
+      query: null,
       imagePath: 'tests/fixtures/1688/product.jpg',
-      imageSearch,
       details,
     });
     expect(result.mode).toBe('image');

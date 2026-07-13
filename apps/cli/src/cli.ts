@@ -2,22 +2,25 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
-import type { CommandResult } from '../../../packages/contracts/src/command-result.js';
+import type { CommandResult } from '@auto-ozon/contracts';
 import {
-  get1688Offers,
-  get1688OffersV2,
-  get1688Similar,
-  get1688SimilarV2,
-  search1688ByImage,
-  search1688ByImageV2,
-  search1688ByKeyword,
-  search1688ByKeywordV2,
-} from '../../../packages/adapters-1688/src/client.js';
+  runOfflineNormalizeCommand,
+  runListingPreparation,
+  runSourceCommand,
+  runCategoryInspect,
+} from '@auto-ozon/workflows';
 import {
-  normalizeV2Offline,
-  parseCollectionMethod,
-} from '../../../packages/adapters-1688/src/v2/offline-normalize.js';
-import { CliError } from '../../../packages/adapters-1688/src/engine/io/errors.js';
+  CliError,
+  get1688ProfileStatus,
+  getLast1688DebugEvent,
+  list1688DebugEvents,
+  list1688Profiles,
+  run1688DoctorCommand,
+  run1688LoginCommand,
+  run1688LogoutCommand,
+  run1688WhoamiCommand,
+  show1688DebugEvent,
+} from '@auto-ozon/adapters-1688';
 import {
   currentCommandName,
   emit,
@@ -25,9 +28,8 @@ import {
   isJsonV2,
   makeEnvelope,
   setOutputFlags,
-} from '../../../packages/adapters-1688/src/engine/io/output.js';
+} from '@auto-ozon/adapters-1688';
 import { registerOzonCommands } from './commands/ozon.js';
-import { runCategoryInspect } from './workflows/category-inspect.js';
 
 export function buildProgram(): Command {
   const program = new Command();
@@ -46,8 +48,7 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a real browser window instead of terminal QR')
     .action(async (opts) => {
-      const { run } = await import('../../../packages/adapters-1688/src/engine/commands/login.js');
-      await run(opts);
+      await run1688LoginCommand(opts);
     });
 
   yibaba
@@ -56,8 +57,7 @@ export function buildProgram(): Command {
     .option('-y, --yes', 'Skip the confirmation prompt')
     .option('--profile <name>', 'Profile name')
     .action(async (opts) => {
-      const { run } = await import('../../../packages/adapters-1688/src/engine/commands/logout.js');
-      await run(opts);
+      await run1688LogoutCommand(opts);
     });
 
   yibaba
@@ -66,8 +66,7 @@ export function buildProgram(): Command {
     .option('--verify', 'Verify the session online')
     .option('--profile <name>', 'Profile name')
     .action(async (opts) => {
-      const { run } = await import('../../../packages/adapters-1688/src/engine/commands/whoami.js');
-      await run(opts);
+      await run1688WhoamiCommand(opts);
     });
 
   yibaba
@@ -77,8 +76,7 @@ export function buildProgram(): Command {
     .option('--live', 'Run event log, artifact, and risk-event probes')
     .option('--profile <name>', 'Profile name')
     .action(async (opts) => {
-      const { run } = await import('../../../packages/adapters-1688/src/engine/commands/doctor.js');
-      await run(opts);
+      await run1688DoctorCommand(opts);
     });
 
   const profile = yibaba.command('profile').description('Inspect local 1688 profiles');
@@ -86,16 +84,14 @@ export function buildProgram(): Command {
     .command('list')
     .description('List local profiles')
     .action(async () => {
-      const { list } = await import('../../../packages/adapters-1688/src/engine/commands/profile.js');
-      await list();
+      await list1688Profiles();
     });
   profile
     .command('status')
     .description('Show profile status')
     .argument('[name]', 'Profile name', 'default')
     .action(async (name) => {
-      const { status } = await import('../../../packages/adapters-1688/src/engine/commands/profile.js');
-      await status(name);
+      await get1688ProfileStatus(name);
     });
 
   const debug = yibaba.command('debug').description('Inspect recent command events and artifacts');
@@ -105,24 +101,21 @@ export function buildProgram(): Command {
     .option('--limit <n>', 'Max requests to show', '20')
     .option('--failed', 'Only show failed requests')
     .action(async (opts) => {
-      const { list } = await import('../../../packages/adapters-1688/src/engine/commands/debug.js');
-      await list(opts);
+      await list1688DebugEvents(opts);
     });
   debug
     .command('last')
     .description('Show the most recent command event')
     .option('--failed', 'Show the most recent failed request')
     .action(async (opts) => {
-      const { last } = await import('../../../packages/adapters-1688/src/engine/commands/debug.js');
-      await last(opts);
+      await getLast1688DebugEvent(opts);
     });
   debug
     .command('show')
     .description('Show events and artifact location for a request')
     .argument('<requestId>', 'Request ID')
     .action(async (requestId) => {
-      const { show } = await import('../../../packages/adapters-1688/src/engine/commands/debug.js');
-      await show({ requestId });
+      await show1688DebugEvent({ requestId });
     });
 
   const source = program.command('source').description('Source products for Ozon drafts');
@@ -159,10 +152,11 @@ export function buildProgram(): Command {
         profile: opts.profile,
         headed: opts.headed,
       };
-      const result =
-        schemaVersion === 2
-          ? await search1688ByKeywordV2({ ...input, productsDir: opts.productsDir })
-          : await search1688ByKeyword(input);
+      const result = await runSourceCommand({
+        source: { mode: 'keyword', ...input },
+        schema_version: schemaVersion,
+        products_dir: opts.productsDir,
+      });
       emitCommandResult(result);
     });
 
@@ -185,9 +179,11 @@ export function buildProgram(): Command {
         headed: opts.headed,
       };
       emitCommandResult(
-        schemaVersion === 2
-          ? await search1688ByImageV2({ ...input, productsDir: opts.productsDir })
-          : await search1688ByImage(input),
+        await runSourceCommand({
+          source: { mode: 'image', ...input },
+          schema_version: schemaVersion,
+          products_dir: opts.productsDir,
+        }),
       );
     });
 
@@ -208,9 +204,11 @@ export function buildProgram(): Command {
         headed: opts.headed,
       };
       emitCommandResult(
-        schemaVersion === 2
-          ? await get1688OffersV2({ ...input, productsDir: opts.productsDir })
-          : await get1688Offers(input),
+        await runSourceCommand({
+          source: { mode: 'offers', ...input },
+          schema_version: schemaVersion,
+          products_dir: opts.productsDir,
+        }),
       );
     });
 
@@ -233,9 +231,11 @@ export function buildProgram(): Command {
         headed: opts.headed,
       };
       emitCommandResult(
-        schemaVersion === 2
-          ? await get1688SimilarV2({ ...input, productsDir: opts.productsDir })
-          : await get1688Similar(input),
+        await runSourceCommand({
+          source: { mode: 'similar', ...input },
+          schema_version: schemaVersion,
+          products_dir: opts.productsDir,
+        }),
       );
     });
 
@@ -249,12 +249,12 @@ export function buildProgram(): Command {
     .option('--products-dir <directory>', 'Save each product under <directory>/<offer_id>')
     .action(async (opts) => {
       emitCommandResult(
-        await normalizeV2Offline({
-          inputPath: opts.input ?? '',
+        await runOfflineNormalizeCommand({
+          input_path: opts.input ?? '',
           method: parseCollectionMethod(opts.method),
-          searchTerm: opts.searchTerm,
-          seedOfferId: opts.seedOfferId,
-          productsDir: opts.productsDir,
+          search_term: opts.searchTerm,
+          seed_offer_id: opts.seedOfferId,
+          products_dir: opts.productsDir,
         }),
       );
     });
@@ -334,6 +334,44 @@ function registerWorkflowCommands(
           skuMax: parseSkuMax(opts.skuMax),
           decisionFile: opts.decisionFile,
           productsDir: opts.productsDir,
+        }),
+      );
+    });
+
+  const listing = workflow
+    .command('listing')
+    .description('Listing preparation workflows');
+
+  listing
+    .command('prepare')
+    .description('Run or resume source → canonical → category → attributes → mapping')
+    .argument('<keyword>', '1688 keyword used when the source step must run')
+    .option('--run-id <id>', 'Reuse a run ID to resume from saved artifacts')
+    .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON')
+    .option('--start-from <step>', 'First step to execute', 'source-1688')
+    .option('--stop-after <step>', 'Last step to execute', 'attribute-mapping')
+    .option('--force-step <steps...>', 'Refresh this step and all downstream steps')
+    .option('--continue-on-review', 'Continue when an upstream step needs review')
+    .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
+    .option('--profile <name>', '1688 profile name')
+    .option('--headed', 'Open a browser window for manual verification')
+    .action(async (keyword, opts) => {
+      emitCommandResult(
+        await runListingPreparation({
+          run_id: opts.runId,
+          source: {
+            mode: 'keyword',
+            keyword,
+            max: 1,
+            skuMax: parseSkuMax(opts.skuMax),
+            profile: opts.profile,
+            headed: opts.headed,
+          },
+          category_decision_file: opts.decisionFile,
+          start_from: parseWorkflowStep(opts.startFrom),
+          stop_after: parseWorkflowStep(opts.stopAfter),
+          force_steps: (opts.forceStep ?? []).map(parseWorkflowStep),
+          stop_on_review: !opts.continueOnReview,
         }),
       );
     });
@@ -469,6 +507,40 @@ function parseNumber(raw: string | undefined): number | undefined {
 function parseOptionalNumber(raw: string | undefined): number | null {
   const value = parseNumber(raw);
   return value === undefined ? null : value;
+}
+
+function parseCollectionMethod(
+  raw: string | undefined,
+): 'keyword' | 'image' | 'offers' | 'similar' {
+  const method = raw ?? 'offers';
+  if (
+    method === 'keyword' ||
+    method === 'image' ||
+    method === 'offers' ||
+    method === 'similar'
+  ) {
+    return method;
+  }
+  throw new CliError(
+    2,
+    'BAD_INPUT',
+    '--method must be keyword, image, offers, or similar.',
+  );
+}
+
+function parseWorkflowStep(raw: string): import('@auto-ozon/contracts').WorkflowStepName {
+  const steps = [
+    'source-1688',
+    'canonicalize-product',
+    'category-decision',
+    'category-attributes',
+    'attribute-mapping',
+    'draft-generation',
+  ] as const;
+  if (steps.includes(raw as (typeof steps)[number])) {
+    return raw as (typeof steps)[number];
+  }
+  throw new CliError(2, 'BAD_INPUT', `Unknown workflow step: ${raw}`);
 }
 
 function parseJsonParams(

@@ -93,6 +93,19 @@ export interface OzonDraftAgentInputV1 {
   sku_inputs: OzonDraftAgentSkuInputV1[];
 }
 
+/** Copy-only Agent input consumed after factual AttributeMappingV1 is complete. */
+export interface OzonDraftContentSkuInputV1 {
+  source_sku_id: string;
+  name_ru: OzonDraftAgentValueV1<string>;
+  description_ru: OzonDraftAgentValueV1<string>;
+  hashtags_ru: OzonDraftAgentValueV1<string[]>;
+}
+
+export interface OzonDraftContentInputV1 {
+  source_offer_id: string;
+  sku_inputs: OzonDraftContentSkuInputV1[];
+}
+
 export interface OzonDraftCategoryAttributesGroupV1 {
   group_ids: string[];
   attributes_schema: CategoryAttributesV1;

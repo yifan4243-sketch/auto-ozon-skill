@@ -1,3 +1,2 @@
-export * from './service.js';
-export * from './validator.js';
-export * from './schema-validator.js';
+export { runAttributeMapping } from './service.js';
+export type { RunAttributeMappingInput } from './service.js';

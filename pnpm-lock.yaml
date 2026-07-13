@@ -29,12 +29,18 @@ importers:
 
   apps/cli:
     dependencies:
-      '@auto-ozon/step-category-attributes':
+      '@auto-ozon/adapters-1688':
         specifier: workspace:*
-        version: link:../../packages/steps/category-attributes
-      '@auto-ozon/step-category-decision':
+        version: link:../../packages/adapters-1688
+      '@auto-ozon/adapters-ozon':
         specifier: workspace:*
-        version: link:../../packages/steps/category-decision
+        version: link:../../packages/adapters-ozon
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@auto-ozon/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -45,6 +51,9 @@ importers:
 
   packages/adapters-1688:
     dependencies:
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       iconv-lite:
         specifier: ^0.7.2
         version: 0.7.3
@@ -66,6 +75,9 @@ importers:
 
   packages/adapters-ozon:
     dependencies:
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@modelcontextprotocol/sdk':
         specifier: ^1.6.1
         version: 1.29.0(zod@4.4.3)
@@ -85,15 +97,16 @@ importers:
       '@auto-ozon/step-category-decision':
         specifier: workspace:*
         version: link:../steps/category-decision
-      ajv:
-        specifier: ^8.20.0
-        version: 8.20.0
 
   packages/config: {}
 
   packages/contracts: {}
 
-  packages/core: {}
+  packages/core:
+    dependencies:
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/database: {}
 
@@ -101,7 +114,11 @@ importers:
 
   packages/image-generation: {}
 
-  packages/publishing: {}
+  packages/publishing:
+    dependencies:
+      '@auto-ozon/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/steps/attribute-mapping:
     dependencies:
@@ -114,6 +131,21 @@ importers:
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
+
+  packages/steps/canonicalize-product:
+    dependencies:
+      '@auto-ozon/adapters-1688':
+        specifier: workspace:*
+        version: link:../../adapters-1688
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@auto-ozon/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/steps/category-attributes:
     dependencies:
@@ -138,17 +170,72 @@ importers:
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
 
-  packages/transformer: {}
+  packages/steps/draft-generation:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@auto-ozon/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/steps/source-1688:
+    dependencies:
+      '@auto-ozon/adapters-1688':
+        specifier: workspace:*
+        version: link:../../adapters-1688
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+
+  packages/transformer:
+    dependencies:
+      '@auto-ozon/step-draft-generation':
+        specifier: workspace:*
+        version: link:../steps/draft-generation
 
   packages/workflows:
     dependencies:
+      '@auto-ozon/adapters-1688':
+        specifier: workspace:*
+        version: link:../adapters-1688
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../artifact-store
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@auto-ozon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@auto-ozon/step-attribute-mapping':
+        specifier: workspace:*
+        version: link:../steps/attribute-mapping
+      '@auto-ozon/step-canonicalize-product':
+        specifier: workspace:*
+        version: link:../steps/canonicalize-product
+      '@auto-ozon/step-category-attributes':
+        specifier: workspace:*
+        version: link:../steps/category-attributes
+      '@auto-ozon/step-category-decision':
+        specifier: workspace:*
+        version: link:../steps/category-decision
+      '@auto-ozon/step-draft-generation':
+        specifier: workspace:*
+        version: link:../steps/draft-generation
+      '@auto-ozon/step-source-1688':
+        specifier: workspace:*
+        version: link:../steps/source-1688
 
 packages:
 

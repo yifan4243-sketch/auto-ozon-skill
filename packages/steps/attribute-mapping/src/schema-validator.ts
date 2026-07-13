@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveRepoRoot } from '@auto-ozon/artifact-store';
 import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 
 let compiled: ValidateFunction | null = null;
@@ -18,10 +19,10 @@ export function validateAttributeMappingSchema(value: unknown): {
 
 function resolveSchemaPath(): string {
   const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolveRepoRoot(moduleDirectory);
   const candidates = [
-    path.resolve(process.cwd(), 'packages/steps/attribute-mapping/output.schema.json'),
+    path.join(repoRoot, 'packages/steps/attribute-mapping/output.schema.json'),
     path.resolve(moduleDirectory, '../output.schema.json'),
-    path.resolve(moduleDirectory, '../../../../packages/steps/attribute-mapping/output.schema.json'),
   ];
   const found = candidates.find((candidate) => fs.existsSync(candidate));
   if (!found) throw new Error(`AttributeMappingV1 schema not found: ${candidates.join(', ')}`);

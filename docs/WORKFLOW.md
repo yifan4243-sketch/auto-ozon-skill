@@ -98,7 +98,7 @@ CanonicalProductV2
 -> CategoryDecisionV1
 ```
 
-The category tree under `data/ozon/categories` is the only category source. A
+The category tree under `data/reference/ozon/categories` is the only category source. A
 `type_id` is never validated alone because the tree contains repeated type IDs.
 All source SKUs must appear exactly once in a category group or in the unassigned
 list. Unassigned SKUs, invalid pairs, or blocked source products block the
@@ -161,7 +161,7 @@ diagnostic artifacts to remain in the product workspace.
 
 Original brand attributes are source facts and are not interpreted as ownership
 or authorization claims. Category selection, prohibited-category rules, and
-logistics restrictions remain future stages. The future category Agent will use
+logistics restrictions remain separate policy stages. The category Agent uses
 the search term, Chinese title, 1688 Chinese category path, attributes, and SKU
 specifications to match the saved Ozon Chinese category table; this runtime does
 not implement that matching.
