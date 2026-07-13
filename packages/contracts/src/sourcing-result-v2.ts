@@ -44,18 +44,30 @@ export interface CanonicalV2IntegrityReport {
   product_results: CanonicalV2IntegrityProductResult[];
 }
 
-export interface CanonicalV2ArtifactPaths {
+export interface CanonicalV2ProductArtifactPaths {
   manifest: string;
-  raw_directory: string;
-  canonical_v2_directory: string;
+  source_1688: string;
+  canonical_v2: string;
   integrity_report: string;
-  failures: string;
+}
+
+export interface CanonicalV2ProductArtifacts {
+  offer_id: string;
+  product_directory: string;
+  artifact_paths: CanonicalV2ProductArtifactPaths;
+}
+
+export interface CanonicalV2FailureArtifacts {
+  offer_id: string;
+  product_directory: string;
+  manifest: string;
+  source_failure: string;
 }
 
 export interface CanonicalV2RunArtifacts {
-  run_id: string;
-  run_directory: string;
-  artifact_paths: CanonicalV2ArtifactPaths;
+  products_root: string;
+  products: CanonicalV2ProductArtifacts[];
+  failures: CanonicalV2FailureArtifacts[];
 }
 
 export interface SourcingResultV2 {

@@ -28,7 +28,7 @@ export interface CollectedSourcingRun {
 export interface FinalizeCanonicalV2RunOptions {
   command: string;
   discoveryContext: CanonicalV2DiscoveryContextInput;
-  saveDir?: string;
+  productsDir?: string;
   collectedAt?: string;
 }
 
@@ -131,12 +131,12 @@ export async function finalizeCanonicalV2Run(
     });
   }
 
-  if (options.saveDir) {
+  if (options.productsDir) {
     try {
       const searchTerm = options.discoveryContext.searchTerm?.trim() || null;
       const seedOfferId = options.discoveryContext.seedOfferId?.trim() || null;
       data.artifacts = await saveCanonicalV2Run({
-        saveDir: options.saveDir,
+        productsDir: options.productsDir,
         command: options.command,
         collectionMethod: run.mode,
         searchTerm,
@@ -153,7 +153,6 @@ export async function finalizeCanonicalV2Run(
   return {
     ok: errors.length === 0,
     command: options.command,
-    ...(data.artifacts ? { runId: data.artifacts.run_id } : {}),
     data,
     warnings: [],
     errors,

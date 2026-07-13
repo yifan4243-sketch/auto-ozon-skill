@@ -129,10 +129,10 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
     expect(result.errors[0]!.message).toContain('OfferResult or an OfferBatchResult');
   });
 
-  it('writes the standard run directory and drops secret-like unknown fields', async () => {
+  it('writes the standard offer workspace and drops secret-like unknown fields', async () => {
     const root = await tempRoot();
     const input = path.join(root, 'offer-with-extra.json');
-    const saveDir = path.join(root, 'runs');
+    const productsDir = path.join(root, 'products');
     const offer = readFixture<OfferResult>('offer-result.json') as OfferResult & {
       token?: string;
       cookie?: string;
@@ -143,21 +143,22 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
     offer.unknown = { password: 'hidden' };
     await writeJson(input, offer);
 
-    const result = await normalizeV2Offline({ inputPath: input, saveDir });
+    const result = await normalizeV2Offline({ inputPath: input, productsDir });
     const artifacts = result.data?.artifacts;
+    const productArtifacts = artifacts?.products[0];
 
     expect(result.ok).toBe(true);
     expect(artifacts).not.toBeNull();
-    await expect(fs.stat(artifacts!.artifact_paths.manifest)).resolves.toBeTruthy();
-    await expect(fs.stat(artifacts!.artifact_paths.raw_directory)).resolves.toBeTruthy();
-    await expect(
-      fs.stat(artifacts!.artifact_paths.canonical_v2_directory),
-    ).resolves.toBeTruthy();
-    await expect(fs.stat(artifacts!.artifact_paths.integrity_report)).resolves.toBeTruthy();
-    await expect(fs.stat(artifacts!.artifact_paths.failures)).resolves.toBeTruthy();
+    expect(productArtifacts?.product_directory).toBe(
+      path.join(productsDir, offer.offerId),
+    );
+    await expect(fs.stat(productArtifacts!.artifact_paths.manifest)).resolves.toBeTruthy();
+    await expect(fs.stat(productArtifacts!.artifact_paths.source_1688)).resolves.toBeTruthy();
+    await expect(fs.stat(productArtifacts!.artifact_paths.canonical_v2)).resolves.toBeTruthy();
+    await expect(fs.stat(productArtifacts!.artifact_paths.integrity_report)).resolves.toBeTruthy();
 
     const raw = await fs.readFile(
-      path.join(artifacts!.artifact_paths.raw_directory, `${offer.offerId}.json`),
+      productArtifacts!.artifact_paths.source_1688,
       'utf8',
     );
     expect(raw).not.toContain('must-not-be-saved');
@@ -165,64 +166,124 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
     expect(raw).not.toContain('password');
 
     const manifest = JSON.parse(
-      await fs.readFile(artifacts!.artifact_paths.manifest, 'utf8'),
+      await fs.readFile(productArtifacts!.artifact_paths.manifest, 'utf8'),
     ) as Record<string, unknown>;
     expect(manifest).toMatchObject({
-      command: 'source.normalize-v2',
-      schema_version: 2,
-      collection_method: 'offers',
-      total: 1,
-      success: 1,
-      failed: 0,
+      schema_version: 1,
+      offer_id: offer.offerId,
+      collection: {
+        command: 'source.normalize-v2',
+        method: 'offers',
+      },
+      stages: {
+        source_1688: 'completed',
+        canonical_v2: 'needs_review',
+        category_decision: 'not_started',
+        category_attributes: 'not_started',
+        ozon_draft: 'not_started',
+        ozon_upload: 'not_started',
+      },
     });
     expect(JSON.stringify(manifest)).not.toContain(input);
   });
 
-  it('creates collision-free run directories without overwriting', async () => {
+  it('reuses the offer workspace instead of creating duplicate run directories', async () => {
     const root = await tempRoot();
     const input = path.join(root, 'offer.json');
-    const saveDir = path.join(root, 'runs');
+    const productsDir = path.join(root, 'products');
     await writeJson(input, readFixture<OfferResult>('offer-result.json'));
 
-    const first = await normalizeV2Offline({ inputPath: input, saveDir });
-    const second = await normalizeV2Offline({ inputPath: input, saveDir });
+    const first = await normalizeV2Offline({ inputPath: input, productsDir });
+    const second = await normalizeV2Offline({ inputPath: input, productsDir });
 
-    expect(first.data?.artifacts?.run_directory).not.toBe(
-      second.data?.artifacts?.run_directory,
+    expect(first.data?.artifacts?.products[0]?.product_directory).toBe(
+      second.data?.artifacts?.products[0]?.product_directory,
     );
     await expect(
-      fs.stat(first.data!.artifacts!.run_directory),
+      fs.stat(first.data!.artifacts!.products[0]!.product_directory),
     ).resolves.toBeTruthy();
     await expect(
-      fs.stat(second.data!.artifacts!.run_directory),
-    ).resolves.toBeTruthy();
+      fs
+        .readdir(first.data!.artifacts!.products[0]!.product_directory)
+        .then((entries) => entries.sort()),
+    ).resolves.toEqual([
+      '1688_data',
+      '1688_data_v2',
+      'manifest.json',
+      'ozon_draft',
+      'ozon_upload',
+    ]);
   });
 
-  it('writes the complete offline command result to --output', async () => {
+  it('writes each product in a batch to its own offer ID workspace', async () => {
     const root = await tempRoot();
-    const input = path.join(root, 'offer.json');
-    const output = path.join(root, 'out', 'result.json');
-    await writeJson(input, readFixture<OfferResult>('offer-result.json'));
-
-    const result = await normalizeV2Offline({ inputPath: input, outputPath: output });
-    const written = JSON.parse(await fs.readFile(output, 'utf8')) as {
-      ok: boolean;
-      data: { schema_version: number };
+    const input = path.join(root, 'batch.json');
+    const productsDir = path.join(root, 'products');
+    const first = readFixture<OfferResult>('offer-result.json');
+    const second = { ...structuredClone(first), offerId: '123456790' };
+    const batch: OfferBatchResult = {
+      mode: 'offers',
+      total: 2,
+      success: 2,
+      failed: 0,
+      offerIds: [first.offerId, second.offerId],
+      offers: [first, second],
+      failures: [],
     };
+    await writeJson(input, batch);
+
+    const result = await normalizeV2Offline({ inputPath: input, productsDir });
 
     expect(result.ok).toBe(true);
-    expect(written.ok).toBe(true);
-    expect(written.data.schema_version).toBe(2);
+    expect(result.data?.artifacts?.products.map((item) => item.offer_id)).toEqual([
+      '123456789',
+      '123456790',
+    ]);
+    await expect(fs.stat(path.join(productsDir, '123456789'))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(productsDir, '123456790'))).resolves.toBeTruthy();
+  });
+
+  it('replaces a prior source failure when the same offer later succeeds', async () => {
+    const root = await tempRoot();
+    const productsDir = path.join(root, 'products');
+    const failedInput = path.join(root, 'failed.json');
+    const successfulInput = path.join(root, 'offer.json');
+    const offer = readFixture<OfferResult>('offer-result.json');
+    const failedBatch: OfferBatchResult = {
+      mode: 'offers',
+      total: 1,
+      success: 0,
+      failed: 1,
+      offerIds: [offer.offerId],
+      offers: [],
+      failures: [
+        {
+          offerId: offer.offerId,
+          code: 'DEEP_COLLECT_FAILED',
+          message: 'temporary failure',
+        },
+      ],
+    };
+    await writeJson(failedInput, failedBatch);
+    await writeJson(successfulInput, offer);
+
+    const failed = await normalizeV2Offline({ inputPath: failedInput, productsDir });
+    const failurePath = failed.data!.artifacts!.failures[0]!.source_failure;
+    await expect(fs.stat(failurePath)).resolves.toBeTruthy();
+
+    const succeeded = await normalizeV2Offline({ inputPath: successfulInput, productsDir });
+    expect(succeeded.ok).toBe(true);
+    await expect(fs.stat(failurePath)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('reports ARTIFACT_WRITE_FAILED instead of pretending save success', async () => {
     const root = await tempRoot();
     const input = path.join(root, 'offer.json');
-    const saveDir = path.join(root, 'not-a-directory');
+    const productsDir = path.join(root, 'not-a-directory');
     await writeJson(input, readFixture<OfferResult>('offer-result.json'));
-    await fs.writeFile(saveDir, 'file', 'utf8');
+    await fs.writeFile(productsDir, 'file', 'utf8');
 
-    const result = await normalizeV2Offline({ inputPath: input, saveDir });
+    const result = await normalizeV2Offline({ inputPath: input, productsDir });
 
     expect(result.ok).toBe(false);
     expect(result.data?.items).toHaveLength(1);

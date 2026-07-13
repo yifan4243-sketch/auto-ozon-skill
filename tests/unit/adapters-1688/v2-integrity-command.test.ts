@@ -57,19 +57,19 @@ afterEach(async () => {
 
 describe('V2 integrity command failure semantics', () => {
   it('returns V2_INTEGRITY_FAILED and still saves diagnostic artifacts', async () => {
-    const saveDir = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-integrity-'));
-    roots.push(saveDir);
+    const productsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-integrity-'));
+    roots.push(productsDir);
 
     const result = await get1688OffersV2({
       offerIds: ['123456789'],
-      saveDir,
+      productsDir,
     });
 
     expect(result.ok).toBe(false);
     expect(result.errors).toMatchObject([{ code: 'V2_INTEGRITY_FAILED' }]);
     expect(result.data?.integrity_report.status).toBe('fail');
     await expect(
-      fs.stat(result.data!.artifacts!.artifact_paths.integrity_report),
+      fs.stat(result.data!.artifacts!.products[0]!.artifact_paths.integrity_report),
     ).resolves.toBeTruthy();
   });
 

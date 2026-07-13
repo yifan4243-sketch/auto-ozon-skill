@@ -14,7 +14,6 @@ export interface WarningObject {
 export interface CommandResult<T = unknown> {
   ok: boolean;
   command: string;
-  runId?: string;
   data?: T;
   warnings: WarningObject[];
   errors: ErrorObject[];

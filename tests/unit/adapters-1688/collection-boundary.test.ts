@@ -129,16 +129,16 @@ describe('1688 retained-facts collection boundary', () => {
       inputPath: fixturePath,
       method: 'keyword',
       searchTerm: '修枝剪',
-      saveDir: root,
+      productsDir: root,
     });
 
     expect(result.ok).toBe(true);
     expectNoDeprecatedKeys(result.data);
-    const rawDirectory = result.data!.artifacts!.artifact_paths.raw_directory;
-    const rawFiles = await fs.readdir(rawDirectory);
-    expect(rawFiles).toHaveLength(1);
     const rawArtifact = JSON.parse(
-      await fs.readFile(path.join(rawDirectory, rawFiles[0]!), 'utf8'),
+      await fs.readFile(
+        result.data!.artifacts!.products[0]!.artifact_paths.source_1688,
+        'utf8',
+      ),
     ) as unknown;
     expectNoDeprecatedKeys(rawArtifact);
     expect(rawArtifact).toMatchObject({

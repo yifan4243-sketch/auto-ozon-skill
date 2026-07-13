@@ -66,7 +66,7 @@ export interface SimilarInput {
 }
 
 export interface CanonicalV2RunInput {
-  saveDir?: string;
+  productsDir?: string;
 }
 
 export interface SearchKeywordV2Input extends SearchKeywordInput, CanonicalV2RunInput {}
@@ -126,7 +126,7 @@ export async function search1688ByKeywordV2(
     return finalizeCanonicalV2Run(run, {
       command: 'source.keyword',
       discoveryContext: { searchTerm: input.keyword, seedOfferId: null },
-      saveDir: input.saveDir,
+      productsDir: input.productsDir,
     });
   });
 }
@@ -146,7 +146,7 @@ export async function search1688ByImageV2(
     finalizeCanonicalV2Run(await collectImageSource(input), {
       command: 'source.image',
       discoveryContext: { searchTerm: null, seedOfferId: null },
-      saveDir: input.saveDir,
+      productsDir: input.productsDir,
     }),
   );
 }
@@ -166,7 +166,7 @@ export async function get1688OffersV2(
     finalizeCanonicalV2Run(await collectOffersSource(input), {
       command: 'source.offers',
       discoveryContext: { searchTerm: null, seedOfferId: null },
-      saveDir: input.saveDir,
+      productsDir: input.productsDir,
     }),
   );
 }
@@ -186,7 +186,7 @@ export async function get1688SimilarV2(
     finalizeCanonicalV2Run(await collectSimilarSource(input), {
       command: 'source.similar',
       discoveryContext: { searchTerm: null, seedOfferId: input.offerId },
-      saveDir: input.saveDir,
+      productsDir: input.productsDir,
     }),
   );
 }

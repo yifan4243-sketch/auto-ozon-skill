@@ -196,7 +196,7 @@ describe('CanonicalProductV2 sourcing runtime', () => {
     expect(parseSchemaVersion('2')).toBe(2);
   });
 
-  it('rejects --save-dir on the V1 collection path before collection', async () => {
+  it('rejects --products-dir on the V1 collection path before collection', async () => {
     await expect(
       buildProgram().parseAsync([
         'node',
@@ -204,8 +204,8 @@ describe('CanonicalProductV2 sourcing runtime', () => {
         'source',
         'offers',
         '123456789',
-        '--save-dir',
-        'tmp/run',
+        '--products-dir',
+        'tmp/products',
       ]),
     ).rejects.toMatchObject({ code: 'BAD_INPUT' });
     expect(dispatchMock).not.toHaveBeenCalled();

@@ -105,7 +105,6 @@ export interface GetCategoryAttributesOptions {
   categoryName?: string;
   typeName?: string;
   categoryPathZh?: string[];
-  forceRefresh?: boolean;
 }
 
 export type OzonCommandResult<T = unknown> = CommandResult<T>;

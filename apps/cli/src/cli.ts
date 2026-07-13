@@ -143,10 +143,10 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .option('--schema-version <1|2>', 'Canonical product schema version', '1')
-    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
+    .option('--products-dir <directory>', 'Save each product under <directory>/<offer_id>')
     .action(async (keyword, opts) => {
       const schemaVersion = parseSchemaVersion(opts.schemaVersion);
-      validateSaveDir(schemaVersion, opts.saveDir);
+      validateProductsDir(schemaVersion, opts.productsDir);
       const input = {
         keyword,
         max: parseNumber(opts.max),
@@ -161,7 +161,7 @@ export function buildProgram(): Command {
       };
       const result =
         schemaVersion === 2
-          ? await search1688ByKeywordV2({ ...input, saveDir: opts.saveDir })
+          ? await search1688ByKeywordV2({ ...input, productsDir: opts.productsDir })
           : await search1688ByKeyword(input);
       emitCommandResult(result);
     });
@@ -174,10 +174,10 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .option('--schema-version <1|2>', 'Canonical product schema version', '1')
-    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
+    .option('--products-dir <directory>', 'Save each product under <directory>/<offer_id>')
     .action(async (imagePath, opts) => {
       const schemaVersion = parseSchemaVersion(opts.schemaVersion);
-      validateSaveDir(schemaVersion, opts.saveDir);
+      validateProductsDir(schemaVersion, opts.productsDir);
       const input = {
         imagePath,
         max: parseNumber(opts.max),
@@ -186,7 +186,7 @@ export function buildProgram(): Command {
       };
       emitCommandResult(
         schemaVersion === 2
-          ? await search1688ByImageV2({ ...input, saveDir: opts.saveDir })
+          ? await search1688ByImageV2({ ...input, productsDir: opts.productsDir })
           : await search1688ByImage(input),
       );
     });
@@ -198,10 +198,10 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .option('--schema-version <1|2>', 'Canonical product schema version', '1')
-    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
+    .option('--products-dir <directory>', 'Save each product under <directory>/<offer_id>')
     .action(async (offerIds: string[], opts) => {
       const schemaVersion = parseSchemaVersion(opts.schemaVersion);
-      validateSaveDir(schemaVersion, opts.saveDir);
+      validateProductsDir(schemaVersion, opts.productsDir);
       const input = {
         offerIds,
         profile: opts.profile,
@@ -209,7 +209,7 @@ export function buildProgram(): Command {
       };
       emitCommandResult(
         schemaVersion === 2
-          ? await get1688OffersV2({ ...input, saveDir: opts.saveDir })
+          ? await get1688OffersV2({ ...input, productsDir: opts.productsDir })
           : await get1688Offers(input),
       );
     });
@@ -222,10 +222,10 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .option('--schema-version <1|2>', 'Canonical product schema version', '1')
-    .option('--save-dir <directory>', 'Save an auditable CanonicalProductV2 run')
+    .option('--products-dir <directory>', 'Save each product under <directory>/<offer_id>')
     .action(async (offerId, opts) => {
       const schemaVersion = parseSchemaVersion(opts.schemaVersion);
-      validateSaveDir(schemaVersion, opts.saveDir);
+      validateProductsDir(schemaVersion, opts.productsDir);
       const input = {
         offerId,
         max: parseNumber(opts.max),
@@ -234,7 +234,7 @@ export function buildProgram(): Command {
       };
       emitCommandResult(
         schemaVersion === 2
-          ? await get1688SimilarV2({ ...input, saveDir: opts.saveDir })
+          ? await get1688SimilarV2({ ...input, productsDir: opts.productsDir })
           : await get1688Similar(input),
       );
     });
@@ -246,8 +246,7 @@ export function buildProgram(): Command {
     .option('--method <method>', 'keyword | image | offers | similar', 'offers')
     .option('--search-term <text>', 'Discovery search term to preserve')
     .option('--seed-offer-id <id>', 'Discovery seed offer ID to preserve')
-    .option('--output <path>', 'Write the complete command result JSON')
-    .option('--save-dir <directory>', 'Save a standard auditable V2 run')
+    .option('--products-dir <directory>', 'Save each product under <directory>/<offer_id>')
     .action(async (opts) => {
       emitCommandResult(
         await normalizeV2Offline({
@@ -255,8 +254,7 @@ export function buildProgram(): Command {
           method: parseCollectionMethod(opts.method),
           searchTerm: opts.searchTerm,
           seedOfferId: opts.seedOfferId,
-          outputPath: opts.output,
-          saveDir: opts.saveDir,
+          productsDir: opts.productsDir,
         }),
       );
     });
@@ -327,7 +325,7 @@ function registerWorkflowCommands(
     .option('--max <n>', 'Maximum products to source', '1')
     .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
     .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON file')
-    .option('--refresh', 'Force refresh, bypass category attributes cache')
+    .option('--products-dir <directory>', 'Product workspace root', 'data/products')
     .action(async (keyword, opts) => {
       emitCommandResult(
         await runCategoryInspect({
@@ -335,7 +333,7 @@ function registerWorkflowCommands(
           max: parseNumber(opts.max) ?? 1,
           skuMax: parseSkuMax(opts.skuMax),
           decisionFile: opts.decisionFile,
-          forceRefresh: opts.refresh === true,
+          productsDir: opts.productsDir,
         }),
       );
     });
@@ -364,7 +362,7 @@ function printCommandResult(result: CommandResult<unknown>): void {
           unparsed_spec_sku_count: number;
         };
         integrity_report?: { status: string };
-        artifacts?: { run_directory: string } | null;
+        artifacts?: { products_root: string } | null;
       }
     | undefined;
   if (data?.schema_version === 2 && data.summary && data.integrity_report) {
@@ -408,7 +406,7 @@ export function formatCanonicalV2HumanSummary(
       unparsed_spec_sku_count: number;
     };
     integrity_report: { status: string };
-    artifacts?: { run_directory: string } | null;
+    artifacts?: { products_root: string } | null;
   },
 ): string {
     const status = data.summary.validation_status_counts;
@@ -428,7 +426,7 @@ export function formatCanonicalV2HumanSummary(
       `missing weights: ${data.summary.missing_weight_sku_count}\n` +
       `unparsed specs: ${data.summary.unparsed_spec_sku_count}\n` +
       `integrity: ${data.integrity_report.status}\n` +
-      (data.artifacts ? `artifacts: ${data.artifacts.run_directory}\n` : '')
+      (data.artifacts ? `products: ${data.artifacts.products_root}\n` : '')
     );
 }
 
@@ -440,15 +438,15 @@ export function parseSchemaVersion(raw: string | undefined): ProductSchemaVersio
   throw new CliError(2, 'BAD_INPUT', '--schema-version must be exactly 1 or 2.');
 }
 
-function validateSaveDir(
+function validateProductsDir(
   schemaVersion: ProductSchemaVersion,
-  saveDir: string | undefined,
+  productsDir: string | undefined,
 ): void {
-  if (saveDir && schemaVersion !== 2) {
+  if (productsDir && schemaVersion !== 2) {
     throw new CliError(
       2,
       'BAD_INPUT',
-      '--save-dir requires --schema-version 2 for source collection commands.',
+      '--products-dir requires --schema-version 2 for source collection commands.',
     );
   }
 }

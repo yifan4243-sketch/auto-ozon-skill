@@ -8,6 +8,13 @@ import { FileDecisionProvider } from './category-decision-provider.js';
 import { validateCategoryDecisionSchema } from '../../../../packages/category-intelligence/src/category-decision-schema.js';
 import { loadOzonCategoryIndex } from '../../../../packages/category-intelligence/src/ozon-category-tree.js';
 import { validateCategoryDecision } from '../../../../packages/category-intelligence/src/category-decision-validator.js';
+import {
+  resolveProductsRoot,
+} from '../../../../packages/core/src/product-workspace.js';
+import {
+  saveCategoryAttributesSnapshot,
+  saveCategoryDecisionSnapshot,
+} from '../../../../packages/publishing/src/draft-store.js';
 
 export interface CategoryInspectOptions {
   keyword: string;
@@ -15,7 +22,7 @@ export interface CategoryInspectOptions {
   skuMax?: number;
   decisionFile?: string;
   decisionProvider?: CategoryDecisionProvider;
-  forceRefresh?: boolean;
+  productsDir?: string;
 }
 
 export interface CategoryAttributesGroupResultV1 {
@@ -33,6 +40,7 @@ export interface CategoryInspectResult {
 export async function runCategoryInspect(
   options: CategoryInspectOptions,
 ): Promise<CommandResult<CategoryInspectResult>> {
+  const productsDir = resolveProductsRoot(options.productsDir);
   // Only single product supported in V0
   if (options.max !== 1) {
     return {
@@ -56,6 +64,7 @@ export async function runCategoryInspect(
     max: options.max,
     skuMax: options.skuMax,
     sort: 'relevance',
+    productsDir,
   });
 
   if (!sourceResult.ok) {
@@ -198,6 +207,13 @@ export async function runCategoryInspect(
     };
   }
 
+  const sourceOfferId = decision.source_offer_id;
+  try {
+    await saveCategoryDecisionSnapshot({ offerId: sourceOfferId, productsDir }, decision);
+  } catch (error) {
+    return productWorkspaceWriteFailure(sourceData, decision, error);
+  }
+
   // Step 3: Collect unique category pairs from all decided groups, preserving group_ids
   const decidedGroups = decision.category_groups.filter((g) => g.selected_category !== null);
   if (!decidedGroups.length) {
@@ -240,7 +256,6 @@ export async function runCategoryInspect(
       categoryName: selection.description_category_name,
       typeName: selection.type_name,
       categoryPathZh: selection.category_path_zh,
-      forceRefresh: options.forceRefresh,
     });
 
     if (!attrsResult.ok) {
@@ -255,6 +270,19 @@ export async function runCategoryInspect(
   }
 
   if (errors.length > 0) {
+    try {
+      await saveCategoryAttributesSnapshot(
+        { offerId: sourceOfferId, productsDir },
+        results,
+        'failed',
+      );
+    } catch (error) {
+      errors.push({
+        code: 'PRODUCT_WORKSPACE_WRITE_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        recoverable: false,
+      });
+    }
     return {
       ok: false,
       command: 'workflow.category.inspect',
@@ -269,6 +297,16 @@ export async function runCategoryInspect(
     };
   }
 
+
+  try {
+    await saveCategoryAttributesSnapshot(
+      { offerId: sourceOfferId, productsDir },
+      results,
+    );
+  } catch (error) {
+    return productWorkspaceWriteFailure(sourceData, decision, error);
+  }
+
   return {
     ok: true,
     command: 'workflow.category.inspect',
@@ -279,6 +317,27 @@ export async function runCategoryInspect(
     },
     warnings: [],
     errors: [],
+    nextActions: [],
+  };
+}
+
+function productWorkspaceWriteFailure(
+  source: unknown,
+  decision: CategoryDecisionV1,
+  error: unknown,
+): CommandResult<CategoryInspectResult> {
+  return {
+    ok: false,
+    command: 'workflow.category.inspect',
+    data: { source, category_decision: decision },
+    warnings: [],
+    errors: [
+      {
+        code: 'PRODUCT_WORKSPACE_WRITE_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        recoverable: false,
+      },
+    ],
     nextActions: [],
   };
 }
