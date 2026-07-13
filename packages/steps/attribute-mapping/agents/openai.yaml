@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ozon Attribute Mapping"
+  short_description: "Map shared and variant facts to Ozon attributes"
+  default_prompt: "Use $attribute-mapping to map canonical product facts into validated common and per-SKU Ozon attributes."

@@ -6,9 +6,11 @@ import type {
   CanonicalProductV2,
   CategoryDecisionV1,
 } from '../../contracts/src/index.js';
-import { validateCategoryDecisionSchema } from './category-decision-schema.js';
-import { validateCategoryDecision } from './category-decision-validator.js';
-import { loadOzonCategoryIndex } from './ozon-category-tree.js';
+import {
+  loadOzonCategoryIndex,
+  validateCategoryDecision,
+  validateCategoryDecisionSchema,
+} from '../../steps/category-decision/src/index.js';
 
 const [command, ...rest] = process.argv.slice(2);
 const { values } = parseArgs({

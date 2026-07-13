@@ -7,3 +7,5 @@ export * from './sourcing-result-v2.js';
 export * from './category-decision.js';
 export * from './category-attributes.js';
 export * from './ozon-product-draft.js';
+export * from './workflow-run.js';
+export * from './attribute-mapping.js';

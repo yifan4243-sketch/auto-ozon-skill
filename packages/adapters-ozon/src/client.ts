@@ -1,4 +1,4 @@
-export { getCategoryAttributes } from './category/category-attributes.js';
+export * from './category/category-attributes-transport.js';
 export { ozonDoctor } from './commands/doctor.js';
 export { ozonSearchMethods, ozonDescribeMethod } from './commands/methods.js';
 export {

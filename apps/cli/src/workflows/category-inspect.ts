@@ -1,13 +1,15 @@
 import { search1688ByKeywordV2 } from '../../../../packages/adapters-1688/src/client.js';
-import { getCategoryAttributes } from '../../../../packages/adapters-ozon/src/category/category-attributes.js';
+import { runCategoryAttributes } from '@auto-ozon/step-category-attributes';
 import type { CategoryDecisionV1, OzonCategorySelectionV1 } from '../../../../packages/contracts/src/category-decision.js';
 import type { CategoryAttributesV1 } from '../../../../packages/contracts/src/category-attributes.js';
 import type { CommandResult } from '../../../../packages/contracts/src/command-result.js';
-import type { CategoryDecisionProvider } from './category-decision-provider.js';
-import { FileDecisionProvider } from './category-decision-provider.js';
-import { validateCategoryDecisionSchema } from '../../../../packages/category-intelligence/src/category-decision-schema.js';
-import { loadOzonCategoryIndex } from '../../../../packages/category-intelligence/src/ozon-category-tree.js';
-import { validateCategoryDecision } from '../../../../packages/category-intelligence/src/category-decision-validator.js';
+import {
+  FileDecisionProvider,
+  loadOzonCategoryIndex,
+  validateCategoryDecision,
+  validateCategoryDecisionSchema,
+  type CategoryDecisionProvider,
+} from '@auto-ozon/step-category-decision';
 import {
   resolveProductsRoot,
 } from '../../../../packages/core/src/product-workspace.js';
@@ -250,22 +252,23 @@ export async function runCategoryInspect(
   const results: CategoryAttributesGroupResultV1[] = [];
 
   for (const [, { selection, groupIds }] of pairMap) {
-    const attrsResult = await getCategoryAttributes({
-      descriptionCategoryId: selection.description_category_id,
-      typeId: selection.type_id,
-      categoryName: selection.description_category_name,
-      typeName: selection.type_name,
-      categoryPathZh: selection.category_path_zh,
+    const attrsResult = await runCategoryAttributes({
+      selections: [{
+        group_ids: groupIds,
+        category: {
+          descriptionCategoryId: selection.description_category_id,
+          typeId: selection.type_id,
+          categoryName: selection.description_category_name,
+          typeName: selection.type_name,
+          categoryPathZh: selection.category_path_zh,
+        },
+      }],
     });
 
     if (!attrsResult.ok) {
       errors.push(...attrsResult.errors);
-    } else if (attrsResult.data) {
-      results.push({
-        group_ids: groupIds,
-        category: selection,
-        attributes_schema: attrsResult.data,
-      });
+    } else if (attrsResult.data?.[0]) {
+      results.push(attrsResult.data[0]);
     }
   }
 

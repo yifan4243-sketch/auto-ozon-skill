@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   CanonicalProductV2,
   CategoryDecisionV1,
-} from '../../../packages/contracts/src/index.js';
+} from '../../../../packages/contracts/src/index.js';
 import {
   flattenOzonCategoryTree,
   getOzonCategoryTreeStats,
@@ -14,12 +14,14 @@ import {
   validateCategoryDecision,
   validateCategoryDecisionSchema,
   validateOzonCategoryPair,
+  runCategoryDecision,
+  AgentDecisionProvider,
   type OzonCategoryTreeDocument,
-} from '../../../packages/category-intelligence/src/index.js';
+} from '../../../../packages/steps/category-decision/src/index.js';
 
 const skillRoot = fileURLToPath(
   new URL(
-    '../../../packages/category-intelligence/skills/ozon-category-decision/',
+    '../../../../packages/steps/category-decision/',
     import.meta.url,
   ),
 );
@@ -146,6 +148,33 @@ describe('CategoryDecisionV1 examples and validation', () => {
     );
     expect(codes).toContain('BLOCKED_SOURCE_PRODUCT');
     expect(codes).toContain('UNASSIGNED_SKUS_REQUIRE_BLOCKED');
+  });
+
+  it('exposes one service entry for provider-driven decisions', async () => {
+    const input = readJson('examples/mixed-product.input.json') as CanonicalProductV2;
+    const output = readJson('examples/mixed-product.output.json') as CategoryDecisionV1;
+    const result = await runCategoryDecision({
+      product: input,
+      provider: new AgentDecisionProvider(async () => structuredClone(output)),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.command).toBe('category.decision');
+    expect(result.data).toEqual(output);
+  });
+
+  it('blocks invalid provider output at the public service boundary', async () => {
+    const input = readJson('examples/normal-variants.input.json') as CanonicalProductV2;
+    const output = readJson('examples/normal-variants.output.json') as CategoryDecisionV1;
+    output.category_groups[0]!.selected_category!.type_id = 1;
+
+    const result = await runCategoryDecision({
+      product: input,
+      provider: new AgentDecisionProvider(async () => output),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]?.code).toBe('CATEGORY_DECISION_VALIDATION_FAILED');
   });
 });
 

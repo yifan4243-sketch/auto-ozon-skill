@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "baseline_tag": "refactor-baseline-20260713",
+  "offer_id": "979376199787",
+  "artifact_sha256": {
+    "1688_data/source.json": "ADFC781BC77F21631D1E9105CADAFC2C265977860258B4BE10CDFDCEBCE33DA9",
+    "1688_data_v2/product.json": "6CDA9D630833230BEF54B29FC803E6EC917A2E3A8A4EFBD93F19BE308A94B739",
+    "1688_data_v2/integrity-report.json": "E2BB4CC67263AB6CC67BDF1391CC4703D87170712256BC932A1C74FBCCD00391",
+    "ozon_draft/category_decision.json": "D8E9E9C432ED2D4FC4596910540B43873BDA1860B2F1671791A7E89E443E8E77",
+    "ozon_draft/category_attributes.json": "E185DFF398CE3EFF10CADA29AEE9A41181AF1DEA3B6E5C3A4530BC39A37B0465"
+  },
+  "category_tree_cli_snapshot": {
+    "root_count": 26,
+    "description_category_count": 568,
+    "type_count": 7424,
+    "disabled_description_category_count": 0,
+    "disabled_type_count": 0
+  },
+  "ozon_swagger_cli_snapshot": {
+    "seller": {
+      "version": 2.1,
+      "method_count": 420,
+      "sha256": "c54962e9481ac776e14c0fe4f987e0ff74fde68a793e6b640f70db6cdaabdba5"
+    },
+    "performance": {
+      "version": "2.0",
+      "method_count": 46,
+      "sha256": "27ad70709fdcc6323c4ba9d7d9af20e21a39397023e2776a6c171ab08aa05a06"
+    }
+  }
+}

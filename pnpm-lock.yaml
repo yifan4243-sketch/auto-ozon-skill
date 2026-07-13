@@ -29,6 +29,12 @@ importers:
 
   apps/cli:
     dependencies:
+      '@auto-ozon/step-category-attributes':
+        specifier: workspace:*
+        version: link:../../packages/steps/category-attributes
+      '@auto-ozon/step-category-decision':
+        specifier: workspace:*
+        version: link:../../packages/steps/category-decision
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -68,8 +74,17 @@ importers:
 
   packages/analytics: {}
 
+  packages/artifact-store:
+    dependencies:
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/category-intelligence:
     dependencies:
+      '@auto-ozon/step-category-decision':
+        specifier: workspace:*
+        version: link:../steps/category-decision
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -88,7 +103,52 @@ importers:
 
   packages/publishing: {}
 
+  packages/steps/attribute-mapping:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+
+  packages/steps/category-attributes:
+    dependencies:
+      '@auto-ozon/adapters-ozon':
+        specifier: workspace:*
+        version: link:../../adapters-ozon
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+
+  packages/steps/category-decision:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+
   packages/transformer: {}
+
+  packages/workflows:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
 packages:
 
