@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://auto-ozon.local/schemas/category-attributes-groups-v1.json","type":"array","items":{"type":"object","required":["group_ids","category","attributes_schema"]}}

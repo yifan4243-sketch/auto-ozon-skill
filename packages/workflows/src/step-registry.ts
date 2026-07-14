@@ -7,6 +7,8 @@ export const LISTING_PREPARATION_ORDER: readonly WorkflowStepName[] = [
   'category-attributes',
   'attribute-mapping',
   'draft-generation',
+  'listing-payload',
+  'ozon-publish',
 ];
 
 export function shouldRunStep(

@@ -5,13 +5,12 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "scripts": {
-    "build": "tsc -p ../../tsconfig.base.json"
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@auto-ozon/step-draft-generation": "workspace:*"
+    "@auto-ozon/step-draft-generation": "workspace:*",
+    "@auto-ozon/step-canonicalize-product": "workspace:*"
   }
 }

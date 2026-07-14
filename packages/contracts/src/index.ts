@@ -9,3 +9,4 @@ export * from './category-attributes.js';
 export * from './ozon-product-draft.js';
 export * from './workflow-run.js';
 export * from './attribute-mapping.js';
+export * from './listing-publication.js';

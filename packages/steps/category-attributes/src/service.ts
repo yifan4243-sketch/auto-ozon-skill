@@ -1,12 +1,13 @@
 import type {
   CategoryAttributesGroupV1,
   CategoryAttributesV1,
+  CategoryAttributesCacheEnvelopeV1,
   CategoryDecisionV1,
   CommandResult,
   OzonCategorySelectionV1,
 } from '@auto-ozon/contracts';
 import type { WorkflowContext } from '@auto-ozon/artifact-store';
-import { assertWorkflowActive } from '@auto-ozon/artifact-store';
+import { assertWorkflowActive, sha256Json } from '@auto-ozon/artifact-store';
 import {
   OzonCategoryTransportError,
   withOzonCategoryAttributesTransport,
@@ -14,6 +15,8 @@ import {
 } from '@auto-ozon/adapters-ozon';
 import { fetchAllAttributeValues } from './dictionary-fetcher.js';
 import { normalizeCategoryAttributes } from './normalizer.js';
+
+const SOURCE_SNAPSHOT_SHA256 = 'c54962e9481ac776e14c0fe4f987e0ff74fde68a793e6b640f70db6cdaabdba5';
 
 export interface CategoryAttributesSelectionInput {
   descriptionCategoryId: number;
@@ -53,17 +56,28 @@ export async function runCategoryAttributes(
       const groups: CategoryAttributesGroupV1[] = [];
       for (const selection of selections) {
         const cacheKey = `${selection.category.descriptionCategoryId}-${selection.category.typeId}`;
-        let schema =
+        const cached =
           !effectiveForceRefresh(input, context) && context
-            ? await context.artifact_store.readCache<CategoryAttributesV1>(
+            ? await context.artifact_store.readCache<CategoryAttributesCacheEnvelopeV1>(
                 'category-attributes',
                 cacheKey,
               )
             : null;
+        let schema = validCache(cached, selection.category) ? cached.payload : null;
         if (!schema) {
           schema = await fetchOne(transport, selection.category);
           if (context) {
-            await context.artifact_store.writeCache('category-attributes', cacheKey, schema);
+            await context.artifact_store.writeCache('category-attributes', cacheKey, {
+              schema_version: 1,
+              namespace: 'category-attributes',
+              description_category_id: selection.category.descriptionCategoryId,
+              type_id: selection.category.typeId,
+              language: 'ZH_HANS',
+              fetched_at: schema.fetched_at,
+              source_snapshot_sha256: SOURCE_SNAPSHOT_SHA256,
+              payload_sha256: sha256Json(schema),
+              payload: schema,
+            } satisfies CategoryAttributesCacheEnvelopeV1);
           }
         }
         const category = toSelection(selection.category);
@@ -114,6 +128,17 @@ export async function runCategoryAttributes(
       transportError?.recoverable ?? true,
     );
   }
+}
+
+function validCache(
+  value: CategoryAttributesCacheEnvelopeV1 | null,
+  selection: CategoryAttributesSelectionInput,
+): value is CategoryAttributesCacheEnvelopeV1 {
+  return Boolean(value && value.schema_version === 1 && value.namespace === 'category-attributes' &&
+    value.description_category_id === selection.descriptionCategoryId && value.type_id === selection.typeId &&
+    value.language === 'ZH_HANS' && value.source_snapshot_sha256 === SOURCE_SNAPSHOT_SHA256 &&
+    value.payload.schema_version === 1 && value.payload.category.description_category_id === selection.descriptionCategoryId &&
+    value.payload.category.type_id === selection.typeId && value.payload_sha256 === sha256Json(value.payload));
 }
 
 async function fetchOne(

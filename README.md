@@ -1,8 +1,10 @@
 # auto-ozon-skill
 
-TypeScript monorepo for Ozon seller automation. The implemented foundation
-includes a vertical, resumable 1688-to-Ozon listing-preparation workflow and a
-complete TypeScript bridge to `PCDCK/ozon-mcp`.
+Industrial TypeScript Skill for an Agent-driven, resumable 1688-to-Ozon
+publication workflow. The repository supplies prompts, JSON contracts,
+deterministic validators and Ozon adapters; the host Agent supplies semantic
+reasoning with its own LLM. No model vendor SDK or model HTTP call belongs in
+this repository.
 
 ## 1688 sourcing
 
@@ -43,7 +45,10 @@ pnpm --filter @auto-ozon/cli dev -- ozon methods describe ProductAPI_ImportProdu
 pnpm --filter @auto-ozon/cli dev -- ozon methods examples ProductAPI_ImportProductsV3 --json --pretty
 ```
 
-The current Ozon integration phase is read-only. `ozon call` and `ozon fetch-all` describe the target method first and locally block `write` and `destructive` methods with `OZON_WRITE_BLOCKED`.
+The generic `ozon call` and `ozon fetch-all` bridge remains read-only and locally
+blocks `write` and `destructive` methods with `OZON_WRITE_BLOCKED`. Publication
+is isolated behind the strongly typed `listing-payload` and `ozon-publish`
+steps; it cannot be reached through the generic bridge.
 
 ## Commands
 
@@ -55,6 +60,7 @@ pnpm --filter @auto-ozon/cli dev -- source offers 123456789 987654321 --json
 pnpm --filter @auto-ozon/cli dev -- source similar 123456789 --json
 pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
 pnpm --filter @auto-ozon/cli dev -- workflow listing prepare "收纳盒" --stop-after attribute-mapping --json --pretty
+pnpm --filter @auto-ozon/cli dev -- workflow listing publish "收纳盒" --decision-file ./decision.json --attribute-agent-file ./attributes.json --draft-content-file ./copy.json --store-profile ./store-profile.json --json --pretty
 ```
 
 See `docs/COMMANDS.md` for the full CLI surface.
@@ -91,7 +97,7 @@ V2 preserves keyword/similar discovery context for category work. The category
 decision Skill uses the search term, Chinese title, 1688 Chinese category path,
 product attributes, and SKU specifications to match the saved Ozon Chinese
 category table. The resumable workflow then retrieves attributes and produces
-an independent AttributeMappingV1 before optional draft generation.
+an independent AttributeMappingV2 before validated draft and publication steps.
 Original brand attributes remain ordinary product attributes; ownership and
 authorization are not inferred. Prohibited-category and logistics restrictions
 remain later user-knowledge-base work.

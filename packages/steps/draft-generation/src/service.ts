@@ -1,8 +1,12 @@
 import type {
   AttributeMappingEvidenceV1,
+  AttributeMappingEvidenceV2,
   AttributeMappingProvenanceV1,
   AttributeMappingV1,
+  AttributeMappingV2,
+  CanonicalProductV2,
   CategoryAttributesGroupV1,
+  CategoryDecisionV1,
   CommandResult,
   OzonDraftAttributeV1,
   OzonDraftContentInputV1,
@@ -10,18 +14,74 @@ import type {
   OzonDraftSkuV1,
   OzonDraftValidationV1,
   OzonProductDraftV1,
+  OzonProductDraftV2,
 } from '@auto-ozon/contracts';
 import type { WorkflowContext } from '@auto-ozon/artifact-store';
 import { assertWorkflowActive } from '@auto-ozon/artifact-store';
 import { saveOzonDraftBundle } from '@auto-ozon/core';
+import { sha256Json } from '@auto-ozon/artifact-store';
 
 const CONTENT_ATTRIBUTE_IDS = new Set([4180, 4191, 23171]);
 
 export interface RunDraftGenerationInput {
-  attribute_mapping: AttributeMappingV1;
+  attribute_mapping: AttributeMappingV1 | AttributeMappingV2;
   category_attributes: CategoryAttributesGroupV1[];
   content: OzonDraftContentInputV1;
   products_dir?: string;
+}
+
+export interface RunDraftGenerationV2Input extends RunDraftGenerationInput {
+  product: CanonicalProductV2;
+  category_decision: CategoryDecisionV1;
+}
+
+export async function runDraftGenerationV2(
+  input: RunDraftGenerationV2Input,
+  context?: WorkflowContext,
+): Promise<CommandResult<OzonProductDraftV2>> {
+  const legacy = await runDraftGeneration(input, context);
+  if (!legacy.data) return { ...legacy, data: undefined };
+  const draft = legacy.data;
+  const errors = [...draft.errors];
+  const sourceSkuIds = [...input.product.skus.map((sku) => sku.source_sku_id)].sort();
+  const draftSkuIds = [...draft.items.map((item) => item.source_sku_id)].sort();
+  if (input.product.source.offer_id !== draft.source_offer_id ||
+      input.category_decision.source_offer_id !== draft.source_offer_id) {
+    errors.push({ code: 'UPSTREAM_OFFER_ID_MISMATCH', message: 'Draft upstream offer IDs differ.', sku_ids: [], attribute_ids: [] });
+  }
+  if (JSON.stringify(sourceSkuIds) !== JSON.stringify(draftSkuIds)) {
+    errors.push({ code: 'DRAFT_SKU_COVERAGE_MISMATCH', message: 'Draft does not cover every canonical SKU exactly once.', sku_ids: sourceSkuIds, attribute_ids: [] });
+  }
+  if (input.category_decision.status !== 'decided' || input.attribute_mapping.status !== 'completed') {
+    errors.push({ code: 'UPSTREAM_NOT_PUBLISHABLE', message: 'Category decision and attribute mapping must be fully completed.', sku_ids: [], attribute_ids: [] });
+  }
+  const publishReady = errors.length === 0 && draft.status === 'completed';
+  const v2: OzonProductDraftV2 = {
+    schema_version: 2,
+    source_offer_id: draft.source_offer_id,
+    status: errors.length > 0 ? 'blocked' : draft.status === 'needs_review' ? 'needs_review' : 'draft_complete',
+    publish_readiness: publishReady ? 'ready' : 'not_ready',
+    category_snapshot_sha256: Object.fromEntries(input.category_attributes.map((group) => [
+      group.group_ids.join(','), sha256Json(group.attributes_schema),
+    ])),
+    items: draft.items.map((item) => ({ ...item, publish_readiness: publishReady ? 'ready' : 'not_ready' })),
+    warnings: draft.warnings,
+    errors,
+  };
+  if (context) {
+    const output = await context.artifact_store.write(context.run_id, 'draft-generation', 'product-draft-v2.json', v2);
+    await context.artifact_store.updateStep(context.run_id, 'draft-generation', {
+      status: v2.status === 'draft_complete' ? 'succeeded' : v2.status,
+      output,
+      step_version: '2.0.0',
+    });
+  }
+  return {
+    ...legacy,
+    ok: v2.publish_readiness === 'ready',
+    data: v2,
+    errors: errors.map((error) => ({ code: error.code, message: error.message, detail: error, recoverable: true })),
+  };
 }
 
 export async function runDraftGeneration(
@@ -266,7 +326,14 @@ function mapProvenance(value: AttributeMappingProvenanceV1): OzonDraftAttributeV
   return value === 'agent_selected' ? 'derived' : value;
 }
 
-function mapEvidence(value: AttributeMappingEvidenceV1): OzonDraftAttributeV1['evidence'][number] {
+function mapEvidence(value: AttributeMappingEvidenceV1 | AttributeMappingEvidenceV2): OzonDraftAttributeV1['evidence'][number] {
+  if ('source_path' in value) {
+    return {
+      source: value.source === 'agent_input' ? 'agent_reasoning' : value.source,
+      field: value.source_path,
+      value: value.normalized_value,
+    };
+  }
   return {
     source: value.source === 'agent_input' ? 'agent_reasoning' : value.source,
     field: value.field,

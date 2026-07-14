@@ -1,0 +1,31 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/contracts" },
+    { "path": "packages/adapters-1688" },
+    { "path": "packages/adapters-ozon" },
+    { "path": "packages/artifact-store" },
+    { "path": "packages/core" },
+    { "path": "packages/config" },
+    { "path": "packages/ai" },
+    { "path": "packages/analytics" },
+    { "path": "packages/database" },
+    { "path": "packages/diagnostics" },
+    { "path": "packages/image-generation" },
+    { "path": "packages/steps/source-1688" },
+    { "path": "packages/steps/canonicalize-product" },
+    { "path": "packages/steps/category-decision" },
+    { "path": "packages/steps/category-attributes" },
+    { "path": "packages/steps/attribute-mapping" },
+    { "path": "packages/steps/draft-generation" },
+    { "path": "packages/steps/listing-payload" },
+    { "path": "packages/steps/ozon-publish" },
+    { "path": "packages/category-intelligence" },
+    { "path": "packages/transformer" },
+    { "path": "packages/publishing" },
+    { "path": "packages/workflows" },
+    { "path": "apps/cli" },
+    { "path": "apps/mcp-server" },
+    { "path": "apps/web-console" }
+  ]
+}

@@ -45,10 +45,10 @@ describe('runAttributeMapping', () => {
     expect(result.data?.status).toBe('completed');
     expect(result.data?.sku_attributes).toHaveLength(2);
     expect(result.data?.common_attributes.map((entry) => entry.attribute.attribute_id)).toEqual(
-      expect.arrayContaining([500, 8229]),
+      expect.arrayContaining([500, 4497, 8229]),
     );
     expect(result.data?.variant_attributes.map((entry) => entry.attribute_id)).toEqual(
-      expect.arrayContaining([10096, 4383, 4497]),
+      [10096],
     );
     expect(result.data?.missing_required_attributes).toEqual([]);
     expect(validateAttributeMappingSchema(result.data)).toEqual({ valid: true, errors: [] });
@@ -120,7 +120,7 @@ describe('runAttributeMapping', () => {
     )).toBe(true);
     expect((await store.readManifest('mapping-run'))?.steps['attribute-mapping']).toMatchObject({
       status: 'succeeded',
-      output: '05-attribute-mapping/attribute-mapping-v1.json',
+      output: '05-attribute-mapping/attempts/0001/attribute-mapping-v1.json',
     });
   });
 });
@@ -153,7 +153,7 @@ function inputFixture(): {
     },
     skus: [
       sku('red', '红色', 200),
-      sku('blue', '蓝色', 250),
+      sku('blue', '蓝色', 200),
     ],
     sku_analysis: {
       has_source_skus: true,
@@ -214,8 +214,8 @@ function inputFixture(): {
         attribute(10096, '颜色', true, 10, [
           { id: 1, value: '红色' },
           { id: 2, value: '蓝色' },
-        ]),
-        attribute(4383, '净重', true, 0, []),
+        ], true),
+        attribute(4383, '净重', false, 0, []),
         attribute(4497, '包装重量', true, 0, []),
         attribute(8229, '商品类型', true, 20, [{ id: 30, value: '茶杯' }]),
       ],
@@ -269,6 +269,7 @@ function attribute(
   required: boolean,
   dictionaryId: number,
   values: Array<{ id: number; value: string }>,
+  isAspect = false,
 ) {
   return {
     id,
@@ -277,7 +278,7 @@ function attribute(
     type: 'String',
     required,
     is_collection: false,
-    is_aspect: false,
+    is_aspect: isAspect,
     dictionary_id: dictionaryId,
     group_id: 1,
     group_name: '基本属性',

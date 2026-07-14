@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import type { CommandResult } from '@auto-ozon/contracts';
+import type { AttributeMappingAgentInputV1, OzonDraftContentInputV1 } from '@auto-ozon/contracts';
+import { HttpOzonSellerWriteTransport } from '@auto-ozon/adapters-ozon';
+import { loadStorePublishProfile, resolveOzonCredentials } from '@auto-ozon/config';
+import { FileArtifactStore } from '@auto-ozon/artifact-store';
 import {
   runOfflineNormalizeCommand,
   runListingPreparation,
@@ -375,6 +380,61 @@ function registerWorkflowCommands(
         }),
       );
     });
+
+  const registerPublishOptions = (command: Command) => command
+    .argument('<keyword>', '1688 keyword used when the source step must run')
+    .requiredOption('--decision-file <path>', 'Agent-produced CategoryDecisionV1 JSON')
+    .requiredOption('--attribute-agent-file <path>', 'Agent-produced semantic attribute selections JSON')
+    .requiredOption('--draft-content-file <path>', 'Agent-produced Russian copy JSON')
+    .requiredOption('--store-profile <path>', 'StorePublishProfileV1 JSON')
+    .option('--run-id <id>', 'Reuse a Manifest V2 run ID')
+    .option('--start-from <step>', 'First step to execute', 'source-1688')
+    .option('--force-step <steps...>', 'Refresh this step and all downstream steps')
+    .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
+    .option('--profile <name>', '1688 profile name')
+    .option('--headed', 'Open a browser window for manual verification');
+
+  const publishAction = async (keyword: string, opts: Record<string, any>) => {
+    const profile = await loadStorePublishProfile(opts.storeProfile);
+    const credentials = resolveOzonCredentials(profile.publishing.credentials_ref);
+    emitCommandResult(await runListingPreparation({
+      run_id: opts.runId,
+      source: { mode: 'keyword', keyword, max: 1, skuMax: parseSkuMax(opts.skuMax), profile: opts.profile, headed: opts.headed },
+      category_decision_file: opts.decisionFile,
+      attribute_mapping_agent_input: await readJson<AttributeMappingAgentInputV1>(opts.attributeAgentFile),
+      draft_content: await readJson<OzonDraftContentInputV1>(opts.draftContentFile),
+      publish_profile: profile,
+      ozon_write_transport: new HttpOzonSellerWriteTransport(credentials),
+      start_from: parseWorkflowStep(opts.startFrom),
+      stop_after: 'ozon-publish',
+      force_steps: (opts.forceStep ?? []).map(parseWorkflowStep),
+      stop_on_review: true,
+    }));
+  };
+
+  registerPublishOptions(listing.command('publish').description('Run all eight steps and publish directly to Ozon'))
+    .action(publishAction);
+  registerPublishOptions(listing.command('resume').description('Resume a Manifest V2 publication run'))
+    .action(async (keyword, opts) => {
+      if (!opts.runId) {
+        throw new CliError(2, 'BAD_INPUT', '--run-id is required for workflow listing resume');
+      }
+      await publishAction(keyword, opts);
+    });
+  listing.command('status')
+    .description('Read a Manifest V2 publication status without executing steps')
+    .requiredOption('--run-id <id>', 'Manifest V2 run ID')
+    .action(async (opts) => {
+      const manifest = await new FileArtifactStore().readManifest(opts.runId);
+      emitCommandResult({
+        ok: manifest !== null, command: 'workflow.listing.status', data: manifest ?? undefined,
+        warnings: [], errors: manifest ? [] : [{ code: 'RUN_NOT_FOUND', message: `Run ${opts.runId} was not found.`, recoverable: false }], nextActions: [],
+      });
+    });
+}
+
+async function readJson<T>(file: string): Promise<T> {
+  return JSON.parse(await fs.readFile(path.resolve(file), 'utf8')) as T;
 }
 
 function printCommandResult(result: CommandResult<unknown>): void {

@@ -10,9 +10,9 @@ bypass the snapshot.
 | 85 | Use a verified source brand only when its current dictionary value is known. Otherwise use `126745801` (no brand). Omit the no-brand phrase from the generated name. |
 | 4180 | Generate one Russian name per SKU and copy the exact value to the draft item's top-level `name`. |
 | 4191 | Generate a Russian factual description from retained 1688 facts only. |
-| 4383 | Fill net product weight in grams. The mapper keeps CanonicalProductV2 grams, converts its kilograms, and otherwise uses a positive Agent gram estimate marked `agent_estimated`. |
+| 4383 | Fill net product weight only from an explicit source net-weight fact. Package weight is not net weight, and the Agent must not estimate it. |
 | 4389 | Use a verified source country when its current dictionary value is known. Otherwise use `90296` (China). |
-| 4497 | Derive packaged weight as `4383 + 50` grams. Never ask the Agent to choose it independently. |
+| 4497 | Fill packaged weight from `CanonicalProductV2.skus[].package.raw_weight` only when the unit is known; convert kilograms to grams. Never derive it from net weight. |
 | 8229 | Always select one valid current dictionary value. A low-confidence closest match is allowed only with `needs_review`; never invent an ID. |
 | 8789 | Leave blank. |
 | 9024 | Leave blank in V0. This is a seller product code, not a shop Client ID or API key. |

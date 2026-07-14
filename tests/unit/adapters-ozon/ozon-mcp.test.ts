@@ -196,8 +196,10 @@ describe('ozon CLI registration', () => {
     expect(findCommand(program, 'ozon workflows get')).toBeDefined();
   });
 
-  it('does not expose write-operation command names in help', () => {
-    const help = collectHelp(buildProgram()).toLowerCase();
+  it('keeps the generic ozon bridge free of write-operation command names', () => {
+    const ozon = findCommand(buildProgram(), 'ozon');
+    expect(ozon).toBeDefined();
+    const help = collectHelp(ozon!).toLowerCase();
     for (const forbidden of ['publish', 'submit', 'price update', 'stock update', 'archive', 'delete']) {
       expect(help).not.toContain(forbidden);
     }

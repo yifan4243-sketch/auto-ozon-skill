@@ -1,19 +1,19 @@
 ---
 name: ozon-draft-generation
-description: Generate validated OzonProductDraftV1 from an existing AttributeMappingV1 plus Russian copy input. Use after factual Ozon attributes have already been mapped, when creating Russian names, descriptions, hashtags, per-SKU draft items, or the 06-draft artifact without uploading to Ozon.
+description: Generate validated OzonProductDraftV2 from an existing AttributeMappingV2 plus Russian copy input supplied by the host Agent. Use after factual Ozon attributes have already been mapped, when creating Russian names, descriptions, hashtags, per-SKU draft items, or the 06-draft artifact without uploading to Ozon.
 ---
 
 # Ozon Draft Generation
 
 Create an auditable draft without rematching source facts or calling an Ozon
-write API. `AttributeMappingV1` is the only source of factual Ozon attributes;
+write API. `AttributeMappingV2` is the only source of factual Ozon attributes;
 the Agent supplies Russian copy only.
 
 ## Workflow
 
 1. Read the run manifest and resolve:
    - `04-category-attributes/category-attributes-v1.json`
-   - `05-attribute-mapping/attribute-mapping-v1.json`
+   - `05-attribute-mapping/attribute-mapping-v2.json`
 2. Stop if attribute mapping is blocked or SKU coverage is incomplete.
 3. Read [copy-generation-rules.md](references/copy-generation-rules.md).
 4. Produce one copy input for every mapped `source_sku_id`:
@@ -21,13 +21,13 @@ the Agent supplies Russian copy only.
    - Russian description;
    - 20-30 unique Russian hashtags;
    - confidence and evidence for each value.
-5. Call `runDraftGeneration`. Do not hand-author final attribute arrays.
+5. Call `runDraftGenerationV2`. Do not hand-author final attribute arrays.
 6. Save output matching `output.schema.json` as
-   `06-draft/product-draft-v1.json`.
+   `06-draft/product-draft-v2.json`.
 
 ## Boundaries
 
-- Never change `AttributeMappingV1` or select a new dictionary value here.
+- Never change `AttributeMappingV2` or select a new dictionary value here.
 - Attributes 4180, 4191, and 23171 belong to this copy step; factual and
   variant attributes belong to attribute-mapping.
 - Preserve every `source_sku_id`, group ID, description category ID, and type ID.

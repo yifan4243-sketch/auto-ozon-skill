@@ -49,7 +49,7 @@ describe('listing-preparation workflow', () => {
       'attribute-mapping': { status: 'succeeded' },
     });
     await expect(
-      store.exists(runId, 'attribute-mapping', 'attribute-mapping-v1.json'),
+      store.exists(runId, 'attribute-mapping', 'attribute-mapping-v2.json'),
     ).resolves.toBe(true);
 
     getAttributes.mockClear();
@@ -154,11 +154,11 @@ describe('listing-preparation workflow', () => {
       data: {
         status: 'succeeded',
         stopped_after: 'draft-generation',
-        draft: { status: 'completed' },
+        draft: { status: 'draft_complete', publish_readiness: 'ready' },
       },
     });
     await expect(
-      store.exists(runId, 'draft-generation', 'product-draft-v1.json'),
+      store.exists(runId, 'draft-generation', 'product-draft-v2.json'),
     ).resolves.toBe(true);
   });
 });

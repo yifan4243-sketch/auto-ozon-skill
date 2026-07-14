@@ -1,0 +1,1 @@
+{"extends":"../../../tsconfig.base.json","compilerOptions":{"composite":true,"rootDir":"src","outDir":"dist","tsBuildInfoFile":"dist/.tsbuildinfo"},"include":["src/**/*.ts"],"references":[{"path":"../../adapters-1688"},{"path":"../../artifact-store"},{"path":"../../contracts"}]}

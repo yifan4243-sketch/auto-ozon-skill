@@ -1,0 +1,14 @@
+{
+  "name": "@auto-ozon/step-listing-payload",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": { "build": "tsc -p tsconfig.json" },
+  "dependencies": {
+    "@auto-ozon/artifact-store": "workspace:*",
+    "@auto-ozon/contracts": "workspace:*"
+  }
+}

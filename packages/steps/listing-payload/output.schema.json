@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/listing-payload-v1.json",
+  "type": "object",
+  "required": ["schema_version", "run_id", "source_offer_id", "request_sha256", "swagger_sha256", "sku_offer_ids", "request", "created_at"],
+  "properties": { "schema_version": { "const": 1 }, "request": { "type": "object", "required": ["items"] } }
+}

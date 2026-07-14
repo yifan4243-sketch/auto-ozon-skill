@@ -5,7 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "scripts": {
-    "build": "tsc -p ../../tsconfig.base.json"
-  }
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": { "@auto-ozon/contracts": "workspace:*" }
 }
