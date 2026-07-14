@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
-import type { CommandResult } from '@auto-ozon/contracts';
+import type { AttributeMappingAgentInputV1, CommandResult } from '@auto-ozon/contracts';
 import {
   runOfflineNormalizeCommand,
   runListingPreparation,
@@ -348,6 +348,8 @@ function registerWorkflowCommands(
     .argument('<keyword>', '1688 keyword used when the source step must run')
     .option('--run-id <id>', 'Reuse a run ID to resume from saved artifacts')
     .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON')
+    .option('--attribute-agent-json <json>', 'Agent-selected attribute values as AttributeMappingAgentInputV1 JSON')
+    .option('--attribute-agent-stdin', 'Read AttributeMappingAgentInputV1 JSON from stdin')
     .option('--start-from <step>', 'First step to execute', 'source-1688')
     .option('--stop-after <step>', 'Last step to execute', 'attribute-mapping')
     .option('--force-step <steps...>', 'Refresh this step and all downstream steps')
@@ -356,6 +358,10 @@ function registerWorkflowCommands(
     .option('--profile <name>', '1688 profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .action(async (keyword, opts) => {
+      const attributeAgentInput = await resolveAttributeAgentInput(
+        opts.attributeAgentJson,
+        Boolean(opts.attributeAgentStdin),
+      );
       emitCommandResult(
         await runListingPreparation({
           run_id: opts.runId,
@@ -368,6 +374,7 @@ function registerWorkflowCommands(
             headed: opts.headed,
           },
           category_decision_file: opts.decisionFile,
+          attribute_mapping_agent_input: attributeAgentInput,
           start_from: parseWorkflowStep(opts.startFrom),
           stop_after: parseWorkflowStep(opts.stopAfter),
           force_steps: (opts.forceStep ?? []).map(parseWorkflowStep),
@@ -375,6 +382,48 @@ function registerWorkflowCommands(
         }),
       );
     });
+}
+
+function parseAttributeAgentJson(raw: string | undefined): AttributeMappingAgentInputV1 | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const value = JSON.parse(raw) as Partial<AttributeMappingAgentInputV1>;
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      typeof value.source_offer_id !== 'string' ||
+      !Array.isArray(value.sku_inputs)
+    ) {
+      throw new Error('shape');
+    }
+    return value as AttributeMappingAgentInputV1;
+  } catch {
+    throw new CliError(
+      2,
+      'BAD_ATTRIBUTE_AGENT_JSON',
+      '--attribute-agent-json must be valid AttributeMappingAgentInputV1 JSON.',
+    );
+  }
+}
+
+async function resolveAttributeAgentInput(
+  raw: string | undefined,
+  fromStdin: boolean,
+): Promise<AttributeMappingAgentInputV1 | undefined> {
+  if (raw !== undefined && fromStdin) {
+    throw new CliError(
+      2,
+      'BAD_ATTRIBUTE_AGENT_INPUT',
+      'Use only one of --attribute-agent-json or --attribute-agent-stdin.',
+    );
+  }
+  if (!fromStdin) return parseAttributeAgentJson(raw);
+  let input = '';
+  for await (const chunk of process.stdin) input += String(chunk);
+  if (!input.trim()) {
+    throw new CliError(2, 'BAD_ATTRIBUTE_AGENT_INPUT', '--attribute-agent-stdin received no JSON.');
+  }
+  return parseAttributeAgentJson(input.trim());
 }
 
 function printCommandResult(result: CommandResult<unknown>): void {

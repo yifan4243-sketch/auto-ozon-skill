@@ -26,6 +26,12 @@ export interface MappedOzonAttributeV1 {
   evidence: AttributeMappingEvidenceV1[];
 }
 
+export interface OzonReadyAttributeV1 {
+  id: number;
+  complex_id: number;
+  values: AttributeMappingValueV1[];
+}
+
 export interface CommonAttributeMappingV1 {
   group_id: string;
   attribute: MappedOzonAttributeV1;
@@ -43,6 +49,18 @@ export interface SkuAttributeMappingV1 {
   description_category_id: number;
   type_id: number;
   attributes: MappedOzonAttributeV1[];
+  ozon_attributes: OzonReadyAttributeV1[];
+}
+
+export interface AttributeMappingAgentTaskV1 {
+  source_sku_id: string;
+  group_id: string;
+  attribute_id: number;
+  attribute_name: string;
+  required: boolean;
+  instruction: string;
+  source_facts: AttributeMappingEvidenceV1[];
+  dictionary_candidates: AttributeMappingValueV1[];
 }
 
 export interface MissingRequiredAttributeV1 {
@@ -57,7 +75,12 @@ export interface UnresolvedAttributeV1 {
   attribute_id: number;
   attribute_name: string;
   source_sku_ids: string[];
-  reason: 'no_source_match' | 'dictionary_value_not_found' | 'low_confidence' | 'unsupported_type';
+  reason:
+    | 'no_source_match'
+    | 'dictionary_value_not_found'
+    | 'invalid_agent_value'
+    | 'low_confidence'
+    | 'unsupported_type';
 }
 
 export interface AttributeMappingIssueV1 {
@@ -74,6 +97,7 @@ export interface AttributeMappingV1 {
   common_attributes: CommonAttributeMappingV1[];
   variant_attributes: VariantAttributeMappingV1[];
   sku_attributes: SkuAttributeMappingV1[];
+  agent_tasks: AttributeMappingAgentTaskV1[];
   missing_required_attributes: MissingRequiredAttributeV1[];
   unresolved_attributes: UnresolvedAttributeV1[];
   warnings: AttributeMappingIssueV1[];

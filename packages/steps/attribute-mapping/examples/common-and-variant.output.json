@@ -45,6 +45,10 @@
           "confidence": "high",
           "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "红色" }]
         }
+      ],
+      "ozon_attributes": [
+        { "id": 85, "complex_id": 0, "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }] },
+        { "id": 10096, "complex_id": 0, "values": [{ "dictionary_value_id": 1001, "value": "红色" }] }
       ]
     },
     {
@@ -67,9 +71,14 @@
           "confidence": "high",
           "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "蓝色" }]
         }
+      ],
+      "ozon_attributes": [
+        { "id": 85, "complex_id": 0, "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }] },
+        { "id": 10096, "complex_id": 0, "values": [{ "dictionary_value_id": 1002, "value": "蓝色" }] }
       ]
     }
   ],
+  "agent_tasks": [],
   "missing_required_attributes": [],
   "unresolved_attributes": [],
   "warnings": [],

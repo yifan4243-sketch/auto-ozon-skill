@@ -13,6 +13,11 @@ import {
   silentWorkflowLogger,
 } from '../../../../packages/artifact-store/src/index.js';
 import { runAttributeMapping } from '../../../../packages/steps/attribute-mapping/src/index.js';
+import {
+  normalizedNetWeightGrams,
+  parseWeightTextToGrams,
+} from '../../../../packages/steps/attribute-mapping/src/unit-normalizer.js';
+import { formatRunTimestamp } from '../../../../packages/steps/attribute-mapping/src/deterministic-matcher.js';
 import { validateAttributeMappingSchema } from '../../../../packages/steps/attribute-mapping/src/schema-validator.js';
 
 const temporaryDirectories: string[] = [];
@@ -45,11 +50,18 @@ describe('runAttributeMapping', () => {
     expect(result.data?.status).toBe('completed');
     expect(result.data?.sku_attributes).toHaveLength(2);
     expect(result.data?.common_attributes.map((entry) => entry.attribute.attribute_id)).toEqual(
-      expect.arrayContaining([500, 8229]),
+      expect.arrayContaining([85, 4389, 8229, 9048, 11650, 23249]),
     );
     expect(result.data?.variant_attributes.map((entry) => entry.attribute_id)).toEqual(
-      expect.arrayContaining([10096, 4383, 4497]),
+      expect.arrayContaining([10096, 4383]),
     );
+    expect(result.data?.sku_attributes[0]?.attributes.some((attribute) => attribute.attribute_id === 4497)).toBe(false);
+    expect(result.data?.sku_attributes[0]?.attributes.some((attribute) => attribute.attribute_id === 500)).toBe(false);
+    expect(result.data?.sku_attributes[0]?.ozon_attributes.map((attribute) => attribute.id)).toEqual(
+      [...(result.data?.sku_attributes[0]?.ozon_attributes.map((attribute) => attribute.id) ?? [])]
+        .sort((a, b) => a - b),
+    );
+    expect(result.data?.agent_tasks).toEqual([]);
     expect(result.data?.missing_required_attributes).toEqual([]);
     expect(validateAttributeMappingSchema(result.data)).toEqual({ valid: true, errors: [] });
   });
@@ -61,17 +73,22 @@ describe('runAttributeMapping', () => {
 
     expect(result.ok).toBe(false);
     expect(result.data?.status).toBe('blocked');
-    expect(result.data?.missing_required_attributes).toEqual([
+    expect(result.data?.missing_required_attributes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ attribute_id: 4180, source_sku_ids: ['red'] }),
       expect.objectContaining({ attribute_id: 8229, source_sku_ids: ['red'] }),
-      expect.objectContaining({ attribute_id: 8229, source_sku_ids: ['blue'] }),
-    ]);
+      expect.objectContaining({ attribute_id: 23171, source_sku_ids: ['blue'] }),
+    ]));
+    expect(result.data?.agent_tasks.length).toBeGreaterThan(0);
     expect(result.errors.map((error) => error.code)).toContain('MISSING_REQUIRED_ATTRIBUTES');
     expect(validateAttributeMappingSchema(result.data).valid).toBe(true);
   });
 
   it('rejects Agent dictionary IDs that are absent from the current snapshot', async () => {
     const fixture = inputFixture();
-    fixture.agent_input!.sku_inputs[0]!.attributes[0]!.values[0] = {
+    const selected = fixture.agent_input!.sku_inputs[0]!.attributes.find(
+      (attribute) => attribute.attribute_id === 8229,
+    )!;
+    selected.values[0] = {
       dictionary_value_id: 999,
       value: '不存在',
     };
@@ -89,7 +106,9 @@ describe('runAttributeMapping', () => {
 
   it('marks low-confidence Agent selections for review', async () => {
     const fixture = inputFixture();
-    fixture.agent_input!.sku_inputs[0]!.attributes[0]!.confidence = 'low';
+    fixture.agent_input!.sku_inputs[0]!.attributes.find(
+      (attribute) => attribute.attribute_id === 8229,
+    )!.confidence = 'low';
     const result = await runAttributeMapping(fixture);
 
     expect(result.ok).toBe(true);
@@ -123,6 +142,77 @@ describe('runAttributeMapping', () => {
       output: '05-attribute-mapping/attribute-mapping-v1.json',
     });
   });
+
+  it('normalizes explicit source units and rejects weights at or below three grams', () => {
+    expect(parseWeightTextToGrams('0.25 KG')).toBe(250);
+    expect(parseWeightTextToGrams('125克')).toBe(125);
+    expect(parseWeightTextToGrams('3 g')).toBeNull();
+    expect(parseWeightTextToGrams('100')).toBeNull();
+    expect(normalizedNetWeightGrams(sku('kg', '白色', 1, 'kg'))).toBe(1000);
+    expect(normalizedNetWeightGrams(sku('tiny', '白色', 3))).toBeNull();
+  });
+
+  it('formats one stable Beijing run timestamp to the second', () => {
+    expect(formatRunTimestamp('2026-07-10T14:33:44.000Z')).toBe('20260710223344');
+  });
+
+  it('accepts an Agent weight estimate over three grams without needs_review', async () => {
+    const fixture = inputFixture();
+    fixture.product.skus[0]!.package.raw_weight = null;
+    fixture.product.skus[0]!.package.weight_unit = 'unknown';
+    delete fixture.product.product.attributes.净重说明;
+    fixture.agent_input!.sku_inputs[0]!.attributes.push({
+      attribute_id: 4383,
+      values: [{ value: '180' }],
+      confidence: 'high',
+      evidence: [{ source: 'agent_input', field: 'estimated weight', value: '180g' }],
+    });
+    const result = await runAttributeMapping(fixture);
+    const weight = result.data?.sku_attributes[0]?.attributes.find(
+      (attribute) => attribute.attribute_id === 4383,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.data?.status).toBe('completed');
+    expect(weight).toMatchObject({ provenance: 'agent_selected', confidence: 'low' });
+  });
+
+  it('rejects short descriptions and malformed hashtag sets', async () => {
+    const fixture = inputFixture();
+    const attributes = fixture.agent_input!.sku_inputs[0]!.attributes;
+    attributes.find((attribute) => attribute.attribute_id === 4191)!.values = [{ value: 'Коротко' }];
+    attributes.find((attribute) => attribute.attribute_id === 23171)!.values = [{ value: '#один #два' }];
+    const result = await runAttributeMapping(fixture);
+    expect(result.ok).toBe(false);
+    expect(result.data?.unresolved_attributes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ attribute_id: 4191, reason: 'invalid_agent_value' }),
+      expect.objectContaining({ attribute_id: 23171, reason: 'invalid_agent_value' }),
+    ]));
+  });
+
+  it('rejects a real source brand in the Agent title while attribute 85 stays no-brand', async () => {
+    const fixture = inputFixture();
+    fixture.product.product.attributes.品牌 = 'ExampleBrand';
+    fixture.agent_input!.sku_inputs[0]!.attributes.find(
+      (attribute) => attribute.attribute_id === 4180,
+    )!.values = [{ value: 'Чашка ExampleBrand красная' }];
+    const result = await runAttributeMapping(fixture);
+    expect(result.ok).toBe(false);
+    expect(result.data?.unresolved_attributes).toContainEqual(
+      expect.objectContaining({ attribute_id: 4180, reason: 'invalid_agent_value' }),
+    );
+  });
+
+  it('routes an unlisted required attribute to the Agent instead of filling optional facts', async () => {
+    const fixture = inputFixture();
+    fixture.category_attributes[0]!.attributes_schema.attributes.find(
+      (attribute) => attribute.id === 500,
+    )!.required = true;
+    const result = await runAttributeMapping(fixture);
+    expect(result.ok).toBe(false);
+    expect(result.data?.agent_tasks).toContainEqual(
+      expect.objectContaining({ attribute_id: 500, required: true }),
+    );
+  });
 });
 
 function inputFixture(): {
@@ -147,7 +237,7 @@ function inputFixture(): {
       title_zh: '陶瓷杯',
       main_image: null,
       gallery_images: [],
-      attributes: { 材质: '陶瓷' },
+      attributes: { 材质: '陶瓷', 净重说明: '200克' },
       price_tiers: [],
       sku_options: [],
     },
@@ -210,14 +300,23 @@ function inputFixture(): {
         type_id: selected.type_id,
       },
       attributes: [
-        attribute(500, '材质', true, 0, []),
+        attribute(85, '品牌', true, 28732849, []),
+        attribute(4180, '名称', false, 0, []),
+        attribute(4191, '简介', false, 0, []),
+        attribute(500, '材质', false, 0, []),
         attribute(10096, '颜色', true, 10, [
           { id: 1, value: '红色' },
           { id: 2, value: '蓝色' },
+          { id: 3, value: '多色' },
         ]),
         attribute(4383, '净重', true, 0, []),
-        attribute(4497, '包装重量', true, 0, []),
+        attribute(4389, '原产国', false, 1935, [{ id: 90296, value: '中国' }]),
+        attribute(4497, '包装重量', false, 0, []),
+        attribute(9048, '型号名称', true, 0, []),
+        attribute(11650, '原厂包装数量', false, 0, []),
         attribute(8229, '商品类型', true, 20, [{ id: 30, value: '茶杯' }]),
+        attribute(23171, '#主题标签', false, 0, []),
+        attribute(23249, '统一计量单位中的商品数量', false, 0, []),
       ],
       raw_response: {},
       dictionary_raw_responses: {},
@@ -227,22 +326,19 @@ function inputFixture(): {
     source_offer_id: product.source.offer_id,
     sku_inputs: ['red', 'blue'].map((sourceSkuId) => ({
       source_sku_id: sourceSkuId,
-      attributes: [{
-        attribute_id: 8229,
-        values: [{ dictionary_value_id: 30, value: '茶杯' }],
-        confidence: 'high',
-        evidence: [{
-          source: 'agent_input',
-          field: 'category type',
-          value: '茶杯',
-        }],
-      }],
+      attributes: agentAttributes(sourceSkuId),
     })),
   };
-  return { product, category_decision, category_attributes, agent_input };
+  return {
+    product,
+    category_decision,
+    category_attributes,
+    agent_input,
+    run_created_at: '2026-07-10T14:33:44.000Z',
+  };
 }
 
-function sku(sourceSkuId: string, color: string, weight: number) {
+function sku(sourceSkuId: string, color: string, weight: number, unit: 'g' | 'kg' = 'g') {
   return {
     source_sku_id: sourceSkuId,
     raw_spec_text: color,
@@ -256,11 +352,28 @@ function sku(sourceSkuId: string, color: string, weight: number) {
       width_cm: 10,
       height_cm: 10,
       raw_weight: weight,
-      weight_unit: 'g' as const,
+      weight_unit: unit,
       source: '1688' as const,
       matched_by: 'sku_id' as const,
     },
   };
+}
+
+function agentAttributes(sourceSkuId: string): AttributeMappingAgentInputV1['sku_inputs'][number]['attributes'] {
+  const color = sourceSkuId === 'red'
+    ? { dictionary_value_id: 1, value: '红色' }
+    : { dictionary_value_id: 2, value: '蓝色' };
+  const descriptionParagraph = 'Керамическая чашка предназначена для ежедневного использования дома и в офисе. Форма изделия удобна для горячих и прохладных напитков, а характеристики основаны на данных поставщика. ';
+  const description = Array.from({ length: 4 }, () => descriptionParagraph).join('\n');
+  const hashtags = Array.from({ length: 20 }, (_, index) => `#чашка_${index + 1}`).join(' ');
+  const evidence = [{ source: 'agent_input' as const, field: 'retained 1688 facts', value: sourceSkuId }];
+  return [
+    { attribute_id: 4180, values: [{ value: `Чашка керамическая ${sourceSkuId === 'red' ? 'красная' : 'синяя'}` }], confidence: 'high', evidence },
+    { attribute_id: 4191, values: [{ value: description }], confidence: 'high', evidence },
+    { attribute_id: 8229, values: [{ dictionary_value_id: 30, value: '茶杯' }], confidence: 'high', evidence },
+    { attribute_id: 10096, values: [color], confidence: 'high', evidence },
+    { attribute_id: 23171, values: [{ value: hashtags }], confidence: 'high', evidence },
+  ];
 }
 
 function attribute(

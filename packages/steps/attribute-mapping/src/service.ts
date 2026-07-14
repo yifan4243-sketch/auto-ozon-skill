@@ -6,24 +6,30 @@ import type {
   CategoryDecisionV1,
   CommandResult,
   MappedOzonAttributeV1,
+  OzonReadyAttributeV1,
   SkuAttributeMappingV1,
 } from '@auto-ozon/contracts';
 import type { WorkflowContext } from '@auto-ozon/artifact-store';
 import { assertWorkflowActive } from '@auto-ozon/artifact-store';
 import { resolveAgentAttribute } from './agent-resolver.js';
 import { classifyGroupAttributes } from './attribute-classifier.js';
-import { matchDeterministicAttribute } from './deterministic-matcher.js';
+import { formatRunTimestamp, matchDeterministicAttribute } from './deterministic-matcher.js';
 import { validateAttributeMapping } from './validator.js';
 import { resolveGroupAttributeSnapshot } from './variant-mapper.js';
 import { validateAttributeMappingSchema } from './schema-validator.js';
-
-const DRAFT_OWNED_CONTENT_ATTRIBUTE_IDS = new Set([4180, 4191, 23171]);
+import {
+  buildAgentTask,
+  isBusinessRequired,
+  shouldProcessAttribute,
+  shouldRequestAgent,
+} from './agent-task-builder.js';
 
 export interface RunAttributeMappingInput {
   product: CanonicalProductV2;
   category_decision: CategoryDecisionV1;
   category_attributes: CategoryAttributesGroupV1[];
   agent_input?: AttributeMappingAgentInputV1;
+  run_created_at?: string;
 }
 
 export async function runAttributeMapping(
@@ -37,7 +43,13 @@ export async function runAttributeMapping(
         status: 'running',
       });
     }
-    const mapping = buildMapping(input);
+    const manifest = context
+      ? await context.artifact_store.readManifest(context.run_id)
+      : null;
+    const runTimestamp = formatRunTimestamp(
+      input.run_created_at ?? manifest?.created_at ?? input.product.source.collected_at,
+    );
+    const mapping = buildMapping(input, runTimestamp);
     const violations = validateAttributeMapping(
       mapping,
       input.product,
@@ -90,7 +102,9 @@ export async function runAttributeMapping(
         recoverable: true,
       })),
       nextActions:
-        mapping.status === 'needs_review'
+        mapping.agent_tasks.length > 0
+          ? ['Have the current Agent complete agent_tasks, then rerun attribute-mapping with that Agent JSON.']
+          : mapping.status === 'needs_review'
           ? ['Review low-confidence or unresolved attribute mappings.']
           : [],
     };
@@ -115,7 +129,7 @@ export async function runAttributeMapping(
   }
 }
 
-function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
+function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): AttributeMappingV1 {
   const result: AttributeMappingV1 = {
     schema_version: 1,
     source_offer_id: input.product.source.offer_id,
@@ -123,6 +137,7 @@ function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
     common_attributes: [],
     variant_attributes: [],
     sku_attributes: [],
+    agent_tasks: [],
     missing_required_attributes: [],
     unresolved_attributes: [],
     warnings: [],
@@ -158,22 +173,20 @@ function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
       }
       const attributes: MappedOzonAttributeV1[] = [];
       for (const schema of snapshot.attributes_schema.attributes) {
-        if (DRAFT_OWNED_CONTENT_ATTRIBUTE_IDS.has(schema.id)) continue;
-        const deterministic = matchDeterministicAttribute(input.product, sku, schema);
-        const agent = resolveAgentAttribute(input.agent_input, sourceSkuId, schema);
+        if (!shouldProcessAttribute(schema)) continue;
+        const deterministic = matchDeterministicAttribute(input.product, sku, schema, runTimestamp);
+        const agent = deterministic
+          ? { attribute: null, error: null }
+          : resolveAgentAttribute(
+              input.agent_input,
+              sourceSkuId,
+              schema,
+              sourceBrandValues(input.product),
+            );
         const mapped = deterministic ?? agent.attribute;
-        if (agent.error) {
-          result.unresolved_attributes.push({
-            group_id: group.group_id,
-            attribute_id: schema.id,
-            attribute_name: schema.name,
-            source_sku_ids: [sourceSkuId],
-            reason: agent.error,
-          });
-        }
         if (mapped) {
           attributes.push(mapped);
-          if (mapped.confidence === 'low') {
+          if (mapped.confidence === 'low' && schema.id !== 4383) {
             result.warnings.push(issue(
               'LOW_CONFIDENCE_ATTRIBUTE',
               `Attribute ${schema.id} has low confidence.`,
@@ -181,7 +194,7 @@ function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
               [schema.id],
             ));
           }
-        } else if (schema.required) {
+        } else if (isBusinessRequired(schema)) {
           result.missing_required_attributes.push({
             group_id: group.group_id,
             attribute_id: schema.id,
@@ -195,14 +208,23 @@ function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
             source_sku_ids: [sourceSkuId],
             reason: agent.error ?? 'no_source_match',
           });
+          if (shouldRequestAgent(schema)) {
+            result.agent_tasks.push(buildAgentTask(input.product, sku, group.group_id, schema));
+          }
         }
       }
+      attributes.sort((left, right) => left.attribute_id - right.attribute_id);
       groupMappings.push({
         source_sku_id: sourceSkuId,
         group_id: group.group_id,
         description_category_id: group.selected_category.description_category_id,
         type_id: group.selected_category.type_id,
         attributes,
+        ozon_attributes: attributes.map((attribute): OzonReadyAttributeV1 => ({
+          id: attribute.attribute_id,
+          complex_id: resolveComplexId(snapshot.attributes_schema.raw_response, attribute.attribute_id),
+          values: attribute.values,
+        })),
       });
     }
     result.sku_attributes.push(...groupMappings);
@@ -224,6 +246,36 @@ function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
       ? 'needs_review'
       : 'completed';
   return result;
+}
+
+function resolveComplexId(raw: unknown, attributeId: number): number {
+  const queue: unknown[] = [raw];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+    if (!current || typeof current !== 'object') continue;
+    const object = current as Record<string, unknown>;
+    if (
+      Number(object.id) === attributeId &&
+      Object.prototype.hasOwnProperty.call(object, 'attribute_complex_id')
+    ) {
+      const complexId = Number(object.attribute_complex_id);
+      return Number.isInteger(complexId) && complexId >= 0 ? complexId : 0;
+    }
+    queue.push(...Object.values(object));
+  }
+  return 0;
+}
+
+function sourceBrandValues(product: CanonicalProductV2): string[] {
+  const ignored = new Set(['其他', '其它', 'other', '无品牌', '没有品牌', 'no brand', 'none']);
+  return Object.entries(product.product.attributes)
+    .filter(([name]) => /品牌|brand/iu.test(name))
+    .map(([, value]) => value.normalize('NFKC').trim().toLocaleLowerCase())
+    .filter((value) => value && !ignored.has(value));
 }
 
 function issue(

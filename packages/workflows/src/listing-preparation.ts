@@ -283,7 +283,7 @@ async function executeListingPreparation(
     'attribute-mapping',
     'attribute-mapping-v1.json',
     startFrom,
-    shouldForce('attribute-mapping'),
+    shouldForce('attribute-mapping') || Boolean(input.attribute_mapping_agent_input),
   );
   if (!mapping) {
     const step = await runAttributeMapping(
