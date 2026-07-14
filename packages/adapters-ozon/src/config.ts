@@ -1,5 +1,6 @@
 import type { ErrorObject, WarningObject } from '@auto-ozon/contracts';
 import type { OzonCredentialsStatus, OzonToolAvailability } from './types.js';
+import { loadOzonEnvironment } from './local-env.js';
 
 export const OZON_MCP_TOOLS = {
   callMethod: 'ozon_call_method',
@@ -82,7 +83,7 @@ export const WRITE_BLOCKED_NEXT_ACTIONS = [
   'Keep write operations behind a separate preview and explicit confirmation flow.',
 ];
 
-export function credentialStatus(env = process.env): OzonCredentialsStatus {
+export function credentialStatus(env: NodeJS.ProcessEnv = loadOzonEnvironment()): OzonCredentialsStatus {
   return {
     sellerCredentials: Boolean(env.OZON_CLIENT_ID && env.OZON_API_KEY),
     performanceCredentials: Boolean(
@@ -111,8 +112,9 @@ export function extractToolNames(result: unknown): string[] {
 
 export function sanitizeSecretText(value: unknown): string {
   let text = value instanceof Error ? value.message : String(value);
+  const env = loadOzonEnvironment();
   for (const key of SECRET_ENV_KEYS) {
-    const secret = process.env[key];
+    const secret = env[key];
     if (secret) text = text.split(secret).join(`[${key}_REDACTED]`);
   }
   return text;

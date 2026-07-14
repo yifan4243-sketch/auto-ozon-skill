@@ -15,6 +15,9 @@ import {
 import { fetchAllAttributeValues } from './dictionary-fetcher.js';
 import { normalizeCategoryAttributes } from './normalizer.js';
 
+const BRAND_ATTRIBUTE_ID = 85;
+const NO_BRAND_VALUE = { id: 126745801, value: '无品牌' } as const;
+
 export interface CategoryAttributesSelectionInput {
   descriptionCategoryId: number;
   typeId: number;
@@ -130,6 +133,10 @@ async function fetchOne(
   for (const attribute of list.filter((item) => Number(item.dictionary_id) > 0)) {
     const attributeId = Number(attribute.id);
     assertPositive(attributeId, 'attributeId');
+    if (attributeId === BRAND_ATTRIBUTE_ID) {
+      values.set(attributeId, [{ ...NO_BRAND_VALUE }]);
+      continue;
+    }
     const dictionary = await fetchAllAttributeValues(transport, {
       descriptionCategoryId: selection.descriptionCategoryId,
       typeId: selection.typeId,

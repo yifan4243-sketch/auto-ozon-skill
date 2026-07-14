@@ -21,6 +21,10 @@ Required attributes without values populate both `missing_required_attributes`
 and `unresolved_attributes`, and block the result. Optional attributes without
 evidence may be omitted. Low-confidence mapped values produce `needs_review`.
 
+Brand attribute 85 always uses the locked policy value `无品牌` with dictionary
+value ID 126745801. Category-attribute retrieval must not request the full brand
+dictionary; it injects this one validated policy value into the snapshot.
+
 Russian name (4180), description (4191), and hashtags (23171) are intentionally
 outside the current factual-mapping workflow. They are not missing factual
 mappings and must not block `AttributeMappingV1`.

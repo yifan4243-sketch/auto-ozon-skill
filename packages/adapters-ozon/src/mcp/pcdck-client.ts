@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { loadOzonEnvironment } from '../local-env.js';
 
 export class PcdckOzonMcpClient {
   private client?: Client;
@@ -12,7 +13,7 @@ export class PcdckOzonMcpClient {
     this.transport = new StdioClientTransport({
       command: process.env.OZON_MCP_COMMAND ?? 'uv',
       args: ['--directory', ozonMcpDir, 'run', 'ozon-mcp'],
-      env: cleanEnv(process.env),
+      env: loadOzonEnvironment(),
     });
 
     this.client = new Client(
