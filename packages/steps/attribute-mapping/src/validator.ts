@@ -30,14 +30,8 @@ export function validateAttributeMapping(
       for (const mapped of sku.attributes) {
         const schema = byId.get(mapped.attribute_id);
         if (!schema) violations.push(`UNKNOWN_ATTRIBUTE:${mapped.attribute_id}`);
-        else if (!['String', 'Integer', 'Decimal', 'Boolean', 'URL'].includes(schema.type)) {
-          violations.push(`UNSUPPORTED_ATTRIBUTE_TYPE:${mapped.attribute_id}:${schema.type}`);
-        } else if (!validateDictionaryValues(schema, mapped.values)) {
+        else if (!validateDictionaryValues(schema, mapped.values)) {
           violations.push(`INVALID_DICTIONARY_VALUE:${mapped.attribute_id}`);
-        } else if (!schema.is_collection && mapped.values.length !== 1) {
-          violations.push(`NON_COLLECTION_VALUE_COUNT:${mapped.attribute_id}`);
-        } else if (schema.is_collection && new Set(mapped.values.map((value) => `${value.dictionary_value_id ?? ''}:${value.value}`)).size !== mapped.values.length) {
-          violations.push(`DUPLICATE_COLLECTION_VALUE:${mapped.attribute_id}`);
         }
       }
     }

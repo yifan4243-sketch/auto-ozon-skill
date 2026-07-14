@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ozon Draft Generation"
-  short_description: "Generate validated Russian product copy"
-  default_prompt: "Generate Russian copy only; do not invent product facts, price, stock, or logistics."

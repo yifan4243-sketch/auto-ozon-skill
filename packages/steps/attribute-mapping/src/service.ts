@@ -206,33 +206,9 @@ function buildMapping(input: RunAttributeMappingInput): AttributeMappingV1 {
       });
     }
     result.sku_attributes.push(...groupMappings);
-    const classified = classifyGroupAttributes(
-      group.group_id,
-      groupMappings,
-      snapshot.attributes_schema.attributes,
-    );
+    const classified = classifyGroupAttributes(group.group_id, groupMappings);
     result.common_attributes.push(...classified.common);
     result.variant_attributes.push(...classified.variant);
-    for (const attributeId of classified.nonAspectDifferences) {
-      result.warnings.push(issue(
-        'NON_ASPECT_SKU_DIFFERENCE',
-        `Non-aspect attribute ${attributeId} differs between SKUs and remains per-SKU.`,
-        group.source_sku_ids,
-        [attributeId],
-      ));
-    }
-    const sourceDimensions = input.product.sku_analysis.variant_dimensions.filter(
-      (dimension) => dimension.distinguishes_skus &&
-        dimension.missing_for_skus.every((skuId) => !group.source_sku_ids.includes(skuId)),
-    );
-    if (input.category_decision.product_structure === 'normal_variants' &&
-        sourceDimensions.length > classified.variant.length) {
-      result.errors.push(issue(
-        'UNMAPPED_VARIANT_DIMENSION',
-        'One or more CanonicalProductV2 variant dimensions have no matching Ozon aspect attribute.',
-        group.source_sku_ids,
-      ));
-    }
   }
   if (result.missing_required_attributes.length > 0) {
     result.errors.push(issue(

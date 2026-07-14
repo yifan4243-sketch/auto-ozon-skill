@@ -1,4 +1,4 @@
 interface:
   display_name: "Ozon Category Decision"
   short_description: "Select and validate Ozon categories for 1688 products"
-  default_prompt: "Classify CanonicalProductV2 into validated Ozon category groups without inventing IDs."
+  default_prompt: "Use $ozon-category-decision to classify this CanonicalProductV2 into validated Ozon categories."

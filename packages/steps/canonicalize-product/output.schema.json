@@ -1,1 +1,0 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://auto-ozon.local/schemas/canonical-product-v2.json","type":"object","required":["schema_version","source","product","skus","sku_analysis","validation"],"properties":{"schema_version":{"const":2}}}

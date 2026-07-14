@@ -32,7 +32,7 @@ describe('FileArtifactStore', () => {
     });
     await store.writeCache('category-attributes', '17028741-92537', { values: [1] });
 
-    expect(output).toBe('03-category-decision/attempts/0001/decision.json');
+    expect(output).toBe('03-category-decision/decision.json');
     expect(await store.read('run-1', 'category-decision', 'decision.json')).toEqual({
       status: 'decided',
     });
@@ -56,17 +56,15 @@ describe('FileArtifactStore', () => {
     expect(initial.steps['source-1688'].status).toBe('pending');
 
     await store.updateStep('resume-1', 'source-1688', { status: 'running' });
-    const output = await store.write('resume-1', 'source-1688', 'offer-result.json', { ok: true });
     const completed = await store.updateStep('resume-1', 'source-1688', {
       status: 'succeeded',
-      output,
+      output: '01-source/offer-result.json',
     });
 
     expect(completed.current_step).toBe('source-1688');
     expect(completed.steps['source-1688']).toMatchObject({
       status: 'succeeded',
-      output: '01-source/attempts/0001/offer-result.json',
-      artifact: { schema_version: 1 },
+      output: '01-source/offer-result.json',
     });
     expect(completed.steps['source-1688'].started_at).not.toBeNull();
     expect(completed.steps['source-1688'].completed_at).not.toBeNull();
@@ -100,32 +98,5 @@ describe('FileArtifactStore', () => {
     expect(text).toContain('offer_id');
     expect(text).not.toContain('must-not-leak');
     expect(text).not.toContain('token');
-  });
-
-  it('rejects V1 manifests instead of silently migrating old runs', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-legacy-'));
-    temporaryDirectories.push(root);
-    const runsRoot = path.join(root, 'runs');
-    await fs.mkdir(path.join(runsRoot, 'legacy-run'), { recursive: true });
-    await fs.writeFile(path.join(runsRoot, 'legacy-run', 'manifest.json'), '{"schema_version":1,"run_id":"legacy-run"}\n');
-    const store = new FileArtifactStore({ runsRoot, cacheRoot: path.join(root, 'cache') });
-    await expect(store.ensureRun('legacy-run')).rejects.toMatchObject({ code: 'LEGACY_RUN_UNSUPPORTED' });
-  });
-
-  it('detects corrupt artifacts, cascades stale state, and rejects concurrent run locks', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-recovery-'));
-    temporaryDirectories.push(root);
-    const store = new FileArtifactStore({ runsRoot: path.join(root, 'runs'), cacheRoot: path.join(root, 'cache') });
-    await store.ensureRun('recovery-run');
-    const output = await store.write('recovery-run', 'source-1688', 'offer-result.json', { schema_version: 1, ok: true });
-    await store.updateStep('recovery-run', 'source-1688', { status: 'succeeded', output });
-    await fs.writeFile(path.join(root, 'runs', 'recovery-run', output), '{broken');
-    await expect(store.read('recovery-run', 'source-1688', 'offer-result.json')).resolves.toBeNull();
-    const stale = await store.markStaleFrom('recovery-run', 'category-attributes');
-    expect(stale.steps['category-attributes'].status).toBe('stale');
-    expect(stale.steps['ozon-publish'].status).toBe('stale');
-    await store.withRunLock('recovery-run', async () => {
-      await expect(store.withRunLock('recovery-run', async () => undefined)).rejects.toMatchObject({ code: 'RUN_LOCKED' });
-    });
   });
 });

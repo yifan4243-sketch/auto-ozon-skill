@@ -1,5 +1,4 @@
 import type {
-  CategoryAttributeV1,
   CommonAttributeMappingV1,
   SkuAttributeMappingV1,
   VariantAttributeMappingV1,
@@ -8,19 +7,15 @@ import type {
 export function classifyGroupAttributes(
   groupId: string,
   skuMappings: SkuAttributeMappingV1[],
-  definitions: CategoryAttributeV1[],
 ): {
   common: CommonAttributeMappingV1[];
   variant: VariantAttributeMappingV1[];
-  nonAspectDifferences: number[];
 } {
   const attributeIds = new Set(
     skuMappings.flatMap((sku) => sku.attributes.map((attribute) => attribute.attribute_id)),
   );
   const common: CommonAttributeMappingV1[] = [];
   const variant: VariantAttributeMappingV1[] = [];
-  const nonAspectDifferences: number[] = [];
-  const definitionById = new Map(definitions.map((definition) => [definition.id, definition]));
 
   for (const attributeId of attributeIds) {
     const bySku = Object.fromEntries(
@@ -35,11 +30,9 @@ export function classifyGroupAttributes(
         (candidate) => candidate.attribute_id === attributeId,
       );
       if (attribute) common.push({ group_id: groupId, attribute });
-    } else if (definitionById.get(attributeId)?.is_aspect) {
-      variant.push({ group_id: groupId, attribute_id: attributeId, values_by_sku: bySku });
     } else {
-      nonAspectDifferences.push(attributeId);
+      variant.push({ group_id: groupId, attribute_id: attributeId, values_by_sku: bySku });
     }
   }
-  return { common, variant, nonAspectDifferences };
+  return { common, variant };
 }

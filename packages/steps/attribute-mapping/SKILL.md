@@ -5,7 +5,7 @@ description: Map CanonicalProductV2 facts, a validated CategoryDecisionV1, and c
 
 # Attribute Mapping
 
-Produce one `AttributeMappingV2` without generating copy or an upload payload.
+Produce one `AttributeMappingV1` without generating copy or an upload payload.
 Let deterministic code preserve facts and validate dictionaries; use Agent input
 only for semantic selections that source facts cannot establish.
 
@@ -18,10 +18,10 @@ only for semantic selections that source facts cannot establish.
 4. Produce Agent selections only for attributes that deterministic matching
    cannot resolve. Preserve each `source_sku_id` and select dictionary IDs only
    from the matching current snapshot.
-5. Call `runAttributeMappingV2`; do not hand-author `common_attributes`,
+5. Call `runAttributeMapping`; do not hand-author `common_attributes`,
    `variant_attributes`, or final `sku_attributes`.
 6. Save output matching `output.schema.json` as
-   `05-attribute-mapping/attribute-mapping-v2.json`.
+   `05-attribute-mapping/attribute-mapping-v1.json`.
 
 ## Boundaries
 

@@ -96,36 +96,3 @@ export interface AttributeMappingAgentInputV1 {
   source_offer_id: string;
   sku_inputs: AttributeMappingAgentSkuInputV1[];
 }
-
-export interface AttributeMappingEvidenceV2 {
-  source: AttributeMappingEvidenceV1['source'];
-  source_path: string;
-  source_value: unknown;
-  normalized_value: string;
-}
-
-export interface MappedOzonAttributeV2 extends Omit<MappedOzonAttributeV1, 'evidence'> {
-  evidence: AttributeMappingEvidenceV2[];
-}
-
-export interface AttributeMappingSnapshotRefV2 {
-  group_id: string;
-  description_category_id: number;
-  type_id: number;
-  fetched_at: string;
-  sha256: string;
-}
-
-export interface AttributeMappingV2 {
-  schema_version: 2;
-  source_offer_id: string;
-  status: AttributeMappingStatusV1;
-  snapshot_refs: AttributeMappingSnapshotRefV2[];
-  common_attributes: Array<{ group_id: string; attribute: MappedOzonAttributeV2 }>;
-  variant_attributes: VariantAttributeMappingV1[];
-  sku_attributes: Array<Omit<SkuAttributeMappingV1, 'attributes'> & { attributes: MappedOzonAttributeV2[] }>;
-  missing_required_attributes: MissingRequiredAttributeV1[];
-  unresolved_attributes: UnresolvedAttributeV1[];
-  warnings: AttributeMappingIssueV1[];
-  errors: AttributeMappingIssueV1[];
-}

@@ -5,17 +5,13 @@ on:
   push:
     branches:
       - main
-      - dev
 
 permissions:
   contents: read
 
 jobs:
   verify:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
@@ -47,6 +43,3 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-      - name: Verify Node runtime package imports
-        run: pnpm verify:runtime

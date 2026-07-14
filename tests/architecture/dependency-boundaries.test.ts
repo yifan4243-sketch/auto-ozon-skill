@@ -71,11 +71,9 @@ describe('architecture dependency boundaries', () => {
       )) as { exports?: Record<string, unknown> };
       const index = fs.readFileSync(path.join(packagesRoot, 'steps', step, 'src', 'index.ts'), 'utf8');
       const runEntries = [...new Set(index.match(/\brun[A-Z][A-Za-z0-9_]*/g) ?? [])];
-      const expectedCount = ['attribute-mapping', 'draft-generation'].includes(step) ? 2 : 1;
-      if (runEntries.length !== expectedCount) violations.push(`${step}: ${runEntries.join(', ') || 'none'}`);
-      const expectedExports = step === 'draft-generation' ? ['.', './legacy'] : ['.'];
-      if (JSON.stringify(Object.keys(packageJson.exports ?? {})) !== JSON.stringify(expectedExports)) {
-        violations.push(`${step}: exports must contain ${expectedExports.join(', ')}`);
+      if (runEntries.length !== 1) violations.push(`${step}: ${runEntries.join(', ') || 'none'}`);
+      if (JSON.stringify(Object.keys(packageJson.exports ?? {})) !== JSON.stringify(['.'])) {
+        violations.push(`${step}: exports must contain only "."`);
       }
     }
     expect(violations).toEqual([]);

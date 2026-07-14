@@ -24,7 +24,3 @@ evidence may be omitted. Low-confidence mapped values produce `needs_review`.
 Russian name (4180), description (4191), and hashtags (23171) are intentionally
 deferred to `draft-generation`. They are not missing factual mappings and must
 not block `AttributeMappingV1`.
-Packaging weight is source evidence, not net weight. Map attribute 4497 from
-`skus[].package.raw_weight` only when its unit is known. Never add a packaging
-allowance, and never map the same value to net-weight attribute 4383 unless the
-source explicitly labels it as net weight.

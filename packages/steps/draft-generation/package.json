@@ -6,11 +6,10 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./legacy": { "types": "./dist/legacy-draft-builder.d.ts", "import": "./dist/legacy-draft-builder.js" }
+    ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p ../../../tsconfig.base.json"
   },
   "dependencies": {
     "@auto-ozon/artifact-store": "workspace:*",

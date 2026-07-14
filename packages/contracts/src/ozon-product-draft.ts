@@ -55,23 +55,6 @@ export interface OzonProductDraftV1 {
   errors: OzonDraftIssueV1[];
 }
 
-export type OzonDraftStatusV2 = 'draft_complete' | 'needs_review' | 'blocked';
-
-export interface OzonDraftSkuV2 extends OzonDraftSkuV1 {
-  publish_readiness: 'ready' | 'not_ready';
-}
-
-export interface OzonProductDraftV2 {
-  schema_version: 2;
-  source_offer_id: string;
-  status: OzonDraftStatusV2;
-  publish_readiness: 'ready' | 'not_ready';
-  category_snapshot_sha256: Record<string, string>;
-  items: OzonDraftSkuV2[];
-  warnings: OzonDraftIssueV1[];
-  errors: OzonDraftIssueV1[];
-}
-
 export interface OzonDraftValidationV1 {
   schema_version: 1;
   source_offer_id: string;

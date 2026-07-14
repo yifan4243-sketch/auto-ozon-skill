@@ -54,15 +54,3 @@ export interface CategoryAttributesGroupV1 {
   };
   attributes_schema: CategoryAttributesV1;
 }
-
-export interface CategoryAttributesCacheEnvelopeV1 {
-  schema_version: 1;
-  namespace: 'category-attributes';
-  description_category_id: number;
-  type_id: number;
-  language: 'ZH_HANS';
-  fetched_at: string;
-  source_snapshot_sha256: string;
-  payload_sha256: string;
-  payload: CategoryAttributesV1;
-}

@@ -35,12 +35,6 @@ importers:
       '@auto-ozon/adapters-ozon':
         specifier: workspace:*
         version: link:../../packages/adapters-ozon
-      '@auto-ozon/artifact-store':
-        specifier: workspace:*
-        version: link:../../packages/artifact-store
-      '@auto-ozon/config':
-        specifier: workspace:*
-        version: link:../../packages/config
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -97,9 +91,6 @@ importers:
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../contracts
-      proper-lockfile:
-        specifier: ^4.1.2
-        version: 4.1.2
 
   packages/category-intelligence:
     dependencies:
@@ -107,11 +98,7 @@ importers:
         specifier: workspace:*
         version: link:../steps/category-decision
 
-  packages/config:
-    dependencies:
-      '@auto-ozon/contracts':
-        specifier: workspace:*
-        version: link:../contracts
+  packages/config: {}
 
   packages/contracts: {}
 
@@ -183,7 +170,6 @@ importers:
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
-    devDependencies:
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -200,27 +186,6 @@ importers:
         specifier: workspace:*
         version: link:../../core
 
-  packages/steps/listing-payload:
-    dependencies:
-      '@auto-ozon/artifact-store':
-        specifier: workspace:*
-        version: link:../../artifact-store
-      '@auto-ozon/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-
-  packages/steps/ozon-publish:
-    dependencies:
-      '@auto-ozon/adapters-ozon':
-        specifier: workspace:*
-        version: link:../../adapters-ozon
-      '@auto-ozon/artifact-store':
-        specifier: workspace:*
-        version: link:../../artifact-store
-      '@auto-ozon/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-
   packages/steps/source-1688:
     dependencies:
       '@auto-ozon/adapters-1688':
@@ -235,9 +200,6 @@ importers:
 
   packages/transformer:
     dependencies:
-      '@auto-ozon/step-canonicalize-product':
-        specifier: workspace:*
-        version: link:../steps/canonicalize-product
       '@auto-ozon/step-draft-generation':
         specifier: workspace:*
         version: link:../steps/draft-generation
@@ -247,9 +209,6 @@ importers:
       '@auto-ozon/adapters-1688':
         specifier: workspace:*
         version: link:../adapters-1688
-      '@auto-ozon/adapters-ozon':
-        specifier: workspace:*
-        version: link:../adapters-ozon
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../artifact-store
@@ -274,12 +233,6 @@ importers:
       '@auto-ozon/step-draft-generation':
         specifier: workspace:*
         version: link:../steps/draft-generation
-      '@auto-ozon/step-listing-payload':
-        specifier: workspace:*
-        version: link:../steps/listing-payload
-      '@auto-ozon/step-ozon-publish':
-        specifier: workspace:*
-        version: link:../steps/ozon-publish
       '@auto-ozon/step-source-1688':
         specifier: workspace:*
         version: link:../steps/source-1688
