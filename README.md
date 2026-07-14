@@ -91,7 +91,7 @@ V2 preserves keyword/similar discovery context for category work. The category
 decision Skill uses the search term, Chinese title, 1688 Chinese category path,
 product attributes, and SKU specifications to match the saved Ozon Chinese
 category table. The resumable workflow then retrieves attributes and produces
-an independent AttributeMappingV1 before optional draft generation.
+an independent AttributeMappingV1. The active workflow ends there.
 Original brand attributes remain ordinary product attributes; ownership and
 authorization are not inferred. Prohibited-category and logistics restrictions
 remain later user-knowledge-base work.

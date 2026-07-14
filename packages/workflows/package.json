@@ -19,7 +19,6 @@
     "@auto-ozon/step-attribute-mapping": "workspace:*",
     "@auto-ozon/step-category-attributes": "workspace:*",
     "@auto-ozon/step-category-decision": "workspace:*",
-    "@auto-ozon/step-draft-generation": "workspace:*",
     "@auto-ozon/step-canonicalize-product": "workspace:*",
     "@auto-ozon/step-source-1688": "workspace:*"
   }

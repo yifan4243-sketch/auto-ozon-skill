@@ -80,7 +80,7 @@ auto-ozon source offers 123456789 \
 
 All four V2 collection commands accept `--products-dir <directory>`. Every
 offer is stored under `<directory>/<offer_id>` with `1688_data`,
-`1688_data_v2`, `ozon_draft`, and `ozon_upload` subdirectories.
+`1688_data_v2`, and `ozon_category` subdirectories.
 `--products-dir` is rejected on V1.
 
 ## Offline V2 replay
@@ -132,9 +132,8 @@ auto-ozon workflow listing prepare "收纳盒" \
 The workflow reuses successful artifacts, stops on `needs_review` by default,
 and reruns downstream dependants when a step is forced. Supported step names
 are `source-1688`, `canonicalize-product`, `category-decision`,
-`category-attributes`, `attribute-mapping`, and `draft-generation`. The CLI
-defaults to stopping after `attribute-mapping`; programmatic callers can supply
-copy input and continue through `draft-generation`.
+`category-attributes`, and `attribute-mapping`. The workflow always ends after
+the factual attribute mapping artifact is validated.
 
 ## Complete PCDCK/ozon-mcp bridge
 

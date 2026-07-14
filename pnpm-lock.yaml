@@ -45,10 +45,6 @@ importers:
         specifier: ^12.1.0
         version: 12.1.0
 
-  apps/mcp-server: {}
-
-  apps/web-console: {}
-
   packages/adapters-1688:
     dependencies:
       '@auto-ozon/contracts':
@@ -82,23 +78,11 @@ importers:
         specifier: ^1.6.1
         version: 1.29.0(zod@4.4.3)
 
-  packages/ai: {}
-
-  packages/analytics: {}
-
   packages/artifact-store:
     dependencies:
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../contracts
-
-  packages/category-intelligence:
-    dependencies:
-      '@auto-ozon/step-category-decision':
-        specifier: workspace:*
-        version: link:../steps/category-decision
-
-  packages/config: {}
 
   packages/contracts: {}
 
@@ -107,18 +91,6 @@ importers:
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../contracts
-
-  packages/database: {}
-
-  packages/diagnostics: {}
-
-  packages/image-generation: {}
-
-  packages/publishing:
-    dependencies:
-      '@auto-ozon/core':
-        specifier: workspace:*
-        version: link:../core
 
   packages/steps/attribute-mapping:
     dependencies:
@@ -174,18 +146,6 @@ importers:
         specifier: ^4.23.0
         version: 4.23.0
 
-  packages/steps/draft-generation:
-    dependencies:
-      '@auto-ozon/artifact-store':
-        specifier: workspace:*
-        version: link:../../artifact-store
-      '@auto-ozon/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@auto-ozon/core':
-        specifier: workspace:*
-        version: link:../../core
-
   packages/steps/source-1688:
     dependencies:
       '@auto-ozon/adapters-1688':
@@ -197,12 +157,6 @@ importers:
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../../contracts
-
-  packages/transformer:
-    dependencies:
-      '@auto-ozon/step-draft-generation':
-        specifier: workspace:*
-        version: link:../steps/draft-generation
 
   packages/workflows:
     dependencies:
@@ -230,9 +184,6 @@ importers:
       '@auto-ozon/step-category-decision':
         specifier: workspace:*
         version: link:../steps/category-decision
-      '@auto-ozon/step-draft-generation':
-        specifier: workspace:*
-        version: link:../steps/draft-generation
       '@auto-ozon/step-source-1688':
         specifier: workspace:*
         version: link:../steps/source-1688

@@ -25,8 +25,6 @@ Do not bypass 1688 risk control, sliders, or captchas. Do not use captcha-solvin
   `packages/steps/category-decision/SKILL.md`.
 - For factual Ozon attribute mapping, read
   `packages/steps/attribute-mapping/SKILL.md`.
-- For Russian copy and validated Ozon draft generation, read
-  `packages/steps/draft-generation/SKILL.md`.
 - Keep skills in their owning packages. Resolve product artifacts through
   `data/runs/<run_id>/manifest.json`; legacy product workspaces remain available
   for CLI compatibility. Do not copy skill files into run or product workspaces.

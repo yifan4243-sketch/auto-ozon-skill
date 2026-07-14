@@ -5,8 +5,6 @@ import type {
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
   CommandResult,
-  OzonDraftContentInputV1,
-  OzonProductDraftV1,
   WorkflowRunManifestV1,
   WorkflowStepName,
   WorkflowStepStatus,
@@ -34,11 +32,8 @@ import {
   type RunCategoryAttributesInput,
 } from '@auto-ozon/step-category-attributes';
 import { runAttributeMapping } from '@auto-ozon/step-attribute-mapping';
-import { runDraftGeneration } from '@auto-ozon/step-draft-generation';
 import type { CollectedSourcingRun } from '@auto-ozon/adapters-1688';
 import { LISTING_PREPARATION_ORDER } from './step-registry.js';
-
-const LAST_IMPLEMENTED_STEP: WorkflowStepName = 'draft-generation';
 
 export interface RunListingPreparationInput {
   run_id?: string;
@@ -47,8 +42,6 @@ export interface RunListingPreparationInput {
   category_decision_file?: string;
   category_attributes?: Pick<RunCategoryAttributesInput, 'force_refresh' | 'transport'>;
   attribute_mapping_agent_input?: AttributeMappingAgentInputV1;
-  draft_content?: OzonDraftContentInputV1;
-  products_dir?: string;
   start_from?: WorkflowStepName;
   stop_after?: WorkflowStepName;
   force_steps?: WorkflowStepName[];
@@ -69,7 +62,6 @@ export interface ListingPreparationResultV1 {
   category_decision?: CategoryDecisionV1;
   category_attributes?: CategoryAttributesGroupV1[];
   attribute_mapping?: AttributeMappingV1;
-  draft?: OzonProductDraftV1;
 }
 
 export async function runListingPreparation(
@@ -118,10 +110,19 @@ async function executeListingPreparation(
     force_steps: input.force_steps ?? [],
   });
   const stopAfter = input.stop_after ?? 'attribute-mapping';
-  if (stepIndex(stopAfter) > stepIndex(LAST_IMPLEMENTED_STEP)) {
+  if (!LISTING_PREPARATION_ORDER.includes(stopAfter)) {
     return workflowFailure(context, 'STEP_NOT_ENABLED', `Step ${stopAfter} is not enabled.`);
   }
   const startFrom = input.start_from ?? 'source-1688';
+  if (!LISTING_PREPARATION_ORDER.includes(startFrom)) {
+    return workflowFailure(context, 'STEP_NOT_ENABLED', `Step ${startFrom} is not enabled.`);
+  }
+  const unsupportedForceStep = (input.force_steps ?? []).find(
+    (step) => !LISTING_PREPARATION_ORDER.includes(step),
+  );
+  if (unsupportedForceStep) {
+    return workflowFailure(context, 'STEP_NOT_ENABLED', `Step ${unsupportedForceStep} is not enabled.`);
+  }
   if (stepIndex(startFrom) > stepIndex(stopAfter)) {
     return workflowFailure(
       context,
@@ -304,46 +305,7 @@ async function executeListingPreparation(
   if (mappingStatus === 'blocked' || (mappingStatus === 'needs_review' && stopOnReview)) {
     return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
   }
-  if (stopAfter === 'attribute-mapping') {
-    return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
-  }
-
-  let draft = await restore<OzonProductDraftV1>(
-    context,
-    'draft-generation',
-    'product-draft-v1.json',
-    startFrom,
-    shouldForce('draft-generation'),
-  );
-  if (!draft) {
-    if (!input.draft_content) {
-      await store.updateStep(runId, 'draft-generation', {
-        status: 'needs_review',
-        error_code: 'DRAFT_CONTENT_REQUIRED',
-      });
-      return workflowSuccess(context, 'draft-generation', result, 'needs_review');
-    }
-    const step = await runDraftGeneration(
-      {
-        attribute_mapping: mapping,
-        category_attributes: attributes,
-        content: input.draft_content,
-        products_dir: input.products_dir,
-      },
-      context,
-    );
-    if (!step.data || !step.ok) {
-      return stopFromStep(context, 'draft-generation', step, result);
-    }
-    draft = step.data;
-  }
-  result.draft = draft;
-  return workflowSuccess(
-    context,
-    'draft-generation',
-    result,
-    draft.status === 'completed' ? 'succeeded' : draft.status,
-  );
+  return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
 }
 
 async function restore<T>(

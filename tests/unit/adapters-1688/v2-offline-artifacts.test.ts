@@ -180,8 +180,6 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
         canonical_v2: 'needs_review',
         category_decision: 'not_started',
         category_attributes: 'not_started',
-        ozon_draft: 'not_started',
-        ozon_upload: 'not_started',
       },
     });
     expect(JSON.stringify(manifest)).not.toContain(input);
@@ -210,8 +208,7 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
       '1688_data',
       '1688_data_v2',
       'manifest.json',
-      'ozon_draft',
-      'ozon_upload',
+      'ozon_category',
     ]);
   });
 

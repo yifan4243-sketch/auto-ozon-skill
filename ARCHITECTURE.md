@@ -27,7 +27,6 @@ packages/steps/canonicalize-product runCanonicalizeProduct
 packages/steps/category-decision    runCategoryDecision
 packages/steps/category-attributes  runCategoryAttributes
 packages/steps/attribute-mapping    runAttributeMapping
-packages/steps/draft-generation     runDraftGeneration
 ```
 
 - `source-1688` validates collection input, delegates browser/search/detail
@@ -40,14 +39,8 @@ packages/steps/draft-generation     runDraftGeneration
   retrieval, complete dictionary pagination, cache policy, and
   `04-category-attributes`.
 - `attribute-mapping` owns factual/dictionary/unit mapping, common/variant/SKU
-  classification, the mapping Skill, and `05-attribute-mapping`. Russian copy
-  attributes 4180, 4191, and 23171 are deliberately deferred.
-- `draft-generation` consumes AttributeMappingV1 plus copy-only Agent input and
-  writes the validated `06-draft` output. It never rematches factual values or
-  calls an Ozon write API.
-
-`packages/category-intelligence` and `packages/transformer` are compatibility
-facades only; new code must use the owning step packages.
+  classification, the mapping Skill, and `05-attribute-mapping`. Content fields
+  such as Russian names, descriptions, and hashtags are outside this workflow.
 
 ## Shared infrastructure
 
@@ -72,7 +65,6 @@ data/runs/<run_id>/
   03-category-decision/category-decision-v1.json
   04-category-attributes/category-attributes-v1.json
   05-attribute-mapping/attribute-mapping-v1.json
-  06-draft/product-draft-v1.json
   logs/workflow.log
 
 data/cache/category-attributes/*.json

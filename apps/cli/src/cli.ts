@@ -118,7 +118,7 @@ export function buildProgram(): Command {
       await show1688DebugEvent({ requestId });
     });
 
-  const source = program.command('source').description('Source products for Ozon drafts');
+  const source = program.command('source').description('Collect and normalize 1688 products');
 
   source
     .command('keyword')
@@ -535,7 +535,6 @@ function parseWorkflowStep(raw: string): import('@auto-ozon/contracts').Workflow
     'category-decision',
     'category-attributes',
     'attribute-mapping',
-    'draft-generation',
   ] as const;
   if (steps.includes(raw as (typeof steps)[number])) {
     return raw as (typeof steps)[number];

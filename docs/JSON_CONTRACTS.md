@@ -158,7 +158,8 @@ When persistence is enabled, `artifacts.products_root` is the selected product
 workspace root and `artifacts.products[]` contains one entry per offer. Each
 entry points to `<products_root>/<offer_id>/manifest.json`,
 `1688_data/source.json`, `1688_data_v2/product.json`, and the product integrity
-report. Later category, draft, and upload files use the same offer directory.
+report. Compatible category commands use `ozon_category`; the five-step workflow
+stores its artifacts under `data/runs/<run_id>`.
 
 Collection `success`/`failed` counts are separate from product validation. A
 blocked or needs-review product remains in `items`; it is not a collection

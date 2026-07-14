@@ -4,7 +4,6 @@ export const WORKFLOW_STEP_NAMES = [
   'category-decision',
   'category-attributes',
   'attribute-mapping',
-  'draft-generation',
 ] as const;
 
 export type WorkflowStepName = (typeof WORKFLOW_STEP_NAMES)[number];

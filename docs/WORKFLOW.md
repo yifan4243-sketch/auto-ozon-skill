@@ -83,9 +83,8 @@ names and values, and explicit key/value syntax. Ambiguous text is kept in
 `spec1`, `spec2`, or semantic dimensions.
 
 Later phases, not this normalization path, are responsible for Agent category
-classification, Ozon `GetAttributes`, attribute-dictionary resolution, missing
-package policy, shipping and pricing, Russian content, internal Ozon drafts,
-and final Ozon `items[]` requests.
+classification, Ozon `GetAttributes`, attribute-dictionary resolution, and
+missing-package policy. The current workflow ends after factual attribute mapping.
 
 ## Ozon category decision V0
 
@@ -135,18 +134,15 @@ context, and the image path is not included in CanonicalProductV2.
   1688_data/source.json
   1688_data_v2/product.json
   1688_data_v2/integrity-report.json
-  ozon_draft/category_decision.json
-  ozon_draft/category_attributes.json
-  ozon_draft/draft.json
-  ozon_draft/validation.json
-  ozon_upload/request.json
-  ozon_upload/result.json
+  ozon_category/category-decision-v1.json
+  ozon_category/category-attributes-v1.json
 ```
 
 Repeated collection of the same offer updates the same product workspace rather
 than creating duplicate run directories. Batch collection writes one workspace
-per offer. Ozon draft and upload directories are created up front but remain
-empty until their stages run.
+per offer. The five-step workflow stores category decisions, category attributes,
+and factual attribute mappings under `data/runs/<run_id>`; the two category files
+above are retained only for compatible category CLI commands.
 
 Only reconstructed retained OfferResult fields are written to `1688_data`; unknown
 fields, browser responses, cookies, tokens, credentials, image paths, supplier

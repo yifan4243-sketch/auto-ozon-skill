@@ -96,70 +96,19 @@ describe('listing-preparation workflow', () => {
     expect(result.nextActions[0]).toContain('category-decision');
   });
 
-  it('can continue through the independent draft-generation step', async () => {
+  it('rejects unknown steps outside the current workflow', async () => {
     const { store, runId } = await seededSourceRun();
-    const transport = {
-      getAttributes: vi.fn(async () => ({
-        result: [4180, 4191, 23171].map((id) => ({
-          id,
-          name: String(id),
-          description: '',
-          type: 'String',
-          is_required: true,
-          is_collection: false,
-          is_aspect: false,
-          dictionary_id: 0,
-          group_id: 1,
-          group_name: '内容',
-          category_dependent: true,
-        })),
-      })),
-      getAttributeValuesPage: vi.fn(async () => ({ result: [], has_next: false })),
-    };
-    const evidence = [{
-      source: 'agent_reasoning' as const,
-      field: 'product.title_zh',
-      value: '测试商品',
-    }];
-
     const result = await runListingPreparation({
       run_id: runId,
       start_from: 'canonicalize-product',
-      stop_after: 'draft-generation',
-      category_decision_provider: decisionProvider(),
-      category_attributes: { transport },
-      stop_on_review: false,
+      stop_after: 'not-a-step' as never,
       artifact_store: store,
-      draft_content: {
-        source_offer_id: '123456789',
-        sku_inputs: [{
-          source_sku_id: 'sku-1',
-          name_ru: { value: 'Тестовый товар', confidence: 'high', evidence },
-          description_ru: {
-            value: 'Описание тестового товара на русском языке.',
-            confidence: 'high',
-            evidence,
-          },
-          hashtags_ru: {
-            value: Array.from({ length: 20 }, (_, index) => `#тест${index + 1}`),
-            confidence: 'high',
-            evidence,
-          },
-        }],
-      },
     });
 
     expect(result).toMatchObject({
-      ok: true,
-      data: {
-        status: 'succeeded',
-        stopped_after: 'draft-generation',
-        draft: { status: 'completed' },
-      },
+      ok: false,
+      errors: [{ code: 'STEP_NOT_ENABLED' }],
     });
-    await expect(
-      store.exists(runId, 'draft-generation', 'product-draft-v1.json'),
-    ).resolves.toBe(true);
   });
 });
 

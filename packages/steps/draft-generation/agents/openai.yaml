@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ozon Draft Generation"
-  short_description: "Generate validated Ozon drafts from mapped attributes"
-  default_prompt: "Use $ozon-draft-generation to add Russian copy to this AttributeMappingV1 and produce a validated Ozon draft."

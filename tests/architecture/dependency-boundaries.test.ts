@@ -14,7 +14,6 @@ describe('architecture dependency boundaries', () => {
       .flatMap((file) => forbiddenImports(file, [
         '@auto-ozon/step-',
         '@auto-ozon/workflows',
-        '@auto-ozon/transformer',
       ]));
     expect(violations).toEqual([]);
   });

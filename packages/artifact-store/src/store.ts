@@ -15,7 +15,6 @@ const STEP_DIRECTORIES: Record<WorkflowStepName, string> = {
   'category-decision': '03-category-decision',
   'category-attributes': '04-category-attributes',
   'attribute-mapping': '05-attribute-mapping',
-  'draft-generation': '06-draft',
 };
 
 export interface ArtifactStore {
