@@ -13,8 +13,9 @@ const STEP_DIRECTORIES: Record<WorkflowStepName, string> = {
   'source-1688': '01-source',
   'canonicalize-product': '02-canonical',
   'category-decision': '03-category-decision',
-  'category-attributes': '04-category-attributes',
-  'attribute-mapping': '05-attribute-mapping',
+  'cost-pricing': '04-cost-pricing',
+  'category-attributes': '05-category-attributes',
+  'attribute-mapping': '06-attribute-mapping',
 };
 
 export interface ArtifactStore {

@@ -4,6 +4,7 @@ export const LISTING_PREPARATION_ORDER: readonly WorkflowStepName[] = [
   'source-1688',
   'canonicalize-product',
   'category-decision',
+  'cost-pricing',
   'category-attributes',
   'attribute-mapping',
 ];

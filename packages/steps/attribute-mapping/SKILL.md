@@ -23,7 +23,7 @@ current Agent's semantic selections. Do not call an external model runtime.
    small inputs.
    Do not hand-author common, variant, or Ozon-ready arrays.
 7. Save output matching `output.schema.json` as
-   `05-attribute-mapping/attribute-mapping-v1.json`.
+   `06-attribute-mapping/attribute-mapping-v1.json`.
 
 ## Boundaries
 

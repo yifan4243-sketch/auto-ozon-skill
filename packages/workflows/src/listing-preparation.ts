@@ -5,6 +5,10 @@ import type {
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
   CommandResult,
+  CostPricingAgentInputV1,
+  CostPricingFxRateV1,
+  CostPricingProfileV1,
+  CostPricingV1,
   WorkflowRunManifestV1,
   WorkflowStepName,
   WorkflowStepStatus,
@@ -32,6 +36,10 @@ import {
   type RunCategoryAttributesInput,
 } from '@auto-ozon/step-category-attributes';
 import { runAttributeMapping } from '@auto-ozon/step-attribute-mapping';
+import {
+  runCostPricing,
+  type CostPricingFxRateProvider,
+} from '@auto-ozon/step-cost-pricing';
 import type { CollectedSourcingRun } from '@auto-ozon/adapters-1688';
 import { LISTING_PREPARATION_ORDER } from './step-registry.js';
 
@@ -41,6 +49,12 @@ export interface RunListingPreparationInput {
   category_decision_provider?: CategoryDecisionProvider;
   category_decision_file?: string;
   category_attributes?: Pick<RunCategoryAttributesInput, 'force_refresh' | 'transport'>;
+  cost_pricing_profile?: Partial<CostPricingProfileV1>;
+  cost_pricing_agent_input?: CostPricingAgentInputV1;
+  cost_pricing_commission_snapshot?: unknown;
+  cost_pricing_commission_snapshot_sha256?: string;
+  cost_pricing_fx_rate?: CostPricingFxRateV1;
+  cost_pricing_fx_provider?: CostPricingFxRateProvider;
   attribute_mapping_agent_input?: AttributeMappingAgentInputV1;
   start_from?: WorkflowStepName;
   stop_after?: WorkflowStepName;
@@ -60,6 +74,7 @@ export interface ListingPreparationResultV1 {
   source?: CollectedSourcingRun;
   product?: CanonicalProductV2;
   category_decision?: CategoryDecisionV1;
+  cost_pricing?: CostPricingV1;
   category_attributes?: CategoryAttributesGroupV1[];
   attribute_mapping?: AttributeMappingV1;
 }
@@ -97,6 +112,20 @@ async function executeListingPreparation(
   const store = input.artifact_store ?? new FileArtifactStore();
   const runId = input.run_id ?? createRunId();
   await store.ensureRun(runId);
+  const runManifest = await store.readManifest(runId);
+  if (!runManifest || !Object.prototype.hasOwnProperty.call(runManifest.steps, 'cost-pricing')) {
+    return workflowFailure(
+      {
+        run_id: runId,
+        artifact_store: store,
+        logger: input.logger ?? createFileWorkflowLogger(store.runsRoot, runId),
+        force_refresh: false,
+        signal: input.signal,
+      },
+      'LEGACY_STEP_LAYOUT_UNSUPPORTED',
+      'This run predates cost-pricing and cannot be resumed. Start a new run; historical files were not changed.',
+    );
+  }
   const context: WorkflowContext = {
     run_id: runId,
     artifact_store: store,
@@ -251,6 +280,52 @@ async function executeListingPreparation(
     );
   }
 
+  const previousPricing = await store.read<CostPricingV1>(
+    runId,
+    'cost-pricing',
+    'cost-pricing-v1.json',
+  );
+  let pricing = await restore<CostPricingV1>(
+    context,
+    'cost-pricing',
+    'cost-pricing-v1.json',
+    startFrom,
+    shouldForce('cost-pricing') || Boolean(
+      input.cost_pricing_agent_input
+      || input.cost_pricing_profile
+      || input.cost_pricing_commission_snapshot,
+    ),
+  );
+  if (!pricing) {
+    const step = await runCostPricing(
+      {
+        product,
+        category_decision: decision,
+        profile: input.cost_pricing_profile,
+        agent_input: input.cost_pricing_agent_input ?? recoverPricingAgentInput(previousPricing),
+        commission_snapshot: input.cost_pricing_commission_snapshot,
+        commission_snapshot_sha256: input.cost_pricing_commission_snapshot_sha256,
+        fx_rate: previousPricing?.fx_rate ?? input.cost_pricing_fx_rate ?? undefined,
+        fx_provider: input.cost_pricing_fx_provider,
+      },
+      context,
+    );
+    if (!step.data || !step.ok) return stopFromStep(context, 'cost-pricing', step, result);
+    pricing = step.data;
+  }
+  result.cost_pricing = pricing;
+  const pricingStatus = pricing.status === 'completed'
+    ? 'succeeded'
+    : pricing.status === 'needs_agent'
+      ? 'needs_review'
+      : 'blocked';
+  if (pricingStatus === 'blocked' || pricing.status === 'needs_agent') {
+    return workflowSuccess(context, 'cost-pricing', result, pricingStatus);
+  }
+  if (stopAfter === 'cost-pricing') {
+    return workflowSuccess(context, 'cost-pricing', result, pricingStatus);
+  }
+
   let attributes = await restore<CategoryAttributesGroupV1[]>(
     context,
     'category-attributes',
@@ -306,6 +381,24 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
   }
   return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
+}
+
+function recoverPricingAgentInput(pricing: CostPricingV1 | null): CostPricingAgentInputV1 | undefined {
+  if (!pricing || pricing.status !== 'completed') return undefined;
+  const skuInputs = pricing.sku_pricing
+    .filter((sku) => sku.package.source === 'agent_estimated')
+    .map((sku) => ({
+      source_sku_id: sku.source_sku_id,
+      packaged_weight_g: sku.package.source_weight_g,
+      length_cm: sku.package.length_cm,
+      width_cm: sku.package.width_cm,
+      height_cm: sku.package.height_cm,
+      rationale: 'Reused the audited Agent package estimate from this run.',
+      evidence: sku.package.evidence,
+    }));
+  return skuInputs.length > 0
+    ? { source_offer_id: pricing.source_offer_id, sku_inputs: skuInputs }
+    : undefined;
 }
 
 async function restore<T>(

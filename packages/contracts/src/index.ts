@@ -8,3 +8,4 @@ export * from './category-decision.js';
 export * from './category-attributes.js';
 export * from './workflow-run.js';
 export * from './attribute-mapping.js';
+export * from './cost-pricing.js';

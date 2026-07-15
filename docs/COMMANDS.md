@@ -121,6 +121,13 @@ auto-ozon workflow listing prepare "收纳盒" \
   --stop-after attribute-mapping \
   --json --pretty
 
+# Complete missing package estimates from the current Agent.
+auto-ozon workflow listing prepare "收纳盒" \
+  --run-id listing-cup-001 \
+  --start-from cost-pricing \
+  --pricing-agent-stdin \
+  --json --pretty
+
 auto-ozon workflow listing prepare "收纳盒" \
   --run-id listing-cup-001 \
   --start-from category-attributes \
@@ -132,8 +139,14 @@ auto-ozon workflow listing prepare "收纳盒" \
 The workflow reuses successful artifacts, stops on `needs_review` by default,
 and reruns downstream dependants when a step is forced. Supported step names
 are `source-1688`, `canonicalize-product`, `category-decision`,
-`category-attributes`, and `attribute-mapping`. The workflow always ends after
+`cost-pricing`, `category-attributes`, and `attribute-mapping`. Cost pricing runs
+after category decision and before category-attribute retrieval. The workflow always ends after
 the factual attribute mapping artifact is validated.
+
+Use `--pricing-profile-json` for customer pricing overrides and `--commission-file`
+to replace the bundled commission snapshot. New runs write cost pricing under
+`04-cost-pricing`, category attributes under `05-category-attributes`, and mappings
+under `06-attribute-mapping`; pre-pricing manifests are rejected without migration.
 
 ## Complete PCDCK/ozon-mcp bridge
 

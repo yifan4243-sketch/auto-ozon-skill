@@ -1,8 +1,15 @@
 #!/usr/bin/env node
+import fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
-import type { AttributeMappingAgentInputV1, CommandResult } from '@auto-ozon/contracts';
+import type {
+  AttributeMappingAgentInputV1,
+  CommandResult,
+  CostPricingAgentInputV1,
+  CostPricingProfileV1,
+} from '@auto-ozon/contracts';
 import {
   runOfflineNormalizeCommand,
   runListingPreparation,
@@ -344,12 +351,16 @@ function registerWorkflowCommands(
 
   listing
     .command('prepare')
-    .description('Run or resume source → canonical → category → attributes → mapping')
+    .description('Run or resume source → canonical → category → pricing → attributes → mapping')
     .argument('<keyword>', '1688 keyword used when the source step must run')
     .option('--run-id <id>', 'Reuse a run ID to resume from saved artifacts')
     .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON')
     .option('--attribute-agent-json <json>', 'Agent-selected attribute values as AttributeMappingAgentInputV1 JSON')
     .option('--attribute-agent-stdin', 'Read AttributeMappingAgentInputV1 JSON from stdin')
+    .option('--pricing-agent-json <json>', 'Agent-estimated package values as CostPricingAgentInputV1 JSON')
+    .option('--pricing-agent-stdin', 'Read CostPricingAgentInputV1 JSON from stdin')
+    .option('--pricing-profile-json <json>', 'CostPricingProfileV1 overrides as JSON')
+    .option('--commission-file <path>', 'Ozon category commission snapshot JSON')
     .option('--start-from <step>', 'First step to execute', 'source-1688')
     .option('--stop-after <step>', 'Last step to execute', 'attribute-mapping')
     .option('--force-step <steps...>', 'Refresh this step and all downstream steps')
@@ -358,10 +369,24 @@ function registerWorkflowCommands(
     .option('--profile <name>', '1688 profile name')
     .option('--headed', 'Open a browser window for manual verification')
     .action(async (keyword, opts) => {
+      if (opts.attributeAgentStdin && opts.pricingAgentStdin) {
+        throw new CliError(2, 'BAD_AGENT_INPUT', 'Only one Agent input may read from stdin per invocation.');
+      }
       const attributeAgentInput = await resolveAttributeAgentInput(
         opts.attributeAgentJson,
         Boolean(opts.attributeAgentStdin),
       );
+      const pricingAgentInput = await resolvePricingAgentInput(
+        opts.pricingAgentJson,
+        Boolean(opts.pricingAgentStdin),
+      );
+      const pricingProfile = parsePricingProfile(opts.pricingProfileJson);
+      const commissionText = opts.commissionFile
+        ? await fs.readFile(path.resolve(opts.commissionFile), 'utf8')
+        : undefined;
+      const commissionSnapshot = commissionText === undefined
+        ? undefined
+        : JSON.parse(commissionText) as unknown;
       emitCommandResult(
         await runListingPreparation({
           run_id: opts.runId,
@@ -374,6 +399,12 @@ function registerWorkflowCommands(
             headed: opts.headed,
           },
           category_decision_file: opts.decisionFile,
+          cost_pricing_profile: pricingProfile,
+          cost_pricing_agent_input: pricingAgentInput,
+          cost_pricing_commission_snapshot: commissionSnapshot,
+          cost_pricing_commission_snapshot_sha256: commissionText === undefined
+            ? undefined
+            : createHash('sha256').update(commissionText).digest('hex'),
           attribute_mapping_agent_input: attributeAgentInput,
           start_from: parseWorkflowStep(opts.startFrom),
           stop_after: parseWorkflowStep(opts.stopAfter),
@@ -382,6 +413,44 @@ function registerWorkflowCommands(
         }),
       );
     });
+}
+
+function parsePricingAgentJson(raw: string | undefined): CostPricingAgentInputV1 | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const value = JSON.parse(raw) as Partial<CostPricingAgentInputV1>;
+    if (!value || typeof value.source_offer_id !== 'string' || !Array.isArray(value.sku_inputs)) {
+      throw new Error('shape');
+    }
+    return value as CostPricingAgentInputV1;
+  } catch {
+    throw new CliError(2, 'BAD_PRICING_AGENT_JSON', 'Pricing Agent input must be valid CostPricingAgentInputV1 JSON.');
+  }
+}
+
+async function resolvePricingAgentInput(
+  raw: string | undefined,
+  fromStdin: boolean,
+): Promise<CostPricingAgentInputV1 | undefined> {
+  if (raw !== undefined && fromStdin) {
+    throw new CliError(2, 'BAD_PRICING_AGENT_INPUT', 'Use only one of --pricing-agent-json or --pricing-agent-stdin.');
+  }
+  if (!fromStdin) return parsePricingAgentJson(raw);
+  let input = '';
+  for await (const chunk of process.stdin) input += String(chunk);
+  if (!input.trim()) throw new CliError(2, 'BAD_PRICING_AGENT_INPUT', '--pricing-agent-stdin received no JSON.');
+  return parsePricingAgentJson(input.trim());
+}
+
+function parsePricingProfile(raw: string | undefined): Partial<CostPricingProfileV1> | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('shape');
+    return value as Partial<CostPricingProfileV1>;
+  } catch {
+    throw new CliError(2, 'BAD_PRICING_PROFILE_JSON', '--pricing-profile-json must be a JSON object.');
+  }
 }
 
 function parseAttributeAgentJson(raw: string | undefined): AttributeMappingAgentInputV1 | undefined {
@@ -582,6 +651,7 @@ function parseWorkflowStep(raw: string): import('@auto-ozon/contracts').Workflow
     'source-1688',
     'canonicalize-product',
     'category-decision',
+    'cost-pricing',
     'category-attributes',
     'attribute-mapping',
   ] as const;

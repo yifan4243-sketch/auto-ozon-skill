@@ -28,6 +28,8 @@ describe('listing-preparation workflow', () => {
       start_from: 'canonicalize-product',
       category_decision_provider: provider,
       category_attributes: { transport },
+      cost_pricing_fx_rate: testFxRate(),
+      cost_pricing_agent_input: testPricingAgentInput(),
       stop_on_review: false,
       artifact_store: store,
     });
@@ -45,6 +47,7 @@ describe('listing-preparation workflow', () => {
       'source-1688': { status: 'succeeded' },
       'canonicalize-product': { status: 'needs_review' },
       'category-decision': { status: 'succeeded' },
+      'cost-pricing': { status: 'succeeded' },
       'category-attributes': { status: 'succeeded' },
       'attribute-mapping': { status: 'succeeded' },
     });
@@ -60,6 +63,7 @@ describe('listing-preparation workflow', () => {
         throw new Error('completed decision must be reused');
       }),
       category_attributes: { transport },
+      cost_pricing_fx_rate: testFxRate(),
       stop_on_review: false,
       artifact_store: store,
     });
@@ -71,6 +75,7 @@ describe('listing-preparation workflow', () => {
       start_from: 'canonicalize-product',
       category_decision_provider: provider,
       category_attributes: { transport },
+      cost_pricing_fx_rate: testFxRate(),
       force_steps: ['category-attributes'],
       stop_on_review: false,
       artifact_store: store,
@@ -110,6 +115,45 @@ describe('listing-preparation workflow', () => {
       errors: [{ code: 'STEP_NOT_ENABLED' }],
     });
   });
+
+  it('stops for required pricing Agent input even when continue-on-review is enabled', async () => {
+    const { store, runId } = await seededSourceRun();
+    const result = await runListingPreparation({
+      run_id: runId,
+      start_from: 'canonicalize-product',
+      category_decision_provider: decisionProvider(),
+      cost_pricing_fx_rate: testFxRate(),
+      stop_on_review: false,
+      artifact_store: store,
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        status: 'needs_review',
+        stopped_after: 'cost-pricing',
+        cost_pricing: { status: 'needs_agent', agent_tasks: [{ source_sku_id: 'sku-1' }] },
+      },
+    });
+  });
+
+  it('rejects legacy manifests without moving or rewriting their artifacts', async () => {
+    const { store, runId, root } = await seededSourceRun();
+    const manifestPath = path.join(root, 'runs', runId, 'manifest.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as { steps: Record<string, unknown> };
+    delete manifest.steps['cost-pricing'];
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+    const result = await runListingPreparation({
+      run_id: runId,
+      start_from: 'canonicalize-product',
+      artifact_store: store,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      errors: [{ code: 'LEGACY_STEP_LAYOUT_UNSUPPORTED' }],
+    });
+    await expect(fs.stat(path.join(root, 'runs', runId, '01-source', 'offer-result.json'))).resolves.toBeTruthy();
+  });
 });
 
 async function seededSourceRun() {
@@ -142,7 +186,7 @@ async function seededSourceRun() {
     },
   });
   await store.updateStep(runId, 'source-1688', { status: 'succeeded', output });
-  return { store, runId };
+  return { store, runId, root };
 }
 
 function decisionProvider() {
@@ -177,4 +221,33 @@ function decisionProvider() {
     warnings: [],
     errors: [],
   }));
+}
+
+function testFxRate() {
+  return {
+    provider: 'cbr' as const,
+    cny_nominal: 1,
+    rub_value: 10,
+    rub_per_cny: 10,
+    published_at: '2026-07-15T00:00:00.000Z',
+    fetched_at: '2026-07-15T00:00:00.000Z',
+    source_url: 'https://www.cbr.ru/scripts/XML_daily.asp',
+    response_sha256: 'a'.repeat(64),
+    cache_status: 'live' as const,
+  };
+}
+
+function testPricingAgentInput() {
+  return {
+    source_offer_id: '123456789',
+    sku_inputs: [{
+      source_sku_id: 'sku-1',
+      packaged_weight_g: 400,
+      length_cm: 20,
+      width_cm: 15,
+      height_cm: 10,
+      rationale: 'Integration fixture estimate.',
+      evidence: ['fixture package dimensions'],
+    }],
+  };
 }

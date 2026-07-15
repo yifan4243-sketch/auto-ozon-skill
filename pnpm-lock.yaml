@@ -146,6 +146,18 @@ importers:
         specifier: ^4.23.0
         version: 4.23.0
 
+  packages/steps/cost-pricing:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+
   packages/steps/source-1688:
     dependencies:
       '@auto-ozon/adapters-1688':
@@ -184,6 +196,9 @@ importers:
       '@auto-ozon/step-category-decision':
         specifier: workspace:*
         version: link:../steps/category-decision
+      '@auto-ozon/step-cost-pricing':
+        specifier: workspace:*
+        version: link:../steps/cost-pricing
       '@auto-ozon/step-source-1688':
         specifier: workspace:*
         version: link:../steps/source-1688

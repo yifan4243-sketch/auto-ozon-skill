@@ -57,6 +57,10 @@ pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
 pnpm --filter @auto-ozon/cli dev -- workflow listing prepare "收纳盒" --stop-after attribute-mapping --json --pretty
 ```
 
+The listing workflow now calculates auditable CEL landed cost and an integer CNY
+price after category decision. Missing package facts are returned as Agent tasks;
+resume with `--start-from cost-pricing --pricing-agent-stdin`.
+
 See `docs/COMMANDS.md` for the full CLI surface.
 
 ### Retained-facts boundary

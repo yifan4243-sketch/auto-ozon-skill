@@ -2,6 +2,7 @@ export const WORKFLOW_STEP_NAMES = [
   'source-1688',
   'canonicalize-product',
   'category-decision',
+  'cost-pricing',
   'category-attributes',
   'attribute-mapping',
 ] as const;

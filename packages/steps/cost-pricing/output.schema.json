@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/cost-pricing-v1.json",
+  "title": "CostPricingV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_offer_id", "status", "profile", "tariff_version", "commission_snapshot_sha256", "fx_rate", "sku_pricing", "agent_tasks", "warnings", "errors"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "source_offer_id": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["completed", "needs_agent", "blocked"] },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transport", "sales_unit_quantity", "pricing_multiplier", "retained_target_percent", "label_fee_cny", "domestic_shipping_cny", "other_fixed_cny", "other_rate_percent"],
+      "properties": {
+        "transport": { "enum": ["air", "air_land", "land"] },
+        "sales_unit_quantity": { "type": "integer", "minimum": 1 },
+        "pricing_multiplier": { "type": "number", "exclusiveMinimum": 0 },
+        "retained_target_percent": { "type": "number", "minimum": 0 },
+        "label_fee_cny": { "type": "number", "minimum": 0 },
+        "domestic_shipping_cny": { "type": "number", "minimum": 0 },
+        "other_fixed_cny": { "type": "number", "minimum": 0 },
+        "other_rate_percent": { "type": "number", "minimum": 0, "exclusiveMaximum": 100 }
+      }
+    },
+    "tariff_version": { "const": "CEL-2026-effective" },
+    "commission_snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "fx_rate": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/fx" }] },
+    "sku_pricing": { "type": "array", "items": { "$ref": "#/$defs/sku" } },
+    "agent_tasks": { "type": "array", "items": { "$ref": "#/$defs/task" } },
+    "warnings": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+    "errors": { "type": "array", "items": { "$ref": "#/$defs/issue" } }
+  },
+  "$defs": {
+    "positive": { "type": "number", "exclusiveMinimum": 0 },
+    "fx": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "cny_nominal", "rub_value", "rub_per_cny", "published_at", "fetched_at", "source_url", "response_sha256", "cache_status"],
+      "properties": {
+        "provider": { "const": "cbr" }, "cny_nominal": { "$ref": "#/$defs/positive" },
+        "rub_value": { "$ref": "#/$defs/positive" }, "rub_per_cny": { "$ref": "#/$defs/positive" },
+        "published_at": { "type": "string" }, "fetched_at": { "type": "string" },
+        "source_url": { "type": "string" }, "response_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "cache_status": { "enum": ["live", "cached"] }
+      }
+    },
+    "package": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "confidence", "actual_weight_g", "source_weight_g", "estimate_weight_buffer_percent", "length_cm", "width_cm", "height_cm", "evidence"],
+      "properties": {
+        "source": { "enum": ["1688", "agent_estimated"] }, "confidence": { "enum": ["high", "low"] },
+        "actual_weight_g": { "$ref": "#/$defs/positive" }, "source_weight_g": { "$ref": "#/$defs/positive" },
+        "estimate_weight_buffer_percent": { "type": "number", "minimum": 0 },
+        "length_cm": { "$ref": "#/$defs/positive" }, "width_cm": { "$ref": "#/$defs/positive" }, "height_cm": { "$ref": "#/$defs/positive" },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "commission": {
+      "type": "object", "additionalProperties": false,
+      "required": ["category_id", "price_min_rub", "price_max_rub", "rate_percent"],
+      "properties": {
+        "category_id": { "type": "integer", "minimum": 1 }, "price_min_rub": { "type": "number", "minimum": 0 },
+        "price_max_rub": { "type": ["number", "null"] }, "rate_percent": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "sku": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_sku_id", "group_id", "description_category_id", "purchase_price_cny", "purchase_cost_cny", "package", "volume_weight_kg", "charge_weight_g", "cel_group", "cel_rate_per_g_cny", "cel_fixed_fee_cny", "cel_shipping_cny", "landed_cost_cny", "final_price_cny", "final_price_rub", "commission", "commission_amount_cny", "other_rate_amount_cny", "estimated_profit_cny", "estimated_profit_margin_percent"],
+      "properties": {
+        "source_sku_id": { "type": "string", "minLength": 1 }, "group_id": { "type": "string", "minLength": 1 },
+        "description_category_id": { "type": "integer", "minimum": 1 },
+        "purchase_price_cny": { "$ref": "#/$defs/positive" }, "purchase_cost_cny": { "$ref": "#/$defs/positive" },
+        "package": { "$ref": "#/$defs/package" }, "volume_weight_kg": { "$ref": "#/$defs/positive" },
+        "charge_weight_g": { "$ref": "#/$defs/positive" }, "cel_group": { "type": "string", "minLength": 1 },
+        "cel_rate_per_g_cny": { "$ref": "#/$defs/positive" }, "cel_fixed_fee_cny": { "$ref": "#/$defs/positive" },
+        "cel_shipping_cny": { "$ref": "#/$defs/positive" }, "landed_cost_cny": { "$ref": "#/$defs/positive" },
+        "final_price_cny": { "type": "integer", "minimum": 1 }, "final_price_rub": { "$ref": "#/$defs/positive" },
+        "commission": { "$ref": "#/$defs/commission" }, "commission_amount_cny": { "type": "number", "minimum": 0 },
+        "other_rate_amount_cny": { "type": "number", "minimum": 0 }, "estimated_profit_cny": { "type": "number" },
+        "estimated_profit_margin_percent": { "type": "number" }
+      }
+    },
+    "task": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_sku_id", "group_id", "instruction", "source_facts"],
+      "properties": {
+        "source_sku_id": { "type": "string", "minLength": 1 }, "group_id": { "type": "string", "minLength": 1 },
+        "instruction": { "type": "string", "minLength": 1 }, "source_facts": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "issue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "message", "sku_ids"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 }, "message": { "type": "string", "minLength": 1 },
+        "sku_ids": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

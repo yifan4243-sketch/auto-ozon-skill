@@ -139,7 +139,7 @@ describe('runAttributeMapping', () => {
     )).toBe(true);
     expect((await store.readManifest('mapping-run'))?.steps['attribute-mapping']).toMatchObject({
       status: 'succeeded',
-      output: '05-attribute-mapping/attribute-mapping-v1.json',
+      output: '06-attribute-mapping/attribute-mapping-v1.json',
     });
   });
 
