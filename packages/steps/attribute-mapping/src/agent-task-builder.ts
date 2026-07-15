@@ -6,24 +6,25 @@ import type {
   CategoryAttributeV1,
 } from '@auto-ozon/contracts';
 
-export const SCRIPT_ATTRIBUTE_IDS = new Set([85, 4383, 4389, 9048, 11650, 23249]);
+export const SCRIPT_ATTRIBUTE_IDS = new Set([85, 4383, 4389, 4497, 9048, 11650, 23249]);
+const REQUIRED_SCRIPT_ATTRIBUTE_IDS = new Set([85, 4383, 4389, 9048, 11650, 23249]);
 export const AGENT_ATTRIBUTE_IDS = new Set([4180, 4191, 4383, 8229, 10096, 23171]);
+const SYSTEM_ONLY_ATTRIBUTE_IDS = new Set([21837, 21841, 21845, 22273, 22232, 23536, 8789, 8790, 11254]);
 
 export function shouldProcessAttribute(attribute: CategoryAttributeV1): boolean {
-  return SCRIPT_ATTRIBUTE_IDS.has(attribute.id) ||
-    AGENT_ATTRIBUTE_IDS.has(attribute.id) ||
-    attribute.required;
+  return true;
 }
 
 export function isBusinessRequired(attribute: CategoryAttributeV1): boolean {
   return attribute.required ||
     AGENT_ATTRIBUTE_IDS.has(attribute.id) ||
-    SCRIPT_ATTRIBUTE_IDS.has(attribute.id);
+    REQUIRED_SCRIPT_ATTRIBUTE_IDS.has(attribute.id);
 }
 
 export function shouldRequestAgent(attribute: CategoryAttributeV1): boolean {
   return AGENT_ATTRIBUTE_IDS.has(attribute.id) ||
-    (attribute.required && !SCRIPT_ATTRIBUTE_IDS.has(attribute.id));
+    (attribute.required && !SCRIPT_ATTRIBUTE_IDS.has(attribute.id)) ||
+    !SYSTEM_ONLY_ATTRIBUTE_IDS.has(attribute.id);
 }
 
 export function buildAgentTask(
@@ -68,7 +69,7 @@ export function buildAgentTask(
 function instructionFor(attribute: CategoryAttributeV1): string {
   switch (attribute.id) {
     case 4180:
-      return 'Write a Russian title: category + product name + variant attributes. Omit every brand and no-brand phrase.';
+      return 'Write one natural Russian product name in a single field. It may state the product and supported use cases, but must not contain a brand or a no-brand phrase.';
     case 4191:
       return 'Write a factual Russian description with at least 4 paragraphs and 500 non-whitespace characters.';
     case 4383:
@@ -81,7 +82,7 @@ function instructionFor(attribute: CategoryAttributeV1): string {
       return 'Write exactly 20 unique Russian hashtags separated by one space; every tag starts with # and multiword tags use underscores.';
     default:
       return attribute.dictionary_id > 0
-        ? 'This is an additional required attribute. Select only values from dictionary_candidates using retained 1688 facts.'
-        : 'This is an additional required attribute. Fill only from retained 1688 facts and cite canonical_v2 evidence.';
+        ? 'This optional attribute may be filled only when retained 1688 facts support a value. Select only values from dictionary_candidates; otherwise omit it.'
+        : 'This optional attribute may be filled only from retained 1688 facts. Do not estimate dimensions, generate media, invent compliance codes, or fill it without evidence.';
   }
 }

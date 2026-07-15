@@ -7,6 +7,7 @@ import type {
   CanonicalProductV2,
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
+  CostPricingV1,
 } from '../../../../packages/contracts/src/index.js';
 import {
   FileArtifactStore,
@@ -176,6 +177,26 @@ describe('runAttributeMapping', () => {
     expect(weight).toMatchObject({ provenance: 'agent_selected', confidence: 'low' });
   });
 
+  it('reuses the completed cost-pricing weight and derives packaging weight', async () => {
+    const fixture = inputFixture();
+    fixture.cost_pricing = costPricingFixture();
+    const result = await runAttributeMapping(fixture);
+    const red = result.data?.sku_attributes.find((sku) => sku.source_sku_id === 'red')?.attributes;
+    const blue = result.data?.sku_attributes.find((sku) => sku.source_sku_id === 'blue')?.attributes;
+    expect(red?.find((attribute) => attribute.attribute_id === 4383)).toMatchObject({
+      values: [{ value: '240' }], provenance: 'derived',
+    });
+    expect(red?.find((attribute) => attribute.attribute_id === 4497)).toMatchObject({
+      values: [{ value: '290' }], provenance: 'derived',
+    });
+    expect(blue?.find((attribute) => attribute.attribute_id === 4383)).toMatchObject({
+      values: [{ value: '260' }], provenance: 'derived',
+    });
+    expect(blue?.find((attribute) => attribute.attribute_id === 4497)).toMatchObject({
+      values: [{ value: '310' }], provenance: 'derived',
+    });
+  });
+
   it('rejects short descriptions and malformed hashtag sets', async () => {
     const fixture = inputFixture();
     const attributes = fixture.agent_input!.sku_inputs[0]!.attributes;
@@ -219,6 +240,7 @@ function inputFixture(): {
   product: CanonicalProductV2;
   category_decision: CategoryDecisionV1;
   category_attributes: CategoryAttributesGroupV1[];
+  cost_pricing?: CostPricingV1;
   agent_input?: AttributeMappingAgentInputV1;
 } {
   const product: CanonicalProductV2 = {
@@ -335,6 +357,25 @@ function inputFixture(): {
     category_attributes,
     agent_input,
     run_created_at: '2026-07-10T14:33:44.000Z',
+  };
+}
+
+function costPricingFixture(): CostPricingV1 {
+  return {
+    schema_version: 1,
+    source_offer_id: '123456789',
+    status: 'completed',
+    profile: {} as CostPricingV1['profile'],
+    tariff_version: 'CEL-2026-effective',
+    commission_snapshot_sha256: 'a'.repeat(64),
+    fx_rate: null,
+    sku_pricing: [
+      { source_sku_id: 'red', package: { actual_weight_g: 240 } },
+      { source_sku_id: 'blue', package: { actual_weight_g: 260 } },
+    ] as CostPricingV1['sku_pricing'],
+    agent_tasks: [],
+    warnings: [],
+    errors: [],
   };
 }
 

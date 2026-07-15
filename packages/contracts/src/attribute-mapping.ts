@@ -8,7 +8,7 @@ export type AttributeMappingProvenanceV1 =
   | 'default';
 
 export interface AttributeMappingEvidenceV1 {
-  source: 'canonical_v2' | 'category_attributes' | 'category_decision' | 'agent_input' | 'policy';
+  source: 'canonical_v2' | 'category_attributes' | 'category_decision' | 'cost_pricing' | 'agent_input' | 'policy';
   field: string;
   value: string;
 }

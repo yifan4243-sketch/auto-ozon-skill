@@ -2,6 +2,7 @@ import type {
   CanonicalProductV2,
   CanonicalSkuV2,
   CategoryAttributeV1,
+  CostPricingV1,
   MappedOzonAttributeV1,
 } from '@auto-ozon/contracts';
 import { extractProductFacts, normalizeFactText } from './product-fact-extractor.js';
@@ -10,6 +11,7 @@ import { normalizedNetWeightGrams, parseWeightTextToGrams } from './unit-normali
 const ATTRIBUTE = {
   brand: 85,
   netWeight: 4383,
+  packagedWeight: 4497,
   originCountry: 4389,
   modelName: 9048,
   factoryPackageCount: 11650,
@@ -26,6 +28,7 @@ export function matchDeterministicAttribute(
   sku: CanonicalSkuV2,
   attribute: CategoryAttributeV1,
   runTimestamp: string,
+  costPricing?: CostPricingV1,
 ): MappedOzonAttributeV1 | null {
   if (attribute.id === ATTRIBUTE.brand) {
     return fixedDictionaryDefault(
@@ -39,6 +42,14 @@ export function matchDeterministicAttribute(
     return dictionaryDefault(attribute, DEFAULT_DICTIONARY.china, '1688 source country policy');
   }
 
+  const costWeight = costPricing?.sku_pricing.find((entry) => entry.source_sku_id === sku.source_sku_id)
+    ?.package.actual_weight_g;
+  if (attribute.id === ATTRIBUTE.netWeight && costWeight && costWeight > 3) {
+    return costDerived(attribute.id, costWeight, 'cost_pricing.package.actual_weight_g');
+  }
+  if (attribute.id === ATTRIBUTE.packagedWeight && costWeight && costWeight > 3) {
+    return costDerived(attribute.id, costWeight + 50, 'cost_pricing.package.actual_weight_g + 50g');
+  }
   const weight = sourceNetWeightGrams(product, sku);
   if (attribute.id === ATTRIBUTE.netWeight && weight !== null) {
     return mapped(attribute.id, String(weight), 'converted', 'high', 'sku.package.raw_weight');
@@ -53,6 +64,16 @@ export function matchDeterministicAttribute(
     return mapped(attribute.id, '1', 'default', 'medium', 'default unified item count');
   }
   return null;
+}
+
+function costDerived(attributeId: number, weight: number, field: string): MappedOzonAttributeV1 {
+  return {
+    attribute_id: attributeId,
+    values: [{ value: String(weight) }],
+    provenance: 'derived',
+    confidence: 'low',
+    evidence: [{ source: 'cost_pricing', field, value: String(weight) }],
+  };
 }
 
 export function formatRunTimestamp(createdAt: string): string {

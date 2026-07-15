@@ -109,7 +109,7 @@
       "additionalProperties": false,
       "required": ["source", "field", "value"],
       "properties": {
-        "source": { "enum": ["canonical_v2", "category_attributes", "category_decision", "agent_input", "policy"] },
+        "source": { "enum": ["canonical_v2", "category_attributes", "category_decision", "cost_pricing", "agent_input", "policy"] },
         "field": { "type": "string", "minLength": 1 },
         "value": { "type": "string" }
       }

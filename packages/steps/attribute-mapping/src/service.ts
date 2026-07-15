@@ -5,6 +5,7 @@ import type {
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
   CommandResult,
+  CostPricingV1,
   MappedOzonAttributeV1,
   OzonReadyAttributeV1,
   SkuAttributeMappingV1,
@@ -28,6 +29,7 @@ export interface RunAttributeMappingInput {
   product: CanonicalProductV2;
   category_decision: CategoryDecisionV1;
   category_attributes: CategoryAttributesGroupV1[];
+  cost_pricing?: CostPricingV1;
   agent_input?: AttributeMappingAgentInputV1;
   run_created_at?: string;
 }
@@ -174,7 +176,13 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
       const attributes: MappedOzonAttributeV1[] = [];
       for (const schema of snapshot.attributes_schema.attributes) {
         if (!shouldProcessAttribute(schema)) continue;
-        const deterministic = matchDeterministicAttribute(input.product, sku, schema, runTimestamp);
+        const deterministic = matchDeterministicAttribute(
+          input.product,
+          sku,
+          schema,
+          runTimestamp,
+          input.cost_pricing,
+        );
         const agent = deterministic
           ? { attribute: null, error: null }
           : resolveAgentAttribute(
@@ -186,7 +194,7 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
         const mapped = deterministic ?? agent.attribute;
         if (mapped) {
           attributes.push(mapped);
-          if (mapped.confidence === 'low' && schema.id !== 4383) {
+          if (mapped.confidence === 'low' && ![4383, 4497].includes(schema.id)) {
             result.warnings.push(issue(
               'LOW_CONFIDENCE_ATTRIBUTE',
               `Attribute ${schema.id} has low confidence.`,
@@ -194,21 +202,23 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
               [schema.id],
             ));
           }
-        } else if (isBusinessRequired(schema)) {
-          result.missing_required_attributes.push({
-            group_id: group.group_id,
-            attribute_id: schema.id,
-            attribute_name: schema.name,
-            source_sku_ids: [sourceSkuId],
-          });
-          result.unresolved_attributes.push({
-            group_id: group.group_id,
-            attribute_id: schema.id,
-            attribute_name: schema.name,
-            source_sku_ids: [sourceSkuId],
-            reason: agent.error ?? 'no_source_match',
-          });
-          if (shouldRequestAgent(schema)) {
+        } else {
+          if (isBusinessRequired(schema)) {
+            result.missing_required_attributes.push({
+              group_id: group.group_id,
+              attribute_id: schema.id,
+              attribute_name: schema.name,
+              source_sku_ids: [sourceSkuId],
+            });
+            result.unresolved_attributes.push({
+              group_id: group.group_id,
+              attribute_id: schema.id,
+              attribute_name: schema.name,
+              source_sku_ids: [sourceSkuId],
+              reason: agent.error ?? 'no_source_match',
+            });
+          }
+          if (shouldRequestAgent(schema) && (!input.agent_input || isBusinessRequired(schema))) {
             result.agent_tasks.push(buildAgentTask(input.product, sku, group.group_id, schema));
           }
         }

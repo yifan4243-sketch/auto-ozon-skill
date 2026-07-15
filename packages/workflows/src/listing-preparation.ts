@@ -366,6 +366,7 @@ async function executeListingPreparation(
         product,
         category_decision: decision,
         category_attributes: attributes,
+        cost_pricing: pricing,
         agent_input: input.attribute_mapping_agent_input,
       },
       context,
