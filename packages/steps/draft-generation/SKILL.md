@@ -1,5 +1,5 @@
 ---
-name: draft-generation
+name: ozon-draft-generation
 description: Combine completed product, category, pricing, mapping, and 1688 image artifacts into a validated internal Ozon-shaped ListingDraftV1. This Skill never submits to Ozon.
 ---
 
