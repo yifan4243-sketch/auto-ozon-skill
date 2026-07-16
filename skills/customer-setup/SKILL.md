@@ -17,28 +17,53 @@ does not decide whether a later request needs market selection or a supplied
 ## First use
 
 1. Inspect `.env`, `data/config/ozon-stores.local.json`, and
-   `data/config/customer-settings.local.json` if they exist. Report only whether
-   a secret is configured; never display it.
-2. Ask only for information that is missing or that the customer asked to
-   change. Ask in this order, keeping each question short:
+   `data/config/customer-settings.local.json` if they exist. Also run `1688
+   profile list`. Report only whether a secret or profile is configured; never
+   display a secret, cookie, QR payload, or session value.
+2. Before doing any product work, ensure that at least two independent 1688
+   Profiles are logged in. If fewer than two are usable, tell the customer:
+
+   > 为了在 1688 风控、登录失效或采集失败时能切换账号，请先登录至少两个 1688 账号。我会依次打开二维码登录；请分别扫码完成账号 1 和账号 2 的登录。
+
+   Create distinct profile names such as `account-1` and `account-2`, unless
+   the customer supplies names. Run and verify each profile in turn:
+
+   ```text
+   1688 login --profile account-1
+   1688 login --profile account-2
+   1688 profile status --profile account-1
+   1688 profile status --profile account-2
+   ```
+
+   Do not collect products until two profiles are usable. Do not expose their
+   cookies or attempt to bypass any login verification.
+3. Bind an Ozon store if no local store is configured. Ask only for the
+   following information, in this order:
+
    - “请按当下格式给我提供店铺信息，我帮您绑定店铺：\n备注\nID\nAPI KEY”
-   - “由于 1688 有部分商品有很多个 SKU，而且 Ozon 平台每个 SKU 都算一个商品额度，我建议设置最大 SKU 数量，舍弃那些 SKU 数过多的商品。请告诉我最大 SKU 数量。”
-   - “采集采购价区间是多少？请按 CNY 提供最低价和最高价；不限制可回答‘不限制’。”
-   - “售价和成本的计算公式是什么？例如：到俄固定成本 × 2。”
-   Ask only after these answers are confirmed whether automatic publishing
-   should be enabled. Default: `false`. Keep the existing account retry policy
-   and per-step timeout unless the customer explicitly asks to change them.
+4. Then ask exactly one image question:
 
-   Ask the following question **only** when the customer explicitly asks to
-   generate product images or configure image generation:
-   - “请提供生图模型配置：\n\n接口地址 Base URL\n模型名称\nAPI KEY\n是否使用 1688 原图作为参考图（默认：是）\n\n如果您没有生图模型 API Key，可联系作者微信：ziyi_ozon，请备注来意。”
+   > 是否需要为商品生成图片？默认不生成，直接使用 1688 图片。回答“需要”后我再帮您配置生图模型。
 
-   Never ask for an LLM API Key, LLM Base URL, LLM model name, or a key for
-   Russian copy. Russian copy and semantic attribute decisions are performed
-   by the current Agent itself, then validated by repository rules.
-3. Recap the proposed values, including the warning that enabling publishing
-   permits `workflow listing publish` without a per-batch confirmation. Obtain
-   one explicit confirmation before writing files.
+   - If the customer answers “不需要”, do not ask for any image-model field and
+     do not create image-generation configuration.
+   - If the customer answers “需要”, ask:
+
+     > 请提供生图模型配置：\n\n接口地址 Base URL\n模型名称\nAPI KEY\n是否使用 1688 原图作为参考图（默认：是）\n\n如果您没有生图模型 API Key，不知道如何配置，可联系作者微信：ziyi_ozon，请备注来意。
+
+5. Create the proposed local configuration only after the customer confirms the
+   recap. Keep `publishing.enabled` as `false`; ask for a separate explicit
+   confirmation only immediately before the first real Ozon publish action.
+
+Do not ask maximum SKU count, collection price range, visual-browser mode, or
+captcha policy during first-use setup. They are task-specific choices and must
+be asked by the root Skill at the start of every collection task. Use the
+default cost formula “到俄固定成本 × 2” unless the customer later requests a
+custom formula.
+
+Never ask for an LLM API Key, LLM Base URL, LLM model name, or a key for
+Russian copy. Russian copy and semantic attribute decisions are performed by
+the current Agent itself, then validated by repository rules.
 
 ## Write targets
 
@@ -106,6 +131,9 @@ image-generation workflow is implemented.
 
 ## Later changes
 
+- For “need generated product images”, ask the image question and then the
+  image-model fields above. For “do not generate images”, do not request or
+  modify image-model credentials.
 - For “change SKU limit”, “change price range”, or “change multiplier”, ask
   only for the requested value and update `customer-settings.local.json`.
 - For “bind another store”, add a new store entry and unique environment-variable
