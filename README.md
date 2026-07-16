@@ -45,7 +45,7 @@ CanonicalProduct（供定价、类目与上架步骤使用）
 pnpm dlx ozon-master init --agent all
 ```
 
-该命令会下载仓库、安装依赖、初始化 Ozon MCP、检查 Chrome，并在没有 Chrome 时下载 Playwright Chromium；同时为 Codex 和 Claude Code 安装不含密钥的本地 Skill 指针。Node.js 20+ 与 pnpm 是此命令的前提。
+该命令会下载仓库、安装依赖、初始化 Ozon MCP、检查 Chrome，并在没有 Chrome 时下载 Playwright Chromium；同时为 Codex、Claude Code 和 Hermes 安装不含密钥的本地 Skill 指针。Node.js 20+ 与 pnpm 是此命令的前提。
 
 ```powershell
 git clone <你的仓库地址>

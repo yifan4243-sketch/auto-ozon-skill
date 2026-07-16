@@ -11,6 +11,7 @@ test('help describes the init command', () => {
   const result = spawnSync(process.execPath, [cli, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /pnpm dlx ozon-master init --agent all/);
+  assert.match(result.stdout, /codex\|claude\|hermes\|all\|none/);
 });
 
 test('unknown command fails without running an installer', () => {

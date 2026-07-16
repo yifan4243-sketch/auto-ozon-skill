@@ -6,7 +6,7 @@
 pnpm dlx ozon-master init --agent all
 ```
 
-它会克隆仓库、安装 pnpm 依赖、初始化 Ozon MCP 子模块、检查 Chrome，并在没有可用 Chrome 时下载 Playwright Chromium；随后为 Codex 和/或 Claude Code 写入一个不含密钥的本地 Skill 指针。
+它会克隆仓库、安装 pnpm 依赖、初始化 Ozon MCP 子模块、检查 Chrome，并在没有可用 Chrome 时下载 Playwright Chromium；随后为 Codex、Claude Code 和/或 Hermes 写入一个不含密钥的本地 Skill 指针。
 
 Node.js 20+ 和 pnpm 是运行这条命令的前提。Git 与 uv 缺失时，工具会给出明确的安装指引；运行 `ozon-master doctor` 可复查环境。
 

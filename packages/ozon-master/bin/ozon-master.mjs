@@ -35,8 +35,8 @@ function parseOptions(args) {
     else if (arg === '--skip-mcp') result.skipMcp = true;
     else throw new Error(`Unknown option: ${arg}`);
   }
-  if (!['codex', 'claude', 'all', 'none'].includes(result.agent)) {
-    throw new Error('--agent must be codex, claude, all, or none.');
+  if (!['codex', 'claude', 'hermes', 'all', 'none'].includes(result.agent)) {
+    throw new Error('--agent must be codex, claude, hermes, all, or none.');
   }
   return result;
 }
@@ -84,6 +84,7 @@ function doctor(directory) {
   report('uv (required for Ozon MCP)', commandExists('uv'));
   report('Codex Skill pointer', fs.existsSync(path.join(codexSkillDirectory(), 'SKILL.md')));
   report('Claude Skill pointer', fs.existsSync(path.join(claudeSkillDirectory(), 'SKILL.md')));
+  report('Hermes Skill pointer', fs.existsSync(path.join(hermesSkillDirectory(), 'SKILL.md')));
 }
 
 function report(name, ok) {
@@ -113,6 +114,7 @@ function installAgentPointers(directory, agent) {
   if (agent === 'none') return;
   if (agent === 'codex' || agent === 'all') writePointer(codexSkillDirectory(), directory, 'Codex');
   if (agent === 'claude' || agent === 'all') writePointer(claudeSkillDirectory(), directory, 'Claude Code');
+  if (agent === 'hermes' || agent === 'all') writePointer(hermesSkillDirectory(), directory, 'Hermes');
 }
 
 function writePointer(skillDirectory, repositoryDirectory, agentName) {
@@ -130,6 +132,10 @@ function codexSkillDirectory() {
 
 function claudeSkillDirectory() {
   return path.join(os.homedir(), '.claude', 'skills', 'ozon-master');
+}
+
+function hermesSkillDirectory() {
+  return path.join(os.homedir(), '.hermes', 'skills', 'ozon-master');
 }
 
 function resolveDirectory(value) {
@@ -159,7 +165,15 @@ function commandExists(command) {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' });
+  const pnpmEntrypoint = command === 'pnpm' ? resolvePnpmEntrypoint() : undefined;
+  if (pnpmEntrypoint) {
+    const result = spawnSync(process.execPath, [pnpmEntrypoint, ...args], { cwd, stdio: 'inherit' });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}.`);
+    return;
+  }
+  const executable = resolveExecutable(command);
+  const result = spawnSync(executable, args, { cwd, stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}.`);
 }
@@ -183,5 +197,22 @@ function playwrightChromiumInstalled() {
 }
 
 function printHelp() {
-  console.log(`ozon-master — Auto Ozon Skill installer\n\nUsage:\n  pnpm dlx ozon-master init --agent all\n  pnpm dlx ozon-master doctor --dir .\\auto-ozon-skill\n\nOptions:\n  --agent <codex|claude|all|none>  Install local Agent Skill pointers (default: all)\n  --dir <path>                       Target repository directory\n  --skip-browser                      Do not install Playwright Chromium when Chrome is absent\n  --skip-mcp                          Do not initialize Ozon MCP\n`);
+  console.log(`ozon-master — Auto Ozon Skill installer\n\nUsage:\n  pnpm dlx ozon-master init --agent all\n  pnpm dlx ozon-master doctor --dir .\\auto-ozon-skill\n\nOptions:\n  --agent <codex|claude|hermes|all|none>  Install local Agent Skill pointers (default: all)\n  --dir <path>                              Target repository directory\n  --skip-browser                             Do not install Playwright Chromium when Chrome is absent\n  --skip-mcp                                 Do not initialize Ozon MCP\n`);
+}
+
+function resolvePnpmEntrypoint() {
+  if (process.platform !== 'win32') return undefined;
+  const lookup = spawnSync('where.exe', ['pnpm.cmd'], { encoding: 'utf8' });
+  const launcher = String(lookup.stdout || '').split(/\r?\n/).find(Boolean);
+  if (!launcher) return undefined;
+  const corepackEntrypoint = path.join(path.dirname(launcher), 'node_modules', 'corepack', 'dist', 'pnpm.js');
+  return fs.existsSync(corepackEntrypoint) ? corepackEntrypoint : undefined;
+}
+
+function resolveExecutable(command) {
+  if (process.platform !== 'win32') return command;
+  const lookup = spawnSync('where.exe', [command], { encoding: 'utf8' });
+  const candidates = String(lookup.stdout || '').split(/\r?\n/).filter(Boolean);
+  const candidate = candidates.find((entry) => /\.(?:exe|cmd|bat)$/i.test(entry)) ?? candidates[0];
+  return candidate || command;
 }
