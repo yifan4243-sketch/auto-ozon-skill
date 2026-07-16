@@ -102,6 +102,38 @@ describe('runCategoryAttributes', () => {
     expect(refreshedTransport.getAttributes).toHaveBeenCalledOnce();
   });
 
+  it('injects the no-brand policy value without requesting the brand dictionary', async () => {
+    const getAttributeValuesPage = vi.fn().mockResolvedValue({
+      result: [{ id: 10, value: '红色' }],
+      has_next: false,
+    });
+    const transport: OzonCategoryAttributesTransport = {
+      getAttributes: vi.fn().mockResolvedValue({
+        result: [
+          rawDictionaryAttribute(85, '品牌', 1),
+          rawDictionaryAttribute(100, '颜色', 200),
+        ],
+      }),
+      getAttributeValuesPage,
+    };
+
+    const result = await runCategoryAttributes({
+      selections: [selection('group-a')],
+      transport,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(getAttributeValuesPage).toHaveBeenCalledTimes(1);
+    expect(getAttributeValuesPage).toHaveBeenCalledWith(
+      expect.objectContaining({ attributeId: 100 }),
+    );
+    const attributes = result.data?.[0]?.attributes_schema.attributes ?? [];
+    expect(attributes.find((attribute) => attribute.id === 85)?.values).toEqual([
+      { id: 126745801, value: '无品牌' },
+    ]);
+    expect(result.data?.[0]?.attributes_schema.dictionary_raw_responses[85]).toBeUndefined();
+  });
+
   it('fails safely on empty continuing and repeated dictionary pages', async () => {
     const empty = await runCategoryAttributes({
       selections: [selection('group-a')],
@@ -164,16 +196,20 @@ function fakeTransport(pages: unknown[]): OzonCategoryAttributesTransport & {
   };
 }
 
-function rawDictionaryAttribute(): Record<string, unknown> {
+function rawDictionaryAttribute(
+  id = 100,
+  name = '颜色',
+  dictionaryId = 200,
+): Record<string, unknown> {
   return {
-    id: 100,
-    name: '颜色',
+    id,
+    name,
     description: '商品颜色',
     type: 'String',
     is_required: true,
     is_collection: false,
     is_aspect: false,
-    dictionary_id: 200,
+    dictionary_id: dictionaryId,
     group_id: 300,
     group_name: '基本属性',
     category_dependent: true,

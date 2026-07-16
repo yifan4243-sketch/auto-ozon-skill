@@ -24,6 +24,9 @@ export function validateDictionaryValues(
   if (attribute.dictionary_id <= 0) {
     return values.every((value) => value.dictionary_value_id === undefined);
   }
+  if (attribute.id === 85) {
+    return values.length === 1 && values[0]?.dictionary_value_id === 126745801;
+  }
   return values.every((value) => {
     if (!value.dictionary_value_id) return false;
     const match = attribute.values.find((candidate) => candidate.id === value.dictionary_value_id);

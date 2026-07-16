@@ -27,7 +27,7 @@ import {
   search1688ByImageV2,
   search1688ByKeyword,
   search1688ByKeywordV2,
-} from '../../../packages/adapters-1688/src/client.js';
+} from '../../helpers/source-api.js';
 
 describe('CanonicalProductV2 sourcing runtime', () => {
   beforeEach(() => {

@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "source_offer_id": "900000000010",
+  "status": "completed",
+  "common_attributes": [
+    {
+      "group_id": "main",
+      "attribute": {
+        "attribute_id": 85,
+        "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }],
+        "provenance": "default",
+        "confidence": "medium",
+        "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }]
+      }
+    }
+  ],
+  "variant_attributes": [
+    {
+      "group_id": "main",
+      "attribute_id": 10096,
+      "values_by_sku": {
+        "sku-red": [{ "dictionary_value_id": 1001, "value": "红色" }],
+        "sku-blue": [{ "dictionary_value_id": 1002, "value": "蓝色" }]
+      }
+    }
+  ],
+  "sku_attributes": [
+    {
+      "source_sku_id": "sku-red",
+      "group_id": "main",
+      "description_category_id": 17027931,
+      "type_id": 94600,
+      "attributes": [
+        {
+          "attribute_id": 85,
+          "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }],
+          "provenance": "default",
+          "confidence": "medium",
+          "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }]
+        },
+        {
+          "attribute_id": 10096,
+          "values": [{ "dictionary_value_id": 1001, "value": "红色" }],
+          "provenance": "source",
+          "confidence": "high",
+          "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "红色" }]
+        }
+      ],
+      "ozon_attributes": [
+        { "id": 85, "complex_id": 0, "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }] },
+        { "id": 10096, "complex_id": 0, "values": [{ "dictionary_value_id": 1001, "value": "红色" }] }
+      ]
+    },
+    {
+      "source_sku_id": "sku-blue",
+      "group_id": "main",
+      "description_category_id": 17027931,
+      "type_id": 94600,
+      "attributes": [
+        {
+          "attribute_id": 85,
+          "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }],
+          "provenance": "default",
+          "confidence": "medium",
+          "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }]
+        },
+        {
+          "attribute_id": 10096,
+          "values": [{ "dictionary_value_id": 1002, "value": "蓝色" }],
+          "provenance": "source",
+          "confidence": "high",
+          "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "蓝色" }]
+        }
+      ],
+      "ozon_attributes": [
+        { "id": 85, "complex_id": 0, "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }] },
+        { "id": 10096, "complex_id": 0, "values": [{ "dictionary_value_id": 1002, "value": "蓝色" }] }
+      ]
+    }
+  ],
+  "agent_tasks": [],
+  "missing_required_attributes": [],
+  "unresolved_attributes": [],
+  "warnings": [],
+  "errors": []
+}

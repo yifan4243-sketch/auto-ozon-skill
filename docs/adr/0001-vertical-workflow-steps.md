@@ -7,17 +7,17 @@
 ## Context
 
 The listing-preparation path was split horizontally across CLI workflows,
-contracts, adapters, transformers, publishing storage, and category utilities.
+contracts, adapters, persistence, and category utilities.
 Understanding or changing one business step required following internal imports
-through several packages. The next required capability, attribute mapping, also
-needs a stable boundary between category attributes and draft generation.
+through several packages. Attribute mapping needs a stable boundary after
+category-attribute retrieval.
 
 ## Decision
 
 Business behavior is organized as independently callable packages under
 `packages/steps/*`. Every step exposes one public `run...` entry point through
-its package root. Shared contracts, transports, artifact persistence, and agent
-runtime remain horizontal infrastructure.
+its package root. Shared contracts, transports, and artifact persistence remain
+horizontal infrastructure.
 
 The dependency direction is fixed:
 
@@ -33,10 +33,9 @@ Run artifacts use numbered directories under `data/runs/<run_id>` because the
 numbers describe execution order rather than stable package identity. Cache
 entries live under `data/cache` and are never treated as run evidence.
 
-During this refactor, publishing behavior is frozen. Existing command names and
-JSON meanings remain compatible. Compatibility packages may re-export new
-public step APIs, but old business implementations are removed after callers
-migrate.
+The active workflow contains exactly five steps and ends at factual attribute
+mapping. Future content, publishing, analytics, and UI packages are not retained
+as placeholders.
 
 ## Baseline and equivalence gate
 

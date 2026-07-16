@@ -5,14 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { OfferBatchResult } from '../../../packages/adapters-1688/src/engine/commands/offers.js';
-import { offerToCanonical } from '../../../packages/adapters-1688/src/mappers/offer-to-canonical.js';
-import { offerToCanonicalV2 } from '../../../packages/adapters-1688/src/mappers/offer-to-canonical-v2.js';
+import { offerToCanonical } from '../../../packages/steps/canonicalize-product/src/offer-to-canonical.js';
+import { offerToCanonicalV2 } from '../../../packages/steps/canonicalize-product/src/offer-to-canonical-v2.js';
 import {
   parseOfferResult,
   parseOfflineOfferInput,
 } from '../../../packages/adapters-1688/src/v2/offer-result-codec.js';
-import { normalizeV2Offline } from '../../../packages/adapters-1688/src/v2/offline-normalize.js';
-import { collectedRunToV1 } from '../../../packages/adapters-1688/src/v2/sourcing-runtime.js';
+import { normalizeV2Offline } from '../../helpers/source-api.js';
+import { collectedRunToV1 } from '../../../packages/steps/canonicalize-product/src/sourcing-runtime.js';
 
 const deprecatedKeys = new Set([
   'supplier',

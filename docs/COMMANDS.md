@@ -43,6 +43,9 @@ auto-ozon ozon fetch-all ProductAPI_GetProductList --params '{"filter":{"visibil
 
 auto-ozon ozon workflows list --category catalog --json --pretty
 auto-ozon ozon workflows get cabinet_health_check --json --pretty
+
+auto-ozon workflow category inspect "收纳盒" --decision-file decision.json --json --pretty
+auto-ozon workflow listing prepare "收纳盒" --stop-after draft-generation --json --pretty
 ```
 
 Global output flags are available on subcommands: `--json`, `--json-v2`, `--pretty`, `--get`, `--pick`.
@@ -77,7 +80,7 @@ auto-ozon source offers 123456789 \
 
 All four V2 collection commands accept `--products-dir <directory>`. Every
 offer is stored under `<directory>/<offer_id>` with `1688_data`,
-`1688_data_v2`, `ozon_draft`, and `ozon_upload` subdirectories.
+`1688_data_v2`, and `ozon_category` subdirectories.
 `--products-dir` is rejected on V1.
 
 ## Offline V2 replay
@@ -105,6 +108,70 @@ are ignored and never copied into output or raw artifacts.
 Not supported: `serve`, background management, `research`, `compare`, `supplier`, `cart`, `checkout`, `order`, `seller`, `feedback`.
 
 `source keyword` always performs deep detail collection. The old external `--deeppro` flags are not exposed.
+
+## Resumable listing preparation
+
+`workflow listing prepare` runs the numbered vertical steps and writes evidence
+under `data/runs/<run_id>`:
+
+```bash
+auto-ozon workflow listing prepare "收纳盒" \
+  --run-id listing-cup-001 \
+  --decision-file category-decision.json \
+  --stop-after draft-generation \
+  --json --pretty
+
+# Complete missing package estimates from the current Agent.
+auto-ozon workflow listing prepare "收纳盒" \
+  --run-id listing-cup-001 \
+  --start-from cost-pricing \
+  --pricing-agent-stdin \
+  --json --pretty
+
+auto-ozon workflow listing prepare "收纳盒" \
+  --run-id listing-cup-001 \
+  --start-from category-attributes \
+  --force-step category-attributes \
+  --continue-on-review \
+  --json --pretty
+```
+
+The workflow reuses successful artifacts, stops on `needs_review` by default,
+and reruns downstream dependants when a step is forced. Supported step names
+are `source-1688`, `canonicalize-product`, `category-decision`,
+`cost-pricing`, `category-attributes`, `attribute-mapping`, and `draft-generation`. Cost pricing runs
+after category decision and before category-attribute retrieval. The workflow always ends after
+the internal listing draft is validated; it does not submit to Ozon.
+
+Use `--pricing-profile-json` for customer pricing overrides and `--commission-file`
+to replace the bundled commission snapshot. New runs write cost pricing under
+`04-cost-pricing`, category attributes under `05-category-attributes`, and mappings
+under `06-attribute-mapping`, and drafts under `07-draft-generation`; pre-draft manifests are rejected without migration.
+
+## Listing submission
+
+Prepare remains read-only and stops at `draft-generation`. To submit its unchanged
+`items[]`, first copy the tracked profile template to the ignored local profile,
+set `publishing.enabled` only for the intended test store, and provide the two
+referenced environment variables. Neither the profile nor command output stores
+the API key.
+
+```powershell
+Copy-Item data/config/ozon-stores.example.json data/config/ozon-stores.local.json
+$env:OZON_CLIENT_ID = '<Client-Id>'
+$env:OZON_API_KEY = '<Seller-API-Key>'
+
+auto-ozon workflow listing publish --run-id listing-cup-001 --store-id <Client-Id> --json --pretty
+auto-ozon workflow listing resume --run-id listing-cup-001 --store-id <Client-Id> --json --pretty
+auto-ozon workflow listing status --run-id listing-cup-001 --json --pretty
+```
+
+`publish` requires `draft_complete` and CNY items. It records the task under
+`08-listing-submit`, polls it in the foreground, retries only recoverable failed
+SKUs up to two times, and reads back confirmed `product_id` values. `resume`
+first polls an unfinished task and never resubmits the timed-out batch just for
+having timed out. No inventory, URL construction, deletion, archive, or
+unlisting operation is available.
 
 ## Complete PCDCK/ozon-mcp bridge
 
@@ -134,4 +201,4 @@ Runtime registration follows the upstream server:
 
 The Python MCP implementation remains in the external `vendor/ozon-mcp` submodule and is not copied into TypeScript.
 
-The local integration remains read-only for generic execution. `ozon call` and `ozon fetch-all` first describe the requested method and reject `write` or `destructive` methods with `OZON_WRITE_BLOCKED`. Discovery and reference commands can still inspect write-method schemas, examples, limits, related methods, and error catalogs without executing them.
+The local integration remains read-only for generic execution. `ozon call` and `ozon fetch-all` first describe the requested method and reject `write` or `destructive` methods with `OZON_WRITE_BLOCKED`. Discovery and reference commands can still inspect write-method schemas, examples, limits, related methods, and error catalogs without executing them. Listing submission is intentionally separate and uses a fixed typed client limited to import, polling, and product-ID readback.

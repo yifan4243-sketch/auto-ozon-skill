@@ -16,6 +16,36 @@
     "disabled_description_category_count": 0,
     "disabled_type_count": 0
   },
+  "mixed_tableware_groups": [
+    {
+      "group_id": "bowl",
+      "source_sku_ids": ["bowl-sku"],
+      "description_category_id": 17028741,
+      "type_id": 92506,
+      "type_name": "碗"
+    },
+    {
+      "group_id": "cup",
+      "source_sku_ids": ["cup-sku"],
+      "description_category_id": 17028741,
+      "type_id": 92499,
+      "type_name": "杯子"
+    },
+    {
+      "group_id": "plate",
+      "source_sku_ids": ["plate-sku"],
+      "description_category_id": 17028741,
+      "type_id": 92528,
+      "type_name": "盘子"
+    },
+    {
+      "group_id": "divided-plate",
+      "source_sku_ids": ["divided-plate-sku"],
+      "description_category_id": 17028741,
+      "type_id": 92492,
+      "type_name": "分餐盘"
+    }
+  ],
   "ozon_swagger_cli_snapshot": {
     "seller": {
       "version": 2.1,

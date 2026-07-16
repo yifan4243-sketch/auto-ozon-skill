@@ -2,6 +2,7 @@ import { ensureExecutionToolAndReadSafety } from '../commands/call.js';
 import {
   OZON_MCP_TOOLS,
   executionToolsDisabled,
+  credentialStatus,
   extractToolNames,
   isOzonErrorPayload,
   isRecord,
@@ -43,6 +44,13 @@ export class OzonCategoryTransportError extends Error {
 export async function withOzonCategoryAttributesTransport<T>(
   callback: (transport: OzonCategoryAttributesTransport) => Promise<T>,
 ): Promise<T> {
+  if (!credentialStatus().sellerCredentials) {
+    throw new OzonCategoryTransportError(
+      'OZON_SELLER_CREDENTIALS_REQUIRED',
+      'Ozon Seller credentials are required for category attributes.',
+      true,
+    );
+  }
   try {
     return await withPcdckClient(async (client) => {
       await assertTransportReady(client);

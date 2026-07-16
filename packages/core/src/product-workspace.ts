@@ -5,17 +5,14 @@ import path from 'node:path';
 export const PRODUCT_WORKSPACE_DIRECTORIES = {
   source1688: '1688_data',
   canonicalV2: '1688_data_v2',
-  ozonDraft: 'ozon_draft',
-  ozonUpload: 'ozon_upload',
+  ozonCategory: 'ozon_category',
 } as const;
 
 export type ProductWorkspaceStage =
   | 'source_1688'
   | 'canonical_v2'
   | 'category_decision'
-  | 'category_attributes'
-  | 'ozon_draft'
-  | 'ozon_upload';
+  | 'category_attributes';
 
 export type ProductWorkspaceStageStatus =
   | 'not_started'
@@ -30,11 +27,7 @@ export type ProductWorkspaceArtifact =
   | 'canonical_v2'
   | 'integrity_report'
   | 'category_decision'
-  | 'category_attributes'
-  | 'ozon_draft'
-  | 'draft_validation'
-  | 'upload_request'
-  | 'upload_result';
+  | 'category_attributes';
 
 export interface ProductWorkspaceManifestV1 {
   schema_version: 1;
@@ -58,8 +51,7 @@ export interface ProductWorkspacePaths {
   directories: {
     source1688: string;
     canonicalV2: string;
-    ozonDraft: string;
-    ozonUpload: string;
+    ozonCategory: string;
   };
   artifacts: Record<ProductWorkspaceArtifact, string>;
 }
@@ -88,8 +80,7 @@ export function getProductWorkspacePaths(
   const directories = {
     source1688: path.join(productDirectory, PRODUCT_WORKSPACE_DIRECTORIES.source1688),
     canonicalV2: path.join(productDirectory, PRODUCT_WORKSPACE_DIRECTORIES.canonicalV2),
-    ozonDraft: path.join(productDirectory, PRODUCT_WORKSPACE_DIRECTORIES.ozonDraft),
-    ozonUpload: path.join(productDirectory, PRODUCT_WORKSPACE_DIRECTORIES.ozonUpload),
+    ozonCategory: path.join(productDirectory, PRODUCT_WORKSPACE_DIRECTORIES.ozonCategory),
   };
   return {
     productsRoot,
@@ -101,12 +92,8 @@ export function getProductWorkspacePaths(
       source_failure: path.join(directories.source1688, 'failure.json'),
       canonical_v2: path.join(directories.canonicalV2, 'product.json'),
       integrity_report: path.join(directories.canonicalV2, 'integrity-report.json'),
-      category_decision: path.join(directories.ozonDraft, 'category_decision.json'),
-      category_attributes: path.join(directories.ozonDraft, 'category_attributes.json'),
-      ozon_draft: path.join(directories.ozonDraft, 'draft.json'),
-      draft_validation: path.join(directories.ozonDraft, 'validation.json'),
-      upload_request: path.join(directories.ozonUpload, 'request.json'),
-      upload_result: path.join(directories.ozonUpload, 'result.json'),
+      category_decision: path.join(directories.ozonCategory, 'category-decision-v1.json'),
+      category_attributes: path.join(directories.ozonCategory, 'category-attributes-v1.json'),
     },
   };
 }
@@ -178,8 +165,6 @@ function createManifest(
       canonical_v2: 'not_started',
       category_decision: 'not_started',
       category_attributes: 'not_started',
-      ozon_draft: 'not_started',
-      ozon_upload: 'not_started',
     },
     artifact_paths: Object.fromEntries(
       Object.entries(paths.artifacts).map(([key, value]) => [

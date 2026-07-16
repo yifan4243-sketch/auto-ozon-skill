@@ -35,8 +35,8 @@ IDs. Do not infer IDs or use category analytics.
    nouns, not the full title. Run several searches when synonyms are plausible.
 
    ```powershell
-   pnpm --filter @auto-ozon/category-intelligence category:lookup search "智能手机壳" --limit 20
-   pnpm --filter @auto-ozon/category-intelligence category:lookup search "保护套" --limit 20
+   pnpm --filter @auto-ozon/step-category-decision category:lookup search "智能手机壳" --limit 20
+   pnpm --filter @auto-ozon/step-category-decision category:lookup search "保护套" --limit 20
    ```
 
 6. Compare candidates by product function. Reject accessory, replacement-part,
@@ -46,7 +46,7 @@ IDs. Do not infer IDs or use category analytics.
    saved tree contains repeated type IDs.
 
    ```powershell
-   pnpm --filter @auto-ozon/category-intelligence category:lookup validate `
+   pnpm --filter @auto-ozon/step-category-decision category:lookup validate `
      --description-category-id 17028650 --type-id 97011
    ```
 
@@ -55,7 +55,7 @@ IDs. Do not infer IDs or use category analytics.
    the complete schema, category-pair, and SKU-coverage check:
 
    ```powershell
-   pnpm --filter @auto-ozon/category-intelligence category:decision validate `
+   pnpm --filter @auto-ozon/step-category-decision category:decision validate `
      --product <canonical-v2.json> --decision <category-decision.json>
    ```
 

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
 import { buildProgram } from '../../../apps/cli/src/cli.js';
 import type { OfferBatchResult, OfferResult } from '../../../packages/adapters-1688/src/engine/commands/offers.js';
-import { normalizeV2Offline } from '../../../packages/adapters-1688/src/v2/offline-normalize.js';
+import { normalizeV2Offline } from '../../helpers/source-api.js';
 
 const tempRoots: string[] = [];
 
@@ -180,8 +180,6 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
         canonical_v2: 'needs_review',
         category_decision: 'not_started',
         category_attributes: 'not_started',
-        ozon_draft: 'not_started',
-        ozon_upload: 'not_started',
       },
     });
     expect(JSON.stringify(manifest)).not.toContain(input);
@@ -210,8 +208,7 @@ describe('offline CanonicalProductV2 replay and artifacts', () => {
       '1688_data',
       '1688_data_v2',
       'manifest.json',
-      'ozon_draft',
-      'ozon_upload',
+      'ozon_category',
     ]);
   });
 

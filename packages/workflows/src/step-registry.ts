@@ -1,9 +1,10 @@
-import type { WorkflowStepName } from '../../contracts/src/workflow-run.js';
+import type { WorkflowStepName } from '@auto-ozon/contracts';
 
 export const LISTING_PREPARATION_ORDER: readonly WorkflowStepName[] = [
   'source-1688',
   'canonicalize-product',
   'category-decision',
+  'cost-pricing',
   'category-attributes',
   'attribute-mapping',
   'draft-generation',

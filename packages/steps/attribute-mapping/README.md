@@ -2,8 +2,10 @@
 
 Public entry point: `runAttributeMapping`.
 
-This step is deliberately separate from draft generation. It maps retained
-CanonicalProductV2 facts and validated Agent selections into Ozon attributes,
-then classifies identical group values as common attributes and differing values
-as per-SKU variant attributes. It never writes Russian copy, price, stock, media,
-or publishing payloads.
+This is the final step in the current workflow. It applies the locked script
+defaults, exposes unresolved `agent_tasks` to the current Skill Agent, validates
+the returned selections, and writes one `attribute-mapping-v1.json`. Each SKU
+contains both auditable mappings and an ID-sorted `ozon_attributes` array.
+
+No external LLM runtime is used. Russian name, description, and hashtags belong
+to this step; price, stock, media, and publishing remain out of scope.

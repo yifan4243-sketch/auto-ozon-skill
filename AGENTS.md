@@ -22,10 +22,9 @@ Do not bypass 1688 risk control, sliders, or captchas. Do not use captcha-solvin
 ## Repository skills
 
 - For Ozon category selection and SKU category grouping, read
-  `packages/category-intelligence/skills/ozon-category-decision/SKILL.md`.
-- For mapping collected product facts and Ozon category attributes into a
-  validated draft, read
-  `packages/transformer/skills/ozon-draft-generation/SKILL.md`.
+  `packages/steps/category-decision/SKILL.md`.
+- For factual Ozon attribute mapping, read
+  `packages/steps/attribute-mapping/SKILL.md`.
 - Keep skills in their owning packages. Resolve product artifacts through
-  `data/products/<offer_id>/manifest.json`; do not copy skill files into product
-  workspaces.
+  `data/runs/<run_id>/manifest.json`; legacy product workspaces remain available
+  for CLI compatibility. Do not copy skill files into run or product workspaces.

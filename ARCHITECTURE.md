@@ -1,164 +1,87 @@
 # Architecture
 
-`auto-ozon-skill` is a pnpm workspace using TypeScript and Node.js 20+.
+`auto-ozon-skill` uses vertical business steps over shared TypeScript
+infrastructure. Stable package names describe responsibilities; numeric order
+appears only in run artifacts.
 
-## Current implemented slice
-
-The 1688 sourcing engine is migrated from `superjack2050/1688-cli` into `packages/adapters-1688/src/engine`.
+## Dependency direction
 
 ```text
 apps/cli
-  auto-ozon command surface
-  complete Ozon MCP command registration
-
-packages/contracts
-  CommandResult, CanonicalProduct V1, CanonicalProductV2
-  SourcingResult V1, SourcingResultV2, V2 summary/integrity contracts
-
-packages/transformer
-  deterministic SKU specification parsing
-  per-SKU package assembly
-  common/varying source-field comparison
-  source variant-dimension analysis
-  V2 run summary and OfferResult-to-canonical integrity checks
-
-packages/adapters-1688
-  engine/auth
-  engine/session
-  engine/commands
-  mappers
-  reduced retained-facts OfferResult boundary
-  V2 legacy-input codec, runtime result builder, and safe run artifacts
-  client.ts
-
-packages/adapters-ozon
-  TypeScript bridge to vendor/ozon-mcp
-  discovery tools
-  reference tools
-  subscription tools
-  workflows
-  guarded read-only execution
-
-packages/category-intelligence
-  Ozon category decision Skill and fixed CategoryDecisionV1 output
-  read-only lookup over the committed Chinese Ozon category tree
-  exact description-category/type pair and SKU coverage validation
+  -> packages/workflows
+    -> packages/steps/*
+      -> contracts + adapters + artifact-store + core
 ```
 
-The session layer is inline-only. It uses Playwright persistent browser contexts, profiles, cookies, locks, events, artifacts, response capture, mtop capture, and recovery. The daemon logic from the source project is intentionally deleted.
+Adapters never import workflows or steps. Steps never import CLI, workflows, or
+another step. Cross-package imports use package exports only. These rules are
+enforced by `tests/architecture/dependency-boundaries.test.ts`.
 
-## Ozon MCP bridge
+## Business steps
 
-`packages/adapters-ozon` starts the external `vendor/ozon-mcp` server over MCP stdio. The Python implementation remains in the submodule; this repository only contains a typed TypeScript bridge.
-
-The TypeScript bridge has wrappers for the complete 15-tool PCDCK surface:
+Each step exposes one public `run...` function from its package root:
 
 ```text
-ozon_call_method
-ozon_fetch_all
-ozon_describe_method
-ozon_search_methods
-ozon_list_sections
-ozon_get_section
-ozon_list_workflows
-ozon_get_workflow
-ozon_get_related_methods
-ozon_get_examples
-ozon_get_rate_limits
-ozon_get_subscription_status
-ozon_list_methods_for_subscription
-ozon_get_swagger_meta
-ozon_get_error_catalog
+packages/steps/source-1688          runSource1688
+packages/steps/canonicalize-product runCanonicalizeProduct
+packages/steps/category-decision    runCategoryDecision
+packages/steps/category-attributes  runCategoryAttributes
+packages/steps/attribute-mapping    runAttributeMapping
 ```
 
-Runtime registration in `PCDCK/ozon-mcp` is credential-aware:
+- `source-1688` validates collection input, delegates browser/search/detail
+  work to the 1688 adapter, sanitizes retained facts, and writes `01-source`.
+- `canonicalize-product` owns CanonicalProduct V1/V2 conversion, SKU assembly,
+  common/varying analysis, integrity checks, and `02-canonical`.
+- `category-decision` owns the category Skill, Chinese category tree search,
+  exact ID-pair validation, SKU grouping, and `03-category-decision`.
+- `category-attributes` owns dynamic category-pair traversal, Chinese attribute
+  retrieval, complete dictionary pagination, cache policy, and
+  `04-category-attributes`.
+- `attribute-mapping` owns factual/dictionary/unit mapping, common/variant/SKU
+  classification, the mapping Skill, and `05-attribute-mapping`. Content fields
+  such as Russian names, descriptions, and hashtags are outside this workflow.
 
-- 12 discovery, workflow, graph, and reference tools are always available.
-- `ozon_call_method` and `ozon_fetch_all` appear when Seller or Performance credentials are configured.
-- `ozon_get_subscription_status` appears only when Seller credentials are configured.
+## Shared infrastructure
 
-`ozon doctor` validates those three groups separately, so an offline installation is not incorrectly reported as broken merely because credential-dependent tools are absent.
+- `packages/contracts`: data-only contracts and step/run statuses.
+- `packages/adapters-1688`: login/session/search/image/offers/official-similar
+  collection and retained OfferResult codec only.
+- `packages/adapters-ozon`: MCP connection, method safety, response parsing, and
+  category-attribute transport.
+- `packages/artifact-store`: repository root resolution, atomic JSON writes,
+  manifests, numbered run directories, cache separation, and secret-safe logs.
+- `packages/core`: legacy product-workspace compatibility persistence.
+- `packages/workflows`: source command compatibility, category inspect, and the
+  resumable `runListingPreparation` orchestrator.
 
-Every wrapper returns the shared `CommandResult` envelope, sanitizes credential values from errors, and converts MCP error payloads into structured local errors.
-
-Generic execution remains intentionally read-only. Before `ozon_call_method` or `ozon_fetch_all` is invoked, the adapter describes the target operation and only proceeds when its MCP safety classification is `read`. `write` and `destructive` methods return `OZON_WRITE_BLOCKED` locally.
-
-## Sourcing pipeline
+## Run and cache layout
 
 ```text
-keyword / image / offerIds / similar
--> 1688 collection
--> offer detail collection through offers
--> CanonicalProduct
--> later Ozon draft transformation
+data/runs/<run_id>/
+  manifest.json
+  01-source/offer-result.json
+  02-canonical/canonical-product-v2.json
+  03-category-decision/category-decision-v1.json
+  04-category-attributes/category-attributes-v1.json
+  05-attribute-mapping/attribute-mapping-v1.json
+  logs/workflow.log
+
+data/cache/category-attributes/*.json
 ```
 
-`search` always performs detail collection by default. The former optional deep mode is now the normal behavior needed for Ozon listing preparation.
+Manifest statuses are `pending`, `running`, `succeeded`, `needs_review`,
+`blocked`, `failed`, and `skipped`. `runListingPreparation` can resume from an
+artifact, reuse completed steps, force one step and its downstream dependants,
+stop after a selected step, and stop automatically for review.
 
-The detail collector's public boundary intentionally excludes supplier
-identity, freight/region data, stock, sales, numeric 1688 category IDs, and
-source volume. Search candidates are also reduced to offer identity, title,
-price, URL, and image; supplier/region/turnover-dependent search controls are
-not available. Both V1 and V2 are built from the same retained OfferResult
-facts, so deprecated data cannot reappear through a second model.
+Legacy `data/products/<offer_id>` artifacts remain available to existing CLI
+commands, but workflow evidence and reusable cache data are never mixed.
 
-## CanonicalProductV2 source-fact pipeline
+## Safety and scope
 
-V1 remains the contract used by the current source commands. The independent V2
-mapper adds a non-breaking phase-one pipeline:
-
-```text
-1688 OfferResult
--> offerToCanonicalV2
--> CanonicalProductV2.skus (complete per-SKU source facts)
--> CanonicalProductV2.sku_analysis (common, varying, missing, duplicate specs)
-```
-
-Each source SKU owns an independent package object. Matching uses exact SKU ID,
-then normalized exact specification text, and otherwise produces null package
-facts with `matched_by = "none"`. Raw weights retain their source value and use
-`weight_unit = "unknown"` unless the source explicitly supplies a recognized
-unit.
-
-This layer stops before marketplace interpretation. Agent classification, Ozon
-category and attribute retrieval, missing-package policy, shipping, pricing,
-Russian copy, Ozon internal drafts, and final `items[]` are downstream work.
-
-## V2 runtime and validation
-
-The client first produces a typed internal collection run. The default mapper
-returns SourcingResult V1. Explicit V2 calls map the same OfferResult objects to
-CanonicalProductV2, calculate a run summary, and execute deterministic integrity
-checks. Keyword `sku-max` filtering now counts source SKUs directly and shares
-the same selected OfferResult batch between both contract versions.
-
-Offline replay accepts explicit current or legacy OfferResult/OfferBatchResult
-shapes. The codec reconstructs only current retained fields, so legacy supplier,
-freight, numeric category, stock, sales, and volume keys never flow into V1,
-V2, or audit artifacts. Audit persistence is separate from browser failure
-diagnostics and writes a unique run directory without overwriting prior runs.
-
-The V2 integrity layer verifies product/SKU cardinality, stable IDs and SKU
-facts, package matching and numeric normalization, gallery separation, and
-blocked invalid-ID handling. Integrity failure is a program error; validation
-warnings remain source-data observations.
-
-No category Agent, Ozon attribute mapping, prohibited/logistics knowledge base,
-pricing, Russian content, draft, or publishing behavior is part of this layer.
-The downstream category decision Skill matches the saved Ozon Chinese category table from
-the search term, Chinese title, 1688 Chinese category path, attributes, and SKU
-specifications.
-
-## Ozon category decision V0
-
-Category decision consumes one `CanonicalProductV2`, distinguishes normal SKU
-variants from mixed products, groups every source SKU exactly once, and produces
-`CategoryDecisionV1`. AI makes the semantic choice; deterministic code searches
-`data/ozon/categories/ozon-category-tree.json`, validates the exact
-`description_category_id + type_id` pair, rejects disabled nodes, and validates
-SKU coverage. Category analytics, Ozon attributes, Russian content, pricing,
-drafting, and publishing are outside this stage.
-
-## Removed scope
-
-Cart, checkout, order, seller chat, supplier research, research, compare, feedback, procurement, and automatic purchasing are intentionally excluded.
+The 1688 engine does not bypass risk control, sliders, or captchas. Similar
+search uses only the official similar entry. Supplier research, purchasing,
+orders, chat, daemon/background behavior, and automatic publishing are outside
+the collection scope. Ozon generic execution remains read-only and locally
+blocks write/destructive methods.

@@ -5,13 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ensureProductWorkspace,
   getProductWorkspacePaths,
-  writeProductWorkspaceArtifact,
 } from '../../../packages/core/src/product-workspace.js';
-import {
-  saveOzonDraft,
-  saveOzonUploadRequest,
-  saveOzonUploadResult,
-} from '../../../packages/publishing/src/draft-store.js';
 
 const roots: string[] = [];
 
@@ -22,7 +16,7 @@ afterEach(async () => {
 });
 
 describe('product workspace', () => {
-  it('creates the four stable stage directories under the offer ID', async () => {
+  it('creates only directories used by the current collection and category flow', async () => {
     const productsDir = await tempRoot();
     const paths = await ensureProductWorkspace('123456789', productsDir);
 
@@ -33,8 +27,7 @@ describe('product workspace', () => {
       '1688_data',
       '1688_data_v2',
       'manifest.json',
-      'ozon_draft',
-      'ozon_upload',
+      'ozon_category',
     ]);
 
     const manifest = JSON.parse(await fs.readFile(paths.manifest, 'utf8')) as {
@@ -45,9 +38,8 @@ describe('product workspace', () => {
     expect(manifest.artifact_paths).toMatchObject({
       source_1688: '1688_data/source.json',
       canonical_v2: '1688_data_v2/product.json',
-      category_attributes: 'ozon_draft/category_attributes.json',
-      ozon_draft: 'ozon_draft/draft.json',
-      upload_request: 'ozon_upload/request.json',
+      category_decision: 'ozon_category/category-decision-v1.json',
+      category_attributes: 'ozon_category/category-attributes-v1.json',
     });
   });
 
@@ -57,45 +49,6 @@ describe('product workspace', () => {
     );
     expect(() => getProductWorkspacePaths('abc')).toThrow(
       'Invalid 1688 offer ID',
-    );
-  });
-
-  it('preserves completed stages while later draft and upload files are written', async () => {
-    const productsDir = await tempRoot();
-    const options = { offerId: '123456789', productsDir };
-    await writeProductWorkspaceArtifact(
-      options.offerId,
-      'canonical_v2',
-      { schema_version: 2 },
-      {
-        productsDir,
-        manifest: { stages: { source_1688: 'completed', canonical_v2: 'completed' } },
-      },
-    );
-    await saveOzonDraft(options, { draft: true });
-    await saveOzonUploadRequest(options, { items: [] });
-    await saveOzonUploadResult(options, { task_id: 'task-1' }, true);
-
-    const paths = getProductWorkspacePaths(options.offerId, productsDir);
-    const manifest = JSON.parse(await fs.readFile(paths.manifest, 'utf8')) as {
-      stages: Record<string, string>;
-    };
-    expect(manifest.stages).toEqual({
-      source_1688: 'completed',
-      canonical_v2: 'completed',
-      category_decision: 'not_started',
-      category_attributes: 'not_started',
-      ozon_draft: 'needs_review',
-      ozon_upload: 'completed',
-    });
-    await expect(fs.readFile(paths.artifacts.ozon_draft, 'utf8')).resolves.toContain(
-      '"draft": true',
-    );
-    await expect(fs.readFile(paths.artifacts.upload_request, 'utf8')).resolves.toContain(
-      '"items": []',
-    );
-    await expect(fs.readFile(paths.artifacts.upload_result, 'utf8')).resolves.toContain(
-      '"task_id": "task-1"',
     );
   });
 });

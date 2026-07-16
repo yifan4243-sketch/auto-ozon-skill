@@ -2,6 +2,7 @@ import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveRepoRoot } from '@auto-ozon/artifact-store';
 import type { OzonCategorySelectionV1 } from '@auto-ozon/contracts';
 
 interface OzonCategoryNode {
@@ -215,11 +216,10 @@ export function resolveDefaultCategoryTreePath(): string {
   if (explicit) return path.resolve(explicit);
 
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolveRepoRoot(moduleDir);
   const candidates = [
-    path.resolve(process.cwd(), 'data/reference/ozon/categories/ozon-category-tree.json'),
-    path.resolve(process.cwd(), '../../data/reference/ozon/categories/ozon-category-tree.json'),
+    path.join(repoRoot, 'data/reference/ozon/categories/ozon-category-tree.json'),
     path.resolve(moduleDir, '../../../../data/reference/ozon/categories/ozon-category-tree.json'),
-    path.resolve(moduleDir, '../../../../../data/reference/ozon/categories/ozon-category-tree.json'),
   ];
   const found = candidates.find((candidate) => fsSync.existsSync(candidate));
   if (!found) {

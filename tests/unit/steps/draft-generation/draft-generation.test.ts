@@ -1,0 +1,49 @@
+import { describe, expect, it } from 'vitest';
+import { runDraftGeneration } from '../../../../packages/steps/draft-generation/src/index.js';
+
+function input(includeTimestamp = true) {
+  const attributes = [
+    { id: 4180, complex_id: 0, values: [{ value: 'Кружка дорожная' }] },
+    { id: 4191, complex_id: 0, values: [{ value: 'Описание из шага заполнения.' }] },
+    ...(includeTimestamp ? [{ id: 9048, complex_id: 0, values: [{ value: '20260716130000' }] }] : []),
+    { id: 10096, complex_id: 0, values: [{ dictionary_value_id: 7, value: 'Многоцветный' }] },
+  ];
+  return {
+    product: {
+      source: { offer_id: '1688-offer', collected_at: '2026-07-16T00:00:00.000Z' },
+      product: { main_image: 'https://img.example.com/main.jpg', gallery_images: ['https://img.example.com/main.jpg', 'https://img.example.com/second.jpg'] },
+      skus: [{ source_sku_id: 'red', image: 'https://img.example.com/red.jpg' }],
+    },
+    category_decision: { status: 'decided', source_offer_id: '1688-offer' },
+    category_attributes: [{
+      group_ids: ['group-1'], category: { description_category_id: 10, type_id: 20 },
+      attributes_schema: { attributes: [
+        { id: 4180, dictionary_id: 0, values: [] }, { id: 4191, dictionary_id: 0, values: [] },
+        { id: 10096, dictionary_id: 1, values: [{ id: 7, value: 'Многоцветный' }] },
+        { id: 9048, dictionary_id: 0, values: [] },
+      ] },
+    }],
+    cost_pricing: { source_offer_id: '1688-offer', status: 'completed', sku_pricing: [{
+      source_sku_id: 'red', final_price_cny: 25, package: { actual_weight_g: 300, length_cm: 20, width_cm: 10, height_cm: 8 },
+    }] },
+    attribute_mapping: { source_offer_id: '1688-offer', status: 'completed', sku_attributes: [{
+      source_sku_id: 'red', group_id: 'group-1', description_category_id: 10, type_id: 20, ozon_attributes: attributes,
+    }] },
+  } as never;
+}
+
+describe('draft-generation', () => {
+  it('builds Ozon-shaped items without changing mapped attributes', async () => {
+    const result = await runDraftGeneration(input());
+    expect(result).toMatchObject({ ok: true, data: { status: 'draft_complete' } });
+    const item = result.data!.items[0]!;
+    expect(item).toMatchObject({ name: 'Кружка дорожная', price: '25.00', weight: 300, depth: 200, width: 100, height: 80, primary_image: item.images[0], currency_code: 'CNY' });
+    expect(item.images).toEqual(['https://img.example.com/red.jpg', 'https://img.example.com/main.jpg', 'https://img.example.com/second.jpg']);
+    expect(item.attributes).toEqual(input().attribute_mapping.sku_attributes[0].ozon_attributes);
+  });
+
+  it('blocks when current category exposes 9048 but mapping omitted it', async () => {
+    const result = await runDraftGeneration(input(false));
+    expect(result).toMatchObject({ ok: false, data: { status: 'blocked', errors: [{ code: 'TIMESTAMP_9048_MISSING' }] } });
+  });
+});

@@ -1,4 +1,4 @@
-import type { CommandResult } from '../../contracts/src/command-result.js';
+import type { CommandResult } from '@auto-ozon/contracts';
 
 export type OzonSafety = 'read' | 'write' | 'destructive';
 

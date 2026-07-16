@@ -1,0 +1,8 @@
+[
+  {
+    "store_id": "YOUR_SELLER_CLIENT_ID",
+    "publishing": { "enabled": false },
+    "credentials": { "client_id_env": "OZON_CLIENT_ID", "api_key_env": "OZON_API_KEY" },
+    "polling": { "timeout_ms": 60000, "interval_ms": 1500, "max_recoverable_retries": 2 }
+  }
+]
