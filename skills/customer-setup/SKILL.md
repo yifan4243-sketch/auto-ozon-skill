@@ -25,10 +25,17 @@ does not decide whether a later request needs market selection or a supplied
    - “由于 1688 有部分商品有很多个 SKU，而且 Ozon 平台每个 SKU 都算一个商品额度，我建议设置最大 SKU 数量，舍弃那些 SKU 数过多的商品。请告诉我最大 SKU 数量。”
    - “采集采购价区间是多少？请按 CNY 提供最低价和最高价；不限制可回答‘不限制’。”
    - “售价和成本的计算公式是什么？例如：到俄固定成本 × 2。”
-   - “请提供生图模型配置：\n\n接口地址 Base URL\n模型名称\nAPI KEY\n是否使用 1688 原图作为参考图（默认：是）\n\n如果您没有生图模型 API Key，可联系作者微信：ziyi_ozon，请备注来意。”
    Ask only after these answers are confirmed whether automatic publishing
    should be enabled. Default: `false`. Keep the existing account retry policy
    and per-step timeout unless the customer explicitly asks to change them.
+
+   Ask the following question **only** when the customer explicitly asks to
+   generate product images or configure image generation:
+   - “请提供生图模型配置：\n\n接口地址 Base URL\n模型名称\nAPI KEY\n是否使用 1688 原图作为参考图（默认：是）\n\n如果您没有生图模型 API Key，可联系作者微信：ziyi_ozon，请备注来意。”
+
+   Never ask for an LLM API Key, LLM Base URL, LLM model name, or a key for
+   Russian copy. Russian copy and semantic attribute decisions are performed
+   by the current Agent itself, then validated by repository rules.
 3. Recap the proposed values, including the warning that enabling publishing
    permits `workflow listing publish` without a per-batch confirmation. Obtain
    one explicit confirmation before writing files.
@@ -39,7 +46,7 @@ Write atomically and preserve unrelated entries.
 
 | File | Allowed contents |
 | --- | --- |
-| `.env` | `OZON_CLIENT_ID_<store>` and `OZON_API_KEY_<store>` only; never show the API key after writing. |
+| `.env` | `OZON_CLIENT_ID_<store>`, `OZON_API_KEY_<store>`, and, only when image generation is configured, `IMAGE_GENERATION_API_KEY`; never show a key after writing. |
 | `data/config/ozon-stores.local.json` | Store metadata, env-variable references, publishing flag, polling settings. |
 | `data/config/customer-settings.local.json` | Non-secret collection, pricing, retry, and timeout preferences. |
 | `data/config/image-generation.local.json` | Non-secret image-model endpoint, model, reference-image policy, and image count. |

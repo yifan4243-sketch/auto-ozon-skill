@@ -20,6 +20,12 @@ resolving any step output. Keep batch planning artifacts separately under
 | “继续/查看某个 run”、“上架草稿” | Read the manifest and resume only the needed step. | Do not recollect or rebuild a completed draft unless its inputs changed. |
 | “查店铺订单、库存、广告、分析” | Use the read-only Ozon MCP discovery and relevant curated MCP workflow. | Do not confuse MCP analytics workflows with this repository's listing workflow. |
 
+For a generic request such as “上架 5 个商品”, the route is already known:
+start Russian-market selection. Do **not** ask an extra “卖什么？” question.
+For a request containing a concrete product noun, that noun is already the
+keyword. Ask for a product name only when the customer did not state either a
+quantity or a product/selection intent.
+
 For a requested number `N`, count only SKUs confirmed `imported` by step 8.
 Respect the saved SKU maximum and purchase-price range. A single CLI run handles
 one selected 1688 product; the agent must keep a batch ledger and launch the
@@ -32,6 +38,8 @@ defaulting to 100 only if the customer has not provided a lower store limit.
 Before **every** task that starts 1688 collection, ask these four questions,
 even if the customer answered them on a previous task. Do not turn the answers
 into permanent settings unless the customer expressly asks to save them.
+Ask these four questions only; do not add an unrelated “问题 1：卖什么？”
+when routing already determined the keyword or market-selection path.
 
 1. “本次采集是否使用可视化浏览器？默认：否（无头浏览器）。”
 2. “本次商品最多保留多少个 SKU？不限制可回答‘不限制’。”
@@ -51,6 +59,27 @@ Translate the confirmed answers as follows:
 
 Never use a captcha-solving service, cookies from another person, or an
 automated bypass. A per-task setting overrides a saved collection preference.
+
+## Agent-owned reasoning; no text-model API configuration
+
+The current Agent is responsible for all non-deterministic reasoning in this
+repository: Russian title and description, tags, category choice, packaging
+estimation, dictionary selection, and market-selection analysis. Use the
+Agent's own available model capability and then apply the repository validators.
+
+Never ask a customer for an LLM Base URL, language-model name, LLM API Key,
+OpenAI-compatible endpoint, or an “俄语内容生成 Key”. Do not create or require
+`LLM_BASE_URL`, `LLM_MODEL`, or `LLM_API_KEY`. They are not part of this
+project's customer setup.
+
+The only separate model configuration is for **image generation**, and ask for
+it only when the customer explicitly requests generated product images or asks
+to configure image generation. It is not required for normal collection,
+Russian copy, attribute mapping, draft generation, or listing submission.
+
+Ask for Ozon store credentials only when no enabled local store profile exists
+and the task has reached a real publish action. Never ask for them merely to
+prepare, collect, categorize, price, or draft products.
 
 ## Our listing workflow
 
