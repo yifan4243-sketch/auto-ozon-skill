@@ -1,3 +1,0 @@
-# Product Translation Ru
-
-TODO.

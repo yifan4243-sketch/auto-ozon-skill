@@ -1,3 +1,0 @@
-# Make Ozon Draft
-
-TODO.

@@ -1,3 +1,0 @@
-# Inventory Rules
-
-TODO.

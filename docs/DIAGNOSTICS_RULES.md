@@ -1,3 +1,0 @@
-# Diagnostics Rules
-
-TODO.

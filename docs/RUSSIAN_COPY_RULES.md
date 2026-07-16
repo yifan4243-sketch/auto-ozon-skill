@@ -1,3 +1,0 @@
-# Russian Copy Rules
-
-TODO.

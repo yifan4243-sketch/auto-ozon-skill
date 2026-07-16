@@ -1,3 +1,0 @@
-# Category Research
-
-TODO.
