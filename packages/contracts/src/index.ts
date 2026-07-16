@@ -9,3 +9,5 @@ export * from './category-attributes.js';
 export * from './workflow-run.js';
 export * from './attribute-mapping.js';
 export * from './cost-pricing.js';
+export * from './listing-draft.js';
+export * from './ozon-publish.js';

@@ -9,6 +9,8 @@ import type {
   CostPricingFxRateV1,
   CostPricingProfileV1,
   CostPricingV1,
+  DraftGenerationProfileV1,
+  ListingDraftV1,
   WorkflowRunManifestV1,
   WorkflowStepName,
   WorkflowStepStatus,
@@ -40,6 +42,7 @@ import {
   runCostPricing,
   type CostPricingFxRateProvider,
 } from '@auto-ozon/step-cost-pricing';
+import { runDraftGeneration } from '@auto-ozon/step-draft-generation';
 import type { CollectedSourcingRun } from '@auto-ozon/adapters-1688';
 import { LISTING_PREPARATION_ORDER } from './step-registry.js';
 
@@ -56,6 +59,7 @@ export interface RunListingPreparationInput {
   cost_pricing_fx_rate?: CostPricingFxRateV1;
   cost_pricing_fx_provider?: CostPricingFxRateProvider;
   attribute_mapping_agent_input?: AttributeMappingAgentInputV1;
+  draft_generation_profile?: DraftGenerationProfileV1;
   start_from?: WorkflowStepName;
   stop_after?: WorkflowStepName;
   force_steps?: WorkflowStepName[];
@@ -77,6 +81,7 @@ export interface ListingPreparationResultV1 {
   cost_pricing?: CostPricingV1;
   category_attributes?: CategoryAttributesGroupV1[];
   attribute_mapping?: AttributeMappingV1;
+  listing_draft?: ListingDraftV1;
 }
 
 export async function runListingPreparation(
@@ -113,7 +118,7 @@ async function executeListingPreparation(
   const runId = input.run_id ?? createRunId();
   await store.ensureRun(runId);
   const runManifest = await store.readManifest(runId);
-  if (!runManifest || !Object.prototype.hasOwnProperty.call(runManifest.steps, 'cost-pricing')) {
+  if (!runManifest || !Object.prototype.hasOwnProperty.call(runManifest.steps, 'draft-generation')) {
     return workflowFailure(
       {
         run_id: runId,
@@ -123,7 +128,7 @@ async function executeListingPreparation(
         signal: input.signal,
       },
       'LEGACY_STEP_LAYOUT_UNSUPPORTED',
-      'This run predates cost-pricing and cannot be resumed. Start a new run; historical files were not changed.',
+      'This run predates draft-generation and cannot be resumed. Start a new run; historical files were not changed.',
     );
   }
   const context: WorkflowContext = {
@@ -135,10 +140,10 @@ async function executeListingPreparation(
   };
   context.logger.info('listing-preparation started', {
     start_from: input.start_from ?? 'source-1688',
-    stop_after: input.stop_after ?? 'attribute-mapping',
+    stop_after: input.stop_after ?? 'draft-generation',
     force_steps: input.force_steps ?? [],
   });
-  const stopAfter = input.stop_after ?? 'attribute-mapping';
+  const stopAfter = input.stop_after ?? 'draft-generation';
   if (!LISTING_PREPARATION_ORDER.includes(stopAfter)) {
     return workflowFailure(context, 'STEP_NOT_ENABLED', `Step ${stopAfter} is not enabled.`);
   }
@@ -381,7 +386,33 @@ async function executeListingPreparation(
   if (mappingStatus === 'blocked' || (mappingStatus === 'needs_review' && stopOnReview)) {
     return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
   }
-  return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
+  if (stopAfter === 'attribute-mapping') {
+    return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
+  }
+
+  let draft = await restore<ListingDraftV1>(
+    context,
+    'draft-generation',
+    'listing-draft-v1.json',
+    startFrom,
+    shouldForce('draft-generation') || Boolean(input.draft_generation_profile),
+  );
+  if (!draft) {
+    const step = await runDraftGeneration({
+      product,
+      category_decision: decision,
+      category_attributes: attributes,
+      cost_pricing: pricing,
+      attribute_mapping: mapping,
+      profile: input.draft_generation_profile,
+    }, context);
+    if (!step.data || !step.ok) return stopFromStep(context, 'draft-generation', step, result);
+    draft = step.data;
+  }
+  const resolvedDraft = draft!;
+  result.listing_draft = resolvedDraft;
+  const draftStatus = resolvedDraft.status === 'draft_complete' ? 'succeeded' : resolvedDraft.status;
+  return workflowSuccess(context, 'draft-generation', result, draftStatus);
 }
 
 function recoverPricingAgentInput(pricing: CostPricingV1 | null): CostPricingAgentInputV1 | undefined {

@@ -7,6 +7,7 @@ export const LISTING_PREPARATION_ORDER: readonly WorkflowStepName[] = [
   'cost-pricing',
   'category-attributes',
   'attribute-mapping',
+  'draft-generation',
 ];
 
 export function shouldRunStep(

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Customer Setup"
+  short_description: "Configure stores collection pricing and publishing safely"
+  default_prompt: "Configure this project's store, collection, and pricing preferences."

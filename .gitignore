@@ -11,3 +11,4 @@ tmp/
 data/products/
 data/runs/
 data/cache/
+data/config/*.local.json

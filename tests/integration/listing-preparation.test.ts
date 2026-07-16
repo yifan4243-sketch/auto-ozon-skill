@@ -30,6 +30,7 @@ describe('listing-preparation workflow', () => {
       category_attributes: { transport },
       cost_pricing_fx_rate: testFxRate(),
       cost_pricing_agent_input: testPricingAgentInput(),
+      stop_after: 'attribute-mapping',
       stop_on_review: false,
       artifact_store: store,
     });
@@ -64,6 +65,7 @@ describe('listing-preparation workflow', () => {
       }),
       category_attributes: { transport },
       cost_pricing_fx_rate: testFxRate(),
+      stop_after: 'attribute-mapping',
       stop_on_review: false,
       artifact_store: store,
     });
@@ -77,6 +79,7 @@ describe('listing-preparation workflow', () => {
       category_attributes: { transport },
       cost_pricing_fx_rate: testFxRate(),
       force_steps: ['category-attributes'],
+      stop_after: 'attribute-mapping',
       stop_on_review: false,
       artifact_store: store,
     });
@@ -140,7 +143,7 @@ describe('listing-preparation workflow', () => {
     const { store, runId, root } = await seededSourceRun();
     const manifestPath = path.join(root, 'runs', runId, 'manifest.json');
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as { steps: Record<string, unknown> };
-    delete manifest.steps['cost-pricing'];
+    delete manifest.steps['draft-generation'];
     await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
     const result = await runListingPreparation({

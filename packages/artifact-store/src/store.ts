@@ -16,6 +16,8 @@ const STEP_DIRECTORIES: Record<WorkflowStepName, string> = {
   'cost-pricing': '04-cost-pricing',
   'category-attributes': '05-category-attributes',
   'attribute-mapping': '06-attribute-mapping',
+  'draft-generation': '07-draft-generation',
+  'listing-submit': '08-listing-submit',
 };
 
 export interface ArtifactStore {
@@ -73,16 +75,17 @@ export class FileArtifactStore implements ArtifactStore {
   ): Promise<WorkflowRunManifestV1> {
     const manifest = await this.ensureRun(runId);
     const now = new Date().toISOString();
+    const existingRecord = manifest.steps[step] ?? pendingStep();
     const nextRecord: WorkflowStepRecordV1 = {
-      ...manifest.steps[step],
+      ...existingRecord,
       ...update,
       started_at:
         update.started_at ??
-        manifest.steps[step].started_at ??
+        existingRecord.started_at ??
         (update.status === 'running' ? now : null),
       completed_at:
         update.completed_at ??
-        (isTerminal(update.status) ? now : manifest.steps[step].completed_at),
+        (isTerminal(update.status) ? now : existingRecord.completed_at),
     };
     const next: WorkflowRunManifestV1 = {
       ...manifest,
@@ -148,13 +151,6 @@ export function createRunId(prefix = 'listing'): string {
 }
 
 function createManifest(runId: string, createdAt: string): WorkflowRunManifestV1 {
-  const pending = (): WorkflowStepRecordV1 => ({
-    status: 'pending',
-    output: null,
-    started_at: null,
-    completed_at: null,
-    error_code: null,
-  });
   return {
     schema_version: 1,
     run_id: runId,
@@ -163,11 +159,15 @@ function createManifest(runId: string, createdAt: string): WorkflowRunManifestV1
     status: 'pending',
     created_at: createdAt,
     updated_at: createdAt,
-    steps: Object.fromEntries(WORKFLOW_STEP_NAMES.map((step) => [step, pending()])) as Record<
+    steps: Object.fromEntries(WORKFLOW_STEP_NAMES.map((step) => [step, pendingStep()])) as Record<
       WorkflowStepName,
       WorkflowStepRecordV1
     >,
   };
+}
+
+function pendingStep(): WorkflowStepRecordV1 {
+  return { status: 'pending', output: null, started_at: null, completed_at: null, error_code: null };
 }
 
 async function readJsonIfExists<T>(file: string): Promise<T | null> {

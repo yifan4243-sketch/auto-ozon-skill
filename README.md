@@ -43,7 +43,7 @@ pnpm --filter @auto-ozon/cli dev -- ozon methods describe ProductAPI_ImportProdu
 pnpm --filter @auto-ozon/cli dev -- ozon methods examples ProductAPI_ImportProductsV3 --json --pretty
 ```
 
-The current Ozon integration phase is read-only. `ozon call` and `ozon fetch-all` describe the target method first and locally block `write` and `destructive` methods with `OZON_WRITE_BLOCKED`.
+The general Ozon bridge is read-only. `ozon call` and `ozon fetch-all` describe the target method first and locally block `write` and `destructive` methods with `OZON_WRITE_BLOCKED`. Listing submission uses a separate fixed typed client and exposes only import, import-status polling, and product-ID readback.
 
 ## Commands
 
@@ -54,7 +54,12 @@ pnpm --filter @auto-ozon/cli dev -- source image ./product.jpg --max 5 --json
 pnpm --filter @auto-ozon/cli dev -- source offers 123456789 987654321 --json
 pnpm --filter @auto-ozon/cli dev -- source similar 123456789 --json
 pnpm --filter @auto-ozon/cli dev -- ozon doctor --json --pretty
-pnpm --filter @auto-ozon/cli dev -- workflow listing prepare "收纳盒" --stop-after attribute-mapping --json --pretty
+pnpm --filter @auto-ozon/cli dev -- workflow listing prepare "收纳盒" --stop-after draft-generation --json --pretty
+# Publishing requires a local, Git-ignored store profile and environment credentials.
+Copy-Item data/config/ozon-stores.example.json data/config/ozon-stores.local.json
+pnpm --filter @auto-ozon/cli dev -- workflow listing publish --run-id <run_id> --store-id <Client-Id> --json --pretty
+pnpm --filter @auto-ozon/cli dev -- workflow listing resume --run-id <run_id> --store-id <Client-Id> --json --pretty
+pnpm --filter @auto-ozon/cli dev -- workflow listing status --run-id <run_id> --json --pretty
 ```
 
 The listing workflow now calculates auditable CEL landed cost and an integer CNY
@@ -62,6 +67,12 @@ price after category decision. Missing package facts are returned as Agent tasks
 resume with `--start-from cost-pricing --pricing-agent-stdin`.
 
 See `docs/COMMANDS.md` for the full CLI surface.
+
+`publish` only accepts a `draft_complete` result, a store explicitly enabled in
+the ignored local profile, and credentials supplied through its referenced
+environment variables. It submits the draft `items[]` unchanged, records the
+Ozon import task, polls it, and can resume a timed-out task without resubmitting
+the batch. The general `ozon call` bridge remains read-only.
 
 ### Retained-facts boundary
 
@@ -95,7 +106,7 @@ V2 preserves keyword/similar discovery context for category work. The category
 decision Skill uses the search term, Chinese title, 1688 Chinese category path,
 product attributes, and SKU specifications to match the saved Ozon Chinese
 category table. The resumable workflow then retrieves attributes and produces
-an independent AttributeMappingV1. The active workflow ends there.
+an independent AttributeMappingV1, then creates an internal Ozon-shaped ListingDraftV1. The active workflow ends at the draft and does not submit to Ozon.
 Original brand attributes remain ordinary product attributes; ownership and
 authorization are not inferred. Prohibited-category and logistics restrictions
 remain later user-knowledge-base work.

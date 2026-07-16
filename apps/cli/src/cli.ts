@@ -15,6 +15,8 @@ import {
   runListingPreparation,
   runSourceCommand,
   runCategoryInspect,
+  runListingPublish,
+  getListingPublishStatus,
 } from '@auto-ozon/workflows';
 import {
   CliError,
@@ -362,7 +364,7 @@ function registerWorkflowCommands(
     .option('--pricing-profile-json <json>', 'CostPricingProfileV1 overrides as JSON')
     .option('--commission-file <path>', 'Ozon category commission snapshot JSON')
     .option('--start-from <step>', 'First step to execute', 'source-1688')
-    .option('--stop-after <step>', 'Last step to execute', 'attribute-mapping')
+    .option('--stop-after <step>', 'Last step to execute', 'draft-generation')
     .option('--force-step <steps...>', 'Refresh this step and all downstream steps')
     .option('--continue-on-review', 'Continue when an upstream step needs review')
     .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
@@ -413,6 +415,18 @@ function registerWorkflowCommands(
         }),
       );
     });
+
+  listing.command('publish').description('Submit an existing listing draft to the explicitly selected Ozon store')
+    .requiredOption('--run-id <id>', 'Run containing a draft_complete listing draft')
+    .requiredOption('--store-id <Client-Id>', 'Seller Client-Id configured in local store profile')
+    .action(async (opts) => { emitCommandResult(await runListingPublish({ run_id: opts.runId, store_id: opts.storeId })); });
+  listing.command('resume').description('Resume polling or retry failed recoverable SKU imports')
+    .requiredOption('--run-id <id>', 'Run to resume')
+    .requiredOption('--store-id <Client-Id>', 'Seller Client-Id configured in local store profile')
+    .action(async (opts) => { emitCommandResult(await runListingPublish({ run_id: opts.runId, store_id: opts.storeId })); });
+  listing.command('status').description('Read the stored listing-submit result without calling Ozon')
+    .requiredOption('--run-id <id>', 'Run to inspect')
+    .action(async (opts) => { emitCommandResult(await getListingPublishStatus(opts.runId)); });
 }
 
 function parsePricingAgentJson(raw: string | undefined): CostPricingAgentInputV1 | undefined {
@@ -654,6 +668,7 @@ function parseWorkflowStep(raw: string): import('@auto-ozon/contracts').Workflow
     'cost-pricing',
     'category-attributes',
     'attribute-mapping',
+    'draft-generation',
   ] as const;
   if (steps.includes(raw as (typeof steps)[number])) {
     return raw as (typeof steps)[number];

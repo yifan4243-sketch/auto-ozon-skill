@@ -16,10 +16,13 @@
     "@auto-ozon/contracts": "workspace:*",
     "@auto-ozon/core": "workspace:*",
     "@auto-ozon/adapters-1688": "workspace:*",
+    "@auto-ozon/adapters-ozon": "workspace:*",
     "@auto-ozon/step-attribute-mapping": "workspace:*",
     "@auto-ozon/step-category-attributes": "workspace:*",
     "@auto-ozon/step-category-decision": "workspace:*",
     "@auto-ozon/step-cost-pricing": "workspace:*",
+    "@auto-ozon/step-draft-generation": "workspace:*",
+    "@auto-ozon/step-listing-submit": "workspace:*",
     "@auto-ozon/step-canonicalize-product": "workspace:*",
     "@auto-ozon/step-source-1688": "workspace:*"
   }

@@ -158,6 +158,27 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
 
+  packages/steps/draft-generation:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+
+  packages/steps/listing-submit:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+
   packages/steps/source-1688:
     dependencies:
       '@auto-ozon/adapters-1688':
@@ -175,6 +196,9 @@ importers:
       '@auto-ozon/adapters-1688':
         specifier: workspace:*
         version: link:../adapters-1688
+      '@auto-ozon/adapters-ozon':
+        specifier: workspace:*
+        version: link:../adapters-ozon
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../artifact-store
@@ -199,6 +223,12 @@ importers:
       '@auto-ozon/step-cost-pricing':
         specifier: workspace:*
         version: link:../steps/cost-pricing
+      '@auto-ozon/step-draft-generation':
+        specifier: workspace:*
+        version: link:../steps/draft-generation
+      '@auto-ozon/step-listing-submit':
+        specifier: workspace:*
+        version: link:../steps/listing-submit
       '@auto-ozon/step-source-1688':
         specifier: workspace:*
         version: link:../steps/source-1688

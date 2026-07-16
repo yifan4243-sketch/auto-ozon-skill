@@ -5,6 +5,8 @@ export const WORKFLOW_STEP_NAMES = [
   'cost-pricing',
   'category-attributes',
   'attribute-mapping',
+  'draft-generation',
+  'listing-submit',
 ] as const;
 
 export type WorkflowStepName = (typeof WORKFLOW_STEP_NAMES)[number];
