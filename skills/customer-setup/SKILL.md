@@ -1,5 +1,5 @@
 ---
-name: customer-setup
+name: ozon-customer-setup
 description: Configure a customer's local auto-ozon-skill store, collection limits, pricing preferences, retry policy, and publishing permission. Use when a customer asks to configure the project, bind an Ozon store, change SKU or price limits, change pricing defaults, inspect local configuration, or enable or disable automatic publishing.
 ---
 
@@ -8,6 +8,11 @@ description: Configure a customer's local auto-ozon-skill store, collection limi
 Configure only local, Git-ignored files. Never change workflow rules under
 `packages/steps`, commit credentials, print secrets, or write secrets into a
 run artifact.
+
+After configuration, route customer listing requests through the repository
+root `SKILL.md` (`ozon-workflow-router`). This Skill configures preferences; it
+does not decide whether a later request needs market selection or a supplied
+1688 keyword.
 
 ## First use
 

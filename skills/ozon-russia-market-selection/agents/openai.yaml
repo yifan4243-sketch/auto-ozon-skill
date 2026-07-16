@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ozon Market Selection"
+  short_description: "Rank Russian Ozon category opportunities safely"
+  default_prompt: "Analyze the saved Ozon annual category data and choose diversified categories for 1688 sourcing."

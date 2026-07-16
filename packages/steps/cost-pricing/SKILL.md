@@ -1,5 +1,5 @@
 ---
-name: cost-pricing
+name: ozon-cost-pricing
 description: Calculate auditable per-SKU CEL shipping, landed cost, Ozon commission, and CNY listing price after category decision and before Ozon category-attribute retrieval.
 ---
 

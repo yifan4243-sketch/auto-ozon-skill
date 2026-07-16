@@ -1,0 +1,32 @@
+{
+  "name": "ozon-master",
+  "version": "0.1.0",
+  "description": "One-command installer and Agent skill bootstrapper for Auto Ozon Skill.",
+  "type": "module",
+  "bin": {
+    "ozon-master": "bin/ozon-master.mjs"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test test/*.check.mjs",
+    "pack:check": "npm pack --dry-run"
+  },
+  "keywords": [
+    "ozon",
+    "1688",
+    "playwright",
+    "agent",
+    "skill"
+  ],
+  "license": "MIT"
+}

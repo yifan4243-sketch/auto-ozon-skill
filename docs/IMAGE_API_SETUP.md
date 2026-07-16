@@ -1,3 +1,0 @@
-# Image Api Setup
-
-TODO.

@@ -92,6 +92,8 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/ozon-master: {}
+
   packages/steps/attribute-mapping:
     dependencies:
       '@auto-ozon/artifact-store':

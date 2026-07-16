@@ -1,3 +1,0 @@
-# Source By Image
-
-TODO.

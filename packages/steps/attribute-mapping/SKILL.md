@@ -1,5 +1,5 @@
 ---
-name: attribute-mapping
+name: ozon-attribute-mapping
 description: Map CanonicalProductV2 facts, a validated CategoryDecisionV1, and current Ozon CategoryAttributesV1 snapshots into auditable common attributes, variant attributes, and complete per-SKU attribute assignments. Use when filling Ozon category attributes, selecting dictionary values, separating shared values from SKU differences, identifying missing required attributes, or producing the final AttributeMappingV1 artifact.
 ---
 

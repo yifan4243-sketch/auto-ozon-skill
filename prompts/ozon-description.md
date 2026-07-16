@@ -1,3 +1,0 @@
-# Ozon Description
-
-TODO.
