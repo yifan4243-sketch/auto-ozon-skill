@@ -31,6 +31,14 @@ export interface CategoryAttributesV1 {
   language: 'ZH_HANS';
   ok: boolean;
   fetched_at: string;
+  snapshot: {
+    schema_version: 1;
+    source: 'ozon-seller-api';
+    captured_at: string;
+    valid_from: string;
+    valid_to: string;
+    sha256: string;
+  };
   category: {
     description_category_id: number;
     type_id: number;

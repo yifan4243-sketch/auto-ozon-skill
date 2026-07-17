@@ -15,3 +15,6 @@ export * from './domain-error-v1.js';
 export * from './store-profile-v2.js';
 export * from './weight-facts.js';
 export * from './image-bundle.js';
+export * from './market-selection.js';
+export * from './listing-job.js';
+export * from './publish-reliability.js';

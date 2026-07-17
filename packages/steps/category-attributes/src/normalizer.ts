@@ -4,6 +4,7 @@ import type {
   CategoryAttributeValueV1,
   DictionaryPageRawV1,
 } from '@auto-ozon/contracts';
+import { createHash } from 'node:crypto';
 import type { CategoryAttributesSelectionInput } from './service.js';
 
 interface OzonRawAttribute {
@@ -34,12 +35,19 @@ export function normalizeCategoryAttributes(
   options: CategoryAttributesSelectionInput,
 ): CategoryAttributesV1 {
   const attributes = normalizeAttributeList(rawAttributes, dictionaryValues);
+  const capturedAt = new Date().toISOString();
+  const validTo = new Date(Date.parse(capturedAt) + 24 * 60 * 60 * 1000).toISOString();
   return {
     schema_version: 1,
     source: 'ozon',
     language: 'ZH_HANS',
     ok: true,
-    fetched_at: new Date().toISOString(),
+    fetched_at: capturedAt,
+    snapshot: {
+      schema_version: 1, source: 'ozon-seller-api', captured_at: capturedAt,
+      valid_from: capturedAt, valid_to: validTo,
+      sha256: createHash('sha256').update(stableJson({ rawAttributes, dictionaryValues: [...dictionaryValues] })).digest('hex'),
+    },
     category: {
       description_category_id: options.descriptionCategoryId,
       type_id: options.typeId,
@@ -51,6 +59,13 @@ export function normalizeCategoryAttributes(
     raw_response: rawAttributes,
     dictionary_raw_responses: dictionaryRawResponses,
   };
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stableJson(object[key])}`).join(',')}}`;
 }
 
 export function normalizeAttributeList(

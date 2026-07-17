@@ -63,6 +63,7 @@ export async function runCategoryAttributes(
                 cacheKey,
               )
             : null;
+        if (schema && (!schema.snapshot || Date.parse(schema.snapshot.valid_to) <= Date.now())) schema = null;
         if (!schema) {
           schema = await fetchOne(transport, selection.category);
           if (context) {
