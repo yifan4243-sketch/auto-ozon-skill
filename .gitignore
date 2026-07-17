@@ -10,5 +10,7 @@ __pycache__/
 tmp/
 data/products/
 data/runs/
+data/batches/
+data/state/
 data/cache/
 data/config/*.local.json

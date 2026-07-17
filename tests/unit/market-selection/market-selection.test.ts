@@ -34,7 +34,7 @@ describe('market selection', () => {
     const result = await runMarketSelection({ batch_id: 'batch-1', snapshot_path: snapshotPath, category_count: 5 });
 
     expect(result.selected_categories).toHaveLength(5);
-    expect(result.planned_listing_total).toBeLessThanOrEqual(100);
+    expect(result.planned_listing_total).toBe(100);
     expect(Math.max(...Array.from(new Set(result.selected_categories.map((item) => item.root_category_id))).map(
       (root) => result.selected_categories.filter((item) => item.root_category_id === root).length,
     ))).toBeLessThanOrEqual(2);

@@ -19,6 +19,9 @@
       "path": "../artifact-store"
     },
     {
+      "path": "../batch-orchestrator"
+    },
+    {
       "path": "../config"
     },
     {
@@ -32,6 +35,9 @@
     },
     {
       "path": "../job-store"
+    },
+    {
+      "path": "../market-selection"
     },
     {
       "path": "../steps/attribute-mapping"

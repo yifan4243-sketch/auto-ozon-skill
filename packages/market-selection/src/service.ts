@@ -57,7 +57,13 @@ export async function runMarketSelection(input: RunMarketSelectionInputV1): Prom
     else viable.push(row);
   }
   if (viable.length === 0) throw new Error('NO_VIABLE_MARKET_CATEGORIES');
-  const scored = viable.map((row) => scoreRow(row, viable, selectionDate)).sort((a, b) => b.score - a.score || a.analytics_category_id - b.analytics_category_id);
+  const distributions = {
+    gmv: percentileLookup(viable.map((item) => Number(item.metric_gmv))),
+    items: percentileLookup(viable.map((item) => Number(item.metric_items))),
+    growth: percentileLookup(viable.map((item) => Math.max(0, Number(item.metric_gmv_growth)))),
+    sellers: percentileLookup(viable.map((item) => Number(item.metric_sellers))),
+  };
+  const scored = viable.map((row) => scoreRow(row, distributions, selectionDate)).sort((a, b) => b.score - a.score || a.analytics_category_id - b.analytics_category_id);
   const count = input.category_count ?? 8;
   const selected: ReturnType<typeof scoreRow>[] = [];
   const perRoot = new Map<number, number>();
@@ -69,12 +75,10 @@ export async function runMarketSelection(input: RunMarketSelectionInputV1): Prom
   }
   if (selected.length < count) throw new Error('CATEGORY_DIVERSITY_TARGET_UNREACHABLE');
   const dailyLimit = input.daily_listing_limit ?? 100;
-  const cap = count <= 7 ? 15 : count >= 9 ? 10 : 12;
-  const base = Math.min(cap, Math.floor(dailyLimit / count));
-  let remaining = Math.min(dailyLimit, base * count);
-  const final = selected.map((category): SelectedMarketCategoryV1 => {
-    const planned = Math.min(base, remaining);
-    remaining -= planned;
+  const base = Math.floor(dailyLimit / count);
+  const remainder = dailyLimit % count;
+  const final = selected.map((category, index): SelectedMarketCategoryV1 => {
+    const planned = base + (index < remainder ? 1 : 0);
     return { ...category, planned_listings: planned, candidate_collection_target: planned * 2, max_sku_per_product: input.max_sku_per_product ?? 3 };
   });
   return {
@@ -89,13 +93,13 @@ export async function runMarketSelection(input: RunMarketSelectionInputV1): Prom
   };
 }
 
-function scoreRow(row: AnalyticsRow, rows: AnalyticsRow[], selectionDate: string) {
+function scoreRow(row: AnalyticsRow, distributions: ScoringDistributions, selectionDate: string) {
   const gmv = Number(row.metric_gmv); const items = Number(row.metric_items); const growth = Number(row.metric_gmv_growth);
   const sellers = Number(row.metric_sellers); const buyout = Number(row.metric_buyout); const leader = Number(row.metric_leader_share);
-  const demandGmv = percentile(gmv, rows.map((item) => Number(item.metric_gmv)));
-  const demandItems = percentile(items, rows.map((item) => Number(item.metric_items)));
-  const positiveGrowth = percentile(Math.max(0, growth), rows.map((item) => Math.max(0, Number(item.metric_gmv_growth))));
-  const sellerPercentile = percentile(sellers, rows.map((item) => Number(item.metric_sellers)));
+  const demandGmv = distributions.gmv(gmv);
+  const demandItems = distributions.items(items);
+  const positiveGrowth = distributions.growth(Math.max(0, growth));
+  const sellerPercentile = distributions.sellers(sellers);
   const moderateCompetition = Math.max(0, 1 - Math.abs(sellerPercentile - 0.5) * 2);
   const longTail = demandGmv >= 0.2 && demandGmv < 0.8 && growth > 0 && items > 0 ? 1 : 0;
   const seasonal = seasonalAdjustment(row, selectionDate);
@@ -135,11 +139,31 @@ function completeMetric(row: AnalyticsRow): boolean {
     && row.metric_gmv_growth !== '' && Number.isFinite(Number(row.metric_gmv_growth));
 }
 
-function percentile(value: number, values: number[]): number {
-  if (values.length <= 1) return 1;
-  const below = values.filter((candidate) => candidate < value).length;
-  const equal = values.filter((candidate) => candidate === value).length;
-  return (below + Math.max(0, equal - 1) / 2) / (values.length - 1);
+interface ScoringDistributions {
+  gmv: (value: number) => number; items: (value: number) => number;
+  growth: (value: number) => number; sellers: (value: number) => number;
+}
+
+function percentileLookup(values: number[]): (value: number) => number {
+  const sorted = [...values].sort((left, right) => left - right);
+  if (sorted.length <= 1) return () => 1;
+  return (value: number) => {
+    const below = lowerBound(sorted, value);
+    const atOrBelow = upperBound(sorted, value);
+    const equal = atOrBelow - below;
+    return (below + Math.max(0, equal - 1) / 2) / (sorted.length - 1);
+  };
+}
+
+function lowerBound(values: number[], target: number): number {
+  let low = 0; let high = values.length;
+  while (low < high) { const middle = Math.floor((low + high) / 2); if (values[middle]! < target) low = middle + 1; else high = middle; }
+  return low;
+}
+function upperBound(values: number[], target: number): number {
+  let low = 0; let high = values.length;
+  while (low < high) { const middle = Math.floor((low + high) / 2); if (values[middle]! <= target) low = middle + 1; else high = middle; }
+  return low;
 }
 
 function validateInput(input: RunMarketSelectionInputV1): void {

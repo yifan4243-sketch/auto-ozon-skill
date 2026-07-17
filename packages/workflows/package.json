@@ -21,6 +21,8 @@
     "@auto-ozon/config": "workspace:*",
     "@auto-ozon/image-pipeline": "workspace:*",
     "@auto-ozon/job-store": "workspace:*",
+    "@auto-ozon/batch-orchestrator": "workspace:*",
+    "@auto-ozon/market-selection": "workspace:*",
     "@auto-ozon/core": "workspace:*",
     "@auto-ozon/adapters-1688": "workspace:*",
     "@auto-ozon/adapters-ozon": "workspace:*",

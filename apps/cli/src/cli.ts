@@ -17,6 +17,8 @@ import {
   runCategoryInspect,
   runListingPublish,
   getListingPublishStatus,
+  createBatchWorkflow,
+  getBatchWorkflowStatus,
 } from '@auto-ozon/workflows';
 import {
   CliError,
@@ -323,6 +325,40 @@ function registerWorkflowCommands(
     .command('workflow')
     .description('End-to-end automation workflows');
 
+  const batch = workflow.command('batch').description('Create and inspect foreground multi-product jobs');
+  batch.command('create')
+    .description('Create a keyword batch, or omit --keyword to use annual Russian market selection')
+    .requiredOption('--batch-id <id>', 'Stable local batch ID')
+    .requiredOption('--store-id <Client-Id>', 'Target Ozon Seller Client-Id')
+    .requiredOption('--count <n>', 'Requested Ozon listing/SKU count')
+    .requiredOption('--profiles <names>', 'At least two 1688 profile names separated by commas')
+    .option('--keyword <keyword>', 'Explicit 1688 keyword; omit for market selection')
+    .option('--market-snapshot <path>', 'Saved annual Ozon category analytics snapshot')
+    .option('--category-count <n>', 'Market-selection category count from 5 to 10', '8')
+    .option('--candidate-limit <n>', 'Maximum candidate products examined')
+    .option('--sku-max <n>', 'Maximum Ozon SKUs retained per source product', '3')
+    .option('--price-min <n>', 'Minimum 1688 purchase price in CNY')
+    .option('--price-max <n>', 'Maximum 1688 purchase price in CNY')
+    .option('--headed', 'Use a visible browser')
+    .option('--captcha-policy <policy>', 'pause or skip_product', 'pause')
+    .action(async (opts) => {
+      const count = positiveInteger(opts.count, '--count');
+      const candidateLimit = opts.candidateLimit ? positiveInteger(opts.candidateLimit, '--candidate-limit') : Math.max(count * 3, count);
+      const captchaPolicy = opts.captchaPolicy === 'pause' || opts.captchaPolicy === 'skip_product' ? opts.captchaPolicy : null;
+      if (!captchaPolicy) throw new CliError(2, 'BAD_INPUT', '--captcha-policy must be pause or skip_product.');
+      emitCommandResult(await createBatchWorkflow({
+        batch_id: opts.batchId, store_id: opts.storeId, requested_listing_count: count,
+        keyword: opts.keyword, profiles: parseTwoProfiles(opts.profiles), headed: Boolean(opts.headed),
+        captcha_policy: captchaPolicy, max_sku_per_product: positiveInteger(opts.skuMax, '--sku-max'),
+        price_min_cny: parseOptionalNumber(opts.priceMin), price_max_cny: parseOptionalNumber(opts.priceMax),
+        candidate_limit: candidateLimit, category_count: positiveInteger(opts.categoryCount, '--category-count'),
+        market_snapshot_path: opts.marketSnapshot,
+      }));
+    });
+  batch.command('status').description('Read a saved batch without starting collection or publishing')
+    .requiredOption('--batch-id <id>', 'Batch ID to inspect')
+    .action(async (opts) => { emitCommandResult(await getBatchWorkflowStatus(opts.batchId)); });
+
   const categoryCmd = workflow
     .command('category')
     .description('Category-related workflows: sourcing → decision → attributes');
@@ -628,6 +664,20 @@ function parseSkuMax(raw: string | undefined): number | undefined {
     throw new CliError(2, 'BAD_INPUT', '--sku-max must be a positive integer.');
   }
   return value;
+}
+
+function positiveInteger(raw: string | undefined, option: string): number {
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1) throw new CliError(2, 'BAD_INPUT', `${option} must be a positive integer.`);
+  return value;
+}
+
+function parseTwoProfiles(raw: string): [string, string, ...string[]] {
+  const profiles = raw.split(',').map((value) => value.trim()).filter(Boolean);
+  if (profiles.length < 2 || profiles.some((value) => !/^[A-Za-z0-9_-]{1,64}$/u.test(value))) {
+    throw new CliError(2, 'BAD_INPUT', '--profiles requires at least two safe 1688 profile names separated by commas.');
+  }
+  return profiles as [string, string, ...string[]];
 }
 
 function parseNumber(raw: string | undefined): number | undefined {

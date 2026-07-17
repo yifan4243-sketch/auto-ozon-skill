@@ -247,6 +247,9 @@ importers:
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../artifact-store
+      '@auto-ozon/batch-orchestrator':
+        specifier: workspace:*
+        version: link:../batch-orchestrator
       '@auto-ozon/config':
         specifier: workspace:*
         version: link:../config
@@ -262,6 +265,9 @@ importers:
       '@auto-ozon/job-store':
         specifier: workspace:*
         version: link:../job-store
+      '@auto-ozon/market-selection':
+        specifier: workspace:*
+        version: link:../market-selection
       '@auto-ozon/step-attribute-mapping':
         specifier: workspace:*
         version: link:../steps/attribute-mapping

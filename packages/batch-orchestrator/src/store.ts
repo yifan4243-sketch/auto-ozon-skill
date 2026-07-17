@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { ListingBatchResultV1, ListingJobSpecV1 } from '@auto-ozon/contracts';
+import type { ListingBatchResultV1, ListingJobSpecV1, MarketSelectionV1 } from '@auto-ozon/contracts';
 
 export class FileBatchStore {
   constructor(readonly root = path.resolve('data/batches')) {}
@@ -8,6 +8,7 @@ export class FileBatchStore {
   async create(spec: ListingJobSpecV1): Promise<ListingBatchResultV1> {
     validateBatchId(spec.batch_id);
     const directory = this.directory(spec.batch_id);
+    await fs.mkdir(this.root, { recursive: true });
     try {
       await fs.mkdir(directory, { recursive: false });
     } catch (error) {
@@ -35,6 +36,15 @@ export class FileBatchStore {
 
   async writeResult(result: ListingBatchResultV1): Promise<void> {
     await atomicJson(path.join(this.directory(result.batch_id), 'batch-result-v1.json'), result);
+  }
+
+  async writeMarketSelection(batchId: string, selection: MarketSelectionV1): Promise<void> {
+    await atomicJson(path.join(this.directory(batchId), 'market-selection-v1.json'), selection);
+  }
+
+  async readMarketSelection(batchId: string): Promise<MarketSelectionV1 | null> {
+    try { return await readJson<MarketSelectionV1>(path.join(this.directory(batchId), 'market-selection-v1.json')); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
   }
 
   private directory(batchId: string): string {
