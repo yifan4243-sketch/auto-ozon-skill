@@ -1,0 +1,65 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "apps/cli"
+    },
+    {
+      "path": "packages/adapters-1688"
+    },
+    {
+      "path": "packages/adapters-ozon"
+    },
+    {
+      "path": "packages/artifact-store"
+    },
+    {
+      "path": "packages/batch-orchestrator"
+    },
+    {
+      "path": "packages/config"
+    },
+    {
+      "path": "packages/contracts"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/image-pipeline"
+    },
+    {
+      "path": "packages/job-store"
+    },
+    {
+      "path": "packages/market-selection"
+    },
+    {
+      "path": "packages/steps/attribute-mapping"
+    },
+    {
+      "path": "packages/steps/canonicalize-product"
+    },
+    {
+      "path": "packages/steps/category-attributes"
+    },
+    {
+      "path": "packages/steps/category-decision"
+    },
+    {
+      "path": "packages/steps/cost-pricing"
+    },
+    {
+      "path": "packages/steps/draft-generation"
+    },
+    {
+      "path": "packages/steps/listing-submit"
+    },
+    {
+      "path": "packages/steps/source-1688"
+    },
+    {
+      "path": "packages/workflows"
+    }
+  ]
+}

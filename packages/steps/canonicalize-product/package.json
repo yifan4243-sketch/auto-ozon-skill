@@ -3,18 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
-    "build": "tsc -p ../../../tsconfig.base.json"
+    "build": "tsc -b"
   },
   "dependencies": {
     "@auto-ozon/adapters-1688": "workspace:*",
     "@auto-ozon/artifact-store": "workspace:*",
     "@auto-ozon/contracts": "workspace:*",
     "@auto-ozon/core": "workspace:*"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

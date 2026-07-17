@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/cli.js",
+  "types": "./dist/cli.d.ts",
   "scripts": {
-    "build": "tsc -p ../../tsconfig.base.json",
+    "build": "tsc -b",
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
@@ -15,5 +15,18 @@
     "@auto-ozon/adapters-1688": "workspace:*",
     "@auto-ozon/adapters-ozon": "workspace:*",
     "commander": "^12.1.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js",
+      "default": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "auto-ozon": "./dist/cli.js"
   }
 }

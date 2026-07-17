@@ -5,9 +5,14 @@
   "type": "module",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "build": "pnpm -r build",
-    "typecheck": "tsc -p tsconfig.base.json --noEmit",
-    "test": "vitest run",
+    "clean": "node scripts/clean-build.mjs",
+    "build": "pnpm clean && tsc -b --pretty false",
+    "typecheck": "tsc -b --pretty false",
+    "test": "pnpm build && vitest run",
+    "test:fast": "vitest run",
+    "verify:packages": "node scripts/verify-built-packages.mjs",
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "verify:graph": "node scripts/verify-workspace-graph.mjs",
     "agent:verify": "pnpm typecheck"
   },
   "devDependencies": {

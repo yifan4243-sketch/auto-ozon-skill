@@ -5,14 +5,19 @@ on:
   push:
     branches:
       - main
+      - dev
 
 permissions:
   contents: read
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -32,14 +37,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Verify dependency graph
+        run: pnpm verify:graph
 
-      - name: Test Ozon bridge
-        run: pnpm exec vitest run tests/ozon-full-bridge.test.ts
-
-      - name: Test full suite
-        run: pnpm test
-
-      - name: Build
+      - name: Clean project-reference build
         run: pnpm build
+
+      - name: Verify native Node imports
+        run: pnpm verify:packages
+
+      - name: Verify package archives
+        run: pnpm verify:pack
+
+      - name: Test full suite without real Seller writes
+        run: pnpm test:fast
+
+      - name: Check build pollution
+        shell: bash
+        run: test -z "$(git status --porcelain)"

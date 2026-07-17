@@ -8,11 +8,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "outDir": "dist"
-  },
-  "include": [
-    "apps/**/*.ts",
-    "packages/**/*.ts",
-    "scripts/**/*.mjs"
-  ]
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "noUncheckedIndexedAccess": true
+  }
 }

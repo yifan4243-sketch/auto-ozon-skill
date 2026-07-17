@@ -129,11 +129,12 @@ function buildItem(
   }
   // attributes are cloned without semantic conversion; 4191 deliberately stays in this array.
   const copiedAttributes = structuredClone(attributes);
+  const bundledPrimaryImage = bundledImages?.primary_image;
   return {
     offer_id: stableOfferId(product.source.offer_id, sourceSkuId), name: title, price: priced.final_price_cny.toFixed(2),
     description_category_id: categoryId, type_id: typeId, weight, depth: dimensions[0]!, width: dimensions[1]!, height: dimensions[2]!,
     dimension_unit: 'mm', weight_unit: 'g', images,
-    primary_image: bundledImages?.primary_image === images[0] ? bundledImages.primary_image : images[0]!,
+    primary_image: bundledPrimaryImage && bundledPrimaryImage === images[0] ? bundledPrimaryImage : images[0]!,
     attributes: copiedAttributes,
     complex_attributes: [], currency_code: profile?.currency_code ?? 'CNY',
   };

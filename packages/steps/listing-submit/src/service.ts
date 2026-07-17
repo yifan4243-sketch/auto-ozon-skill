@@ -68,8 +68,9 @@ async function submit(input: RunListingSubmitInput): Promise<OzonPublishResultV1
       const ids = pending.map((item) => intentIds.get(item.offer_id)).filter((value): value is string => Boolean(value));
       await input.reliability_store.markSubmitted(ids, submission.task_id);
     }
-    result.task_ids.push(submission.task_id); result.task_items[submission.task_id] = pending.map((item) => item.offer_id); result.submitted_at ??= new Date().toISOString();
-    const complete = await pollTask(input.transport, submission.task_id, result.task_items[submission.task_id], result, deadline, input.profile.polling.interval_ms);
+    const submittedOfferIds = pending.map((item) => item.offer_id);
+    result.task_ids.push(submission.task_id); result.task_items[submission.task_id] = submittedOfferIds; result.submitted_at ??= new Date().toISOString();
+    const complete = await pollTask(input.transport, submission.task_id, submittedOfferIds, result, deadline, input.profile.polling.interval_ms);
     if (!complete) return timeout(result);
   }
   const imported = result.sku_results.filter((item) => item.status === 'imported' || item.status === 'skipped').map((item) => item.offer_id);

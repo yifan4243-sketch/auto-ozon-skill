@@ -203,7 +203,8 @@ export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
   };
 
   if (errors.length > 0) {
-    const [first, ...rest] = errors;
+    const first = errors[0]!;
+    const rest = errors.slice(1);
     return {
       ...errorResult('ozon.doctor', first, [...nextActions], warnings, data),
       errors: [first, ...rest],

@@ -1,0 +1,61 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../adapters-1688"
+    },
+    {
+      "path": "../adapters-ozon"
+    },
+    {
+      "path": "../artifact-store"
+    },
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../contracts"
+    },
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../image-pipeline"
+    },
+    {
+      "path": "../job-store"
+    },
+    {
+      "path": "../steps/attribute-mapping"
+    },
+    {
+      "path": "../steps/canonicalize-product"
+    },
+    {
+      "path": "../steps/category-attributes"
+    },
+    {
+      "path": "../steps/category-decision"
+    },
+    {
+      "path": "../steps/cost-pricing"
+    },
+    {
+      "path": "../steps/draft-generation"
+    },
+    {
+      "path": "../steps/listing-submit"
+    },
+    {
+      "path": "../steps/source-1688"
+    }
+  ]
+}
