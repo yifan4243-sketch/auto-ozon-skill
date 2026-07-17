@@ -42,13 +42,13 @@ export function matchDeterministicAttribute(
     return dictionaryDefault(attribute, DEFAULT_DICTIONARY.china, '1688 source country policy');
   }
 
-  const costWeight = costPricing?.sku_pricing.find((entry) => entry.source_sku_id === sku.source_sku_id)
-    ?.package.actual_weight_g;
+  const costEntry = costPricing?.sku_pricing.find((entry) => entry.source_sku_id === sku.source_sku_id);
+  const costWeight = costEntry?.weight_facts?.cost_base_weight_g ?? costEntry?.package.actual_weight_g;
   if (attribute.id === ATTRIBUTE.netWeight && costWeight && costWeight > 3) {
-    return costDerived(attribute.id, costWeight, 'cost_pricing.package.actual_weight_g');
+    return costDerived(attribute.id, costEntry?.weight_facts?.attribute_4383_weight_g ?? costWeight, 'weight_facts.attribute_4383_weight_g');
   }
   if (attribute.id === ATTRIBUTE.packagedWeight && costWeight && costWeight > 3) {
-    return costDerived(attribute.id, costWeight + 50, 'cost_pricing.package.actual_weight_g + 50g');
+    return costDerived(attribute.id, costEntry?.weight_facts?.attribute_4497_weight_g ?? costWeight + 50, 'weight_facts.attribute_4497_weight_g');
   }
   const weight = sourceNetWeightGrams(product, sku);
   if (attribute.id === ATTRIBUTE.netWeight && weight !== null) {

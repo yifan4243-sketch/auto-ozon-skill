@@ -98,6 +98,12 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/image-pipeline:
+    dependencies:
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/ozon-master: {}
 
   packages/steps/attribute-mapping:
@@ -219,6 +225,9 @@ importers:
       '@auto-ozon/core':
         specifier: workspace:*
         version: link:../core
+      '@auto-ozon/image-pipeline':
+        specifier: workspace:*
+        version: link:../image-pipeline
       '@auto-ozon/step-attribute-mapping':
         specifier: workspace:*
         version: link:../steps/attribute-mapping

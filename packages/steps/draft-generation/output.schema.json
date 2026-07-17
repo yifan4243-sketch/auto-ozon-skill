@@ -1,11 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schema_version", "source_offer_id", "status", "items", "warnings", "errors"],
+  "required": ["schema_version", "source_offer_id", "status", "weight_semantics", "image_bundle_sha256", "items", "warnings", "errors"],
   "properties": {
     "schema_version": { "const": 1 },
     "source_offer_id": { "type": "string", "minLength": 1 },
     "status": { "enum": ["draft_complete", "needs_review", "blocked"] },
+    "weight_semantics": { "const": "legacy-cost-base-v1" },
+    "image_bundle_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "items": { "type": "array", "items": { "type": "object", "required": ["offer_id", "name", "price", "description_category_id", "type_id", "weight", "depth", "width", "height", "dimension_unit", "weight_unit", "images", "primary_image", "attributes", "complex_attributes", "currency_code"] } },
     "warnings": { "type": "array" },
     "errors": { "type": "array" }

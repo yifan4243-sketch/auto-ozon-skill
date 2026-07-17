@@ -1,4 +1,5 @@
 import type { OzonReadyAttributeV1 } from './attribute-mapping.js';
+import type { WeightFactsV1 } from './weight-facts.js';
 
 export type ListingDraftStatusV1 = 'draft_complete' | 'needs_review' | 'blocked';
 
@@ -44,6 +45,8 @@ export interface ListingDraftV1 {
   schema_version: 1;
   source_offer_id: string;
   status: ListingDraftStatusV1;
+  weight_semantics: WeightFactsV1['semantics'];
+  image_bundle_sha256: string | null;
   items: ListingDraftItemV1[];
   warnings: ListingDraftIssueV1[];
   errors: ListingDraftIssueV1[];

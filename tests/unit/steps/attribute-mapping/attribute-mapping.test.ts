@@ -223,6 +223,18 @@ describe('runAttributeMapping', () => {
     );
   });
 
+  it('records a non-blocking warning when source brand facts are overridden by no-brand policy', async () => {
+    const fixture = inputFixture();
+    fixture.product.product.attributes.品牌 = 'ExampleBrand';
+    const result = await runAttributeMapping(fixture);
+    expect(result.ok).toBe(true);
+    expect(result.data?.status).toBe('completed');
+    expect(result.warnings.map((warning) => warning.code)).toContain('SOURCE_BRAND_OVERRIDDEN_NO_BRAND');
+    expect(result.data?.sku_attributes.every((sku) => sku.attributes.some((attribute) =>
+      attribute.attribute_id === 85 && attribute.values[0]?.dictionary_value_id === 126745801,
+    ))).toBe(true);
+  });
+
   it('routes an unlisted required attribute to the Agent instead of filling optional facts', async () => {
     const fixture = inputFixture();
     fixture.category_attributes[0]!.attributes_schema.attributes.find(

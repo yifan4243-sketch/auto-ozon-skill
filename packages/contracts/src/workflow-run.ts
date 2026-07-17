@@ -63,6 +63,7 @@ export interface WorkflowStepAttemptV2 {
   dependency_hashes: Record<string, string>;
   implementation_version: string;
   artifact: WorkflowArtifactV2 | null;
+  artifacts: WorkflowArtifactV2[];
   started_at: string;
   completed_at: string | null;
   error: WorkflowStructuredErrorV2 | null;
@@ -76,6 +77,7 @@ export interface WorkflowStepRecordV2 {
   dependency_hashes: Record<string, string>;
   implementation_version: string;
   artifact: WorkflowArtifactV2 | null;
+  artifacts: WorkflowArtifactV2[];
   started_at: string | null;
   completed_at: string | null;
   error: WorkflowStructuredErrorV2 | null;

@@ -1,3 +1,5 @@
+import type { WeightFactsV1 } from './weight-facts.js';
+
 export type CostPricingStatusV1 = 'completed' | 'needs_agent' | 'blocked';
 export type CostPricingTransportV1 = 'air' | 'air_land' | 'land';
 export type CostPricingPackageSourceV1 = '1688' | 'agent_estimated';
@@ -5,6 +7,7 @@ export type CostPricingPackageSourceV1 = '1688' | 'agent_estimated';
 export interface CostPricingProfileV1 {
   transport: CostPricingTransportV1;
   sales_unit_quantity: number;
+  pricing_mode: 'multiplier' | 'target_margin';
   pricing_multiplier: number;
   retained_target_percent: number;
   label_fee_cny: number;
@@ -51,6 +54,7 @@ export interface CostPricingSkuV1 {
   purchase_price_cny: number;
   purchase_cost_cny: number;
   package: CostPricingPackageV1;
+  weight_facts: WeightFactsV1;
   volume_weight_kg: number;
   charge_weight_g: number;
   cel_group: string;
@@ -68,6 +72,7 @@ export interface CostPricingSkuV1 {
 }
 
 export interface CostPricingAgentTaskV1 {
+  execution_owner: 'current_agent';
   source_sku_id: string;
   group_id: string;
   instruction: string;

@@ -8,6 +8,7 @@
     "schema_version",
     "source_offer_id",
     "status",
+    "weight_semantics",
     "common_attributes",
     "variant_attributes",
     "sku_attributes",
@@ -21,6 +22,7 @@
     "schema_version": { "const": 1 },
     "source_offer_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
     "status": { "enum": ["completed", "needs_review", "blocked"] },
+    "weight_semantics": { "const": "legacy-cost-base-v1" },
     "common_attributes": {
       "type": "array",
       "items": {
@@ -139,8 +141,9 @@
     "agentTask": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source_sku_id", "group_id", "attribute_id", "attribute_name", "required", "instruction", "source_facts", "dictionary_candidates"],
+      "required": ["execution_owner", "source_sku_id", "group_id", "attribute_id", "attribute_name", "required", "instruction", "source_facts", "dictionary_candidates"],
       "properties": {
+        "execution_owner": { "const": "current_agent" },
         "source_sku_id": { "type": "string", "minLength": 1 },
         "group_id": { "type": "string", "minLength": 1 },
         "attribute_id": { "type": "integer", "minimum": 1 },

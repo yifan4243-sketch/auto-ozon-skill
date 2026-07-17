@@ -145,6 +145,7 @@ export class FileArtifactStore implements ArtifactStore {
         dependency_hashes: dependencyHashes,
         implementation_version: implementationVersion,
         artifact: null,
+        artifacts: [],
         started_at: startedAt ?? now,
         completed_at: null,
         error: null,
@@ -192,8 +193,9 @@ export class FileArtifactStore implements ArtifactStore {
     const manifest = await this.readManifest(runId);
     if (!manifest) return null;
     const record = manifest.steps[step];
-    const artifact = record.artifact;
-    if (!artifact || path.posix.basename(artifact.path) !== name) return null;
+    const artifact = record.artifacts.find((entry) => path.posix.basename(entry.path) === name)
+      ?? (record.artifact && path.posix.basename(record.artifact.path) === name ? record.artifact : null);
+    if (!artifact) return null;
     const file = this.resolveRunRelative(runId, artifact.path);
     const bytes = await readBytesIfExists(file);
     if (!bytes || !matchesArtifact(bytes, artifact)) return null;
@@ -229,15 +231,16 @@ export class FileArtifactStore implements ArtifactStore {
     };
     const current = (await this.readManifest(runId))!;
     const record = current.steps[step];
+    const artifacts = [...record.artifacts.filter((entry) => path.posix.basename(entry.path) !== name), artifact];
     const attempts = record.attempts.map((entry) => entry.attempt === attempt
-      ? { ...entry, artifact }
+      ? { ...entry, artifact, artifacts: [...entry.artifacts.filter((item) => path.posix.basename(item.path) !== name), artifact] }
       : entry);
     const next: WorkflowRunManifestV2 = {
       ...current,
       updated_at: new Date().toISOString(),
       steps: {
         ...current.steps,
-        [step]: { ...record, output: relative, artifact, attempts },
+        [step]: { ...record, output: relative, artifact, artifacts, attempts },
       },
     };
     await writeJsonAtomic(this.manifestPath(runId), next);
@@ -256,9 +259,12 @@ export class FileArtifactStore implements ArtifactStore {
     if (check.input_hash !== undefined && record.input_hash !== check.input_hash) return false;
     if (check.implementation_version !== undefined && record.implementation_version !== check.implementation_version) return false;
     if (check.dependency_hashes !== undefined && stableJson(record.dependency_hashes) !== stableJson(check.dependency_hashes)) return false;
-    if (!record.artifact) return false;
-    const bytes = await readBytesIfExists(this.resolveRunRelative(runId, record.artifact.path));
-    return Boolean(bytes && matchesArtifact(bytes, record.artifact));
+    if (record.artifacts.length === 0) return false;
+    for (const artifact of record.artifacts) {
+      const bytes = await readBytesIfExists(this.resolveRunRelative(runId, artifact.path));
+      if (!bytes || !matchesArtifact(bytes, artifact)) return false;
+    }
+    return true;
   }
 
   async prepareStep(runId: string, step: WorkflowStepName, metadata: StepExecutionMetadataV2): Promise<WorkflowRunManifestV2> {
@@ -400,7 +406,7 @@ function pendingStep(): WorkflowStepRecordV2 {
   return {
     status: 'pending', current_attempt: 0, output: null, input_hash: null,
     dependency_hashes: {}, implementation_version: DEFAULT_IMPLEMENTATION_VERSION,
-    artifact: null, started_at: null, completed_at: null, error: null, error_code: null, attempts: [],
+    artifact: null, artifacts: [], started_at: null, completed_at: null, error: null, error_code: null, attempts: [],
   };
 }
 

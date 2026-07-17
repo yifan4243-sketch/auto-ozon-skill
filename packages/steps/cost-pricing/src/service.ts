@@ -9,7 +9,9 @@ import type {
   CostPricingProfileV1,
   CostPricingSkuV1,
   CostPricingV1,
+  CostPricingCommissionTierV1,
 } from '@auto-ozon/contracts';
+import { LEGACY_WEIGHT_SEMANTICS_V1 } from '@auto-ozon/contracts';
 import type { WorkflowContext } from '@auto-ozon/artifact-store';
 import { assertWorkflowActive } from '@auto-ozon/artifact-store';
 import { loadBundledCommissionSnapshot, resolveCommissionSnapshot, selectCommissionTier } from './commission.js';
@@ -39,6 +41,7 @@ export interface RunCostPricingInput {
 export const DEFAULT_COST_PRICING_PROFILE: CostPricingProfileV1 = {
   transport: 'land',
   sales_unit_quantity: 1,
+  pricing_mode: 'multiplier',
   pricing_multiplier: 2,
   retained_target_percent: 20,
   label_fee_cny: 2,
@@ -136,6 +139,7 @@ function resolvePackages(
       const packaged = sourcePackage ?? agentPackage;
       if (!packaged) {
         result.agent_tasks.push({
+          execution_owner: 'current_agent',
           source_sku_id: skuId,
           group_id: group.group_id,
           instruction: 'Estimate one sellable unit packaged weight in grams and package length/width/height in centimetres. Use no external model API. Do not reuse net weight as packaged weight without packaging allowance.',
@@ -206,15 +210,14 @@ function calculateSkuPricing(
         const purchaseCost = sku.price_cny * result.profile.sales_unit_quantity;
         const landedCost = purchaseCost + result.profile.domestic_shipping_cny
           + result.profile.label_fee_cny + candidate.shipping_cny + result.profile.other_fixed_cny;
-        const finalPriceCny = Math.round(landedCost * result.profile.pricing_multiplier);
-        const finalPriceRub = finalPriceCny * result.fx_rate.rub_per_cny;
-        if (!priceFitsCelBand(finalPriceRub, candidate)) continue;
-        const commission = selectCommissionTier(
-          commissionSnapshot,
+        const priceOptions = resolvePriceOptions(
+          landedCost,
+          candidate,
           category.description_category_id,
-          finalPriceRub,
+          commissionSnapshot,
+          result,
         );
-        if (!commission) continue;
+        for (const { finalPriceCny, finalPriceRub, commission } of priceOptions) {
         const commissionAmount = finalPriceCny * commission.rate_percent / 100;
         const otherRateAmount = finalPriceCny * result.profile.other_rate_percent / 100;
         const profit = finalPriceCny - landedCost - commissionAmount - otherRateAmount;
@@ -225,6 +228,16 @@ function calculateSkuPricing(
           purchase_price_cny: round(sku.price_cny),
           purchase_cost_cny: round(purchaseCost),
           package: packaged,
+          weight_facts: {
+            semantics: LEGACY_WEIGHT_SEMANTICS_V1,
+            source: packaged.source,
+            confidence: packaged.confidence,
+            cost_base_weight_g: packaged.actual_weight_g,
+            attribute_4383_weight_g: packaged.actual_weight_g,
+            attribute_4497_weight_g: packaged.actual_weight_g + 50,
+            draft_weight_g: packaged.actual_weight_g,
+            packaging_increment_g: 50,
+          },
           volume_weight_kg: round(volumeWeightKg, 4),
           charge_weight_g: candidate.charge_weight_g,
           cel_group: candidate.name,
@@ -240,6 +253,7 @@ function calculateSkuPricing(
           estimated_profit_cny: round(profit),
           estimated_profit_margin_percent: round(profit / finalPriceCny * 100),
         });
+        }
       }
       if (solutions.length === 0) {
         const categoryExists = commissionSnapshot.categories.some(
@@ -307,6 +321,7 @@ function buildSourceFacts(product: CanonicalProductV2, skuId: string): string[] 
 
 function validateProfile(profile: CostPricingProfileV1): CostPricingProfileV1 {
   if (!['air', 'air_land', 'land'].includes(profile.transport)) throw new Error('Unsupported CEL transport.');
+  if (!['multiplier', 'target_margin'].includes(profile.pricing_mode)) throw new Error('Unsupported pricing_mode.');
   if (!Number.isSafeInteger(profile.sales_unit_quantity) || profile.sales_unit_quantity <= 0) {
     throw new Error('sales_unit_quantity must be a positive integer.');
   }
@@ -316,6 +331,47 @@ function validateProfile(profile: CostPricingProfileV1): CostPricingProfileV1 {
   }
   if (profile.other_rate_percent >= 100) throw new Error('other_rate_percent must be below 100.');
   return profile;
+}
+
+function resolvePriceOptions(
+  landedCost: number,
+  candidate: ReturnType<typeof calculateCelCandidates>[number],
+  categoryId: number,
+  snapshot: ReturnType<typeof resolveCommissionSnapshot>,
+  result: CostPricingV1,
+): Array<{ finalPriceCny: number; finalPriceRub: number; commission: CostPricingCommissionTierV1 }> {
+  const prices: number[] = [];
+  if (result.profile.pricing_mode === 'multiplier') {
+    prices.push(Math.round(landedCost * result.profile.pricing_multiplier));
+  } else {
+    const category = snapshot.categories.find((entry) => entry.category_id === categoryId);
+    for (const tier of category?.tiers ?? []) {
+      const denominator = 1 - (
+        tier.rate_percent
+        + result.profile.other_rate_percent
+        + result.profile.retained_target_percent
+      ) / 100;
+      if (denominator > 0) prices.push(Math.round(landedCost / denominator));
+    }
+  }
+  const seen = new Set<number>();
+  const options: Array<{ finalPriceCny: number; finalPriceRub: number; commission: CostPricingCommissionTierV1 }> = [];
+  for (const finalPriceCny of prices) {
+    if (finalPriceCny <= 0 || seen.has(finalPriceCny)) continue;
+    seen.add(finalPriceCny);
+    const finalPriceRub = finalPriceCny * result.fx_rate!.rub_per_cny;
+    if (!priceFitsCelBand(finalPriceRub, candidate)) continue;
+    const commission = selectCommissionTier(snapshot, categoryId, finalPriceRub);
+    if (!commission) continue;
+    if (result.profile.pricing_mode === 'target_margin') {
+      const achieved = (finalPriceCny - landedCost
+        - finalPriceCny * commission.rate_percent / 100
+        - finalPriceCny * result.profile.other_rate_percent / 100) / finalPriceCny * 100;
+      if (achieved + 0.01 < result.profile.retained_target_percent) continue;
+    }
+    options.push({ finalPriceCny, finalPriceRub, commission });
+  }
+  return options;
 }
 
 function validateFxRate(rate: CostPricingFxRateV1): CostPricingFxRateV1 {

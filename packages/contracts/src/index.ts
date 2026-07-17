@@ -13,3 +13,5 @@ export * from './listing-draft.js';
 export * from './ozon-publish.js';
 export * from './domain-error-v1.js';
 export * from './store-profile-v2.js';
+export * from './weight-facts.js';
+export * from './image-bundle.js';

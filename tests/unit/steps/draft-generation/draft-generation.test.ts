@@ -5,6 +5,8 @@ function input(includeTimestamp = true) {
   const attributes = [
     { id: 4180, complex_id: 0, values: [{ value: 'Кружка дорожная' }] },
     { id: 4191, complex_id: 0, values: [{ value: 'Описание из шага заполнения.' }] },
+    { id: 4383, complex_id: 0, values: [{ value: '300' }] },
+    { id: 4497, complex_id: 0, values: [{ value: '350' }] },
     ...(includeTimestamp ? [{ id: 9048, complex_id: 0, values: [{ value: '20260716130000' }] }] : []),
     { id: 10096, complex_id: 0, values: [{ dictionary_value_id: 7, value: 'Многоцветный' }] },
   ];
@@ -19,12 +21,14 @@ function input(includeTimestamp = true) {
       group_ids: ['group-1'], category: { description_category_id: 10, type_id: 20 },
       attributes_schema: { attributes: [
         { id: 4180, dictionary_id: 0, values: [] }, { id: 4191, dictionary_id: 0, values: [] },
+        { id: 4383, dictionary_id: 0, values: [] }, { id: 4497, dictionary_id: 0, values: [] },
         { id: 10096, dictionary_id: 1, values: [{ id: 7, value: 'Многоцветный' }] },
         { id: 9048, dictionary_id: 0, values: [] },
       ] },
     }],
     cost_pricing: { source_offer_id: '1688-offer', status: 'completed', sku_pricing: [{
       source_sku_id: 'red', final_price_cny: 25, package: { actual_weight_g: 300, length_cm: 20, width_cm: 10, height_cm: 8 },
+      weight_facts: { semantics: 'legacy-cost-base-v1', draft_weight_g: 300 },
     }] },
     attribute_mapping: { source_offer_id: '1688-offer', status: 'completed', sku_attributes: [{
       source_sku_id: 'red', group_id: 'group-1', description_category_id: 10, type_id: 20, ozon_attributes: attributes,
@@ -45,5 +49,12 @@ describe('draft-generation', () => {
   it('blocks when current category exposes 9048 but mapping omitted it', async () => {
     const result = await runDraftGeneration(input(false));
     expect(result).toMatchObject({ ok: false, data: { status: 'blocked', errors: [{ code: 'TIMESTAMP_9048_MISSING' }] } });
+  });
+
+  it('blocks weight drift between pricing, attributes, and the draft request', async () => {
+    const fixture = input();
+    fixture.attribute_mapping.sku_attributes[0].ozon_attributes.find((attribute: { id: number }) => attribute.id === 4497).values[0].value = '349';
+    const result = await runDraftGeneration(fixture);
+    expect(result).toMatchObject({ ok: false, data: { status: 'blocked', errors: [{ code: 'WEIGHT_4497_INCONSISTENT' }] } });
   });
 });

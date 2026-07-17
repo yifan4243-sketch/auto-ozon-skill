@@ -11,6 +11,8 @@ import type {
   CostPricingV1,
   DraftGenerationProfileV1,
   ListingDraftV1,
+  ImageBundleV1,
+  ImageGenerationProviderV1,
   WorkflowRunManifestV2,
   WorkflowStepName,
   WorkflowStepStatus,
@@ -45,6 +47,7 @@ import {
   type CostPricingFxRateProvider,
 } from '@auto-ozon/step-cost-pricing';
 import { runDraftGeneration } from '@auto-ozon/step-draft-generation';
+import { runImagePipeline, type ImagePipelineGenerationOptionsV1 } from '@auto-ozon/image-pipeline';
 import type { CollectedSourcingRun } from '@auto-ozon/adapters-1688';
 import { LISTING_PREPARATION_ORDER } from './step-registry.js';
 
@@ -62,6 +65,9 @@ export interface RunListingPreparationInput {
   cost_pricing_fx_provider?: CostPricingFxRateProvider;
   attribute_mapping_agent_input?: AttributeMappingAgentInputV1;
   draft_generation_profile?: DraftGenerationProfileV1;
+  image_bundle?: ImageBundleV1;
+  image_generation?: ImagePipelineGenerationOptionsV1;
+  image_generation_provider?: ImageGenerationProviderV1;
   start_from?: WorkflowStepName;
   stop_after?: WorkflowStepName;
   force_steps?: WorkflowStepName[];
@@ -420,7 +426,12 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
   }
 
-  await prepareStep(context, 'draft-generation', input.draft_generation_profile);
+  await prepareStep(context, 'draft-generation', {
+    profile: input.draft_generation_profile,
+    image_bundle: input.image_bundle,
+    image_generation: input.image_generation,
+    image_provider: input.image_generation_provider?.constructor.name ?? null,
+  });
   let draft = await restore<ListingDraftV1>(
     context,
     'draft-generation',
@@ -429,6 +440,13 @@ async function executeListingPreparation(
     shouldForce('draft-generation') || Boolean(input.draft_generation_profile),
   );
   if (!draft) {
+    const imageBundle = input.image_bundle ?? await runImagePipeline({
+      product,
+      generation: input.image_generation,
+      provider: input.image_generation_provider,
+      signal: input.signal,
+    });
+    await store.write(runId, 'draft-generation', 'image-bundle-v1.json', imageBundle);
     const step = await runDraftGeneration({
       product,
       category_decision: decision,
@@ -436,6 +454,7 @@ async function executeListingPreparation(
       cost_pricing: pricing,
       attribute_mapping: mapping,
       profile: input.draft_generation_profile,
+      image_bundle: imageBundle,
     }, context);
     if (!step.data || !step.ok) return stopFromStep(context, 'draft-generation', step, result);
     draft = step.data;

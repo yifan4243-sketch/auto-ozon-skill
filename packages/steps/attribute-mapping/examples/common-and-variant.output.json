@@ -2,6 +2,7 @@
   "schema_version": 1,
   "source_offer_id": "900000000010",
   "status": "completed",
+  "weight_semantics": "legacy-cost-base-v1",
   "common_attributes": [
     {
       "group_id": "main",

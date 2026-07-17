@@ -52,6 +52,7 @@ export function buildAgentTask(
     })),
   ];
   return {
+    execution_owner: 'current_agent',
     source_sku_id: sku.source_sku_id,
     group_id: groupId,
     attribute_id: attribute.id,
@@ -73,7 +74,7 @@ function instructionFor(attribute: CategoryAttributeV1): string {
     case 4191:
       return 'Write a factual Russian description with at least 4 paragraphs and 500 non-whitespace characters.';
     case 4383:
-      return 'Estimate net weight in grams from the category and retained 1688 facts. Return one number greater than 3 with low confidence.';
+      return 'Only when cost-pricing has no shared weight fact, estimate the legacy cost-base product weight in grams from retained 1688 facts. Return one number greater than 3 with low confidence.';
     case 8229:
       return 'Select exactly one best product type from dictionary_candidates. This attribute must be filled.';
     case 10096:

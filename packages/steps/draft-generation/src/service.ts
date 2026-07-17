@@ -10,8 +10,10 @@ import type {
   ListingDraftIssueV1,
   ListingDraftItemV1,
   ListingDraftV1,
+  ImageBundleV1,
   OzonReadyAttributeV1,
 } from '@auto-ozon/contracts';
+import { LEGACY_WEIGHT_SEMANTICS_V1 } from '@auto-ozon/contracts';
 import { assertWorkflowActive, type WorkflowContext } from '@auto-ozon/artifact-store';
 import { validateListingDraftSchema } from './schema-validator.js';
 
@@ -22,6 +24,7 @@ export interface RunDraftGenerationInput {
   cost_pricing: CostPricingV1;
   attribute_mapping: AttributeMappingV1;
   profile?: DraftGenerationProfileV1;
+  image_bundle?: ImageBundleV1;
 }
 
 export async function runDraftGeneration(
@@ -62,8 +65,14 @@ export async function runDraftGeneration(
 
 function buildDraft(input: RunDraftGenerationInput): ListingDraftV1 {
   const result: ListingDraftV1 = {
-    schema_version: 1, source_offer_id: input.product.source.offer_id, status: 'draft_complete', items: [], warnings: [], errors: [],
+    schema_version: 1, source_offer_id: input.product.source.offer_id, status: 'draft_complete', weight_semantics: LEGACY_WEIGHT_SEMANTICS_V1,
+    image_bundle_sha256: input.image_bundle ? createHash('sha256').update(JSON.stringify(input.image_bundle)).digest('hex') : null,
+    items: [], warnings: [], errors: [],
   };
+  if (input.image_bundle && (input.image_bundle.source_offer_id !== input.product.source.offer_id || input.image_bundle.status !== 'completed')) {
+    result.errors.push(issue('IMAGE_BUNDLE_INVALID', 'ImageBundle must be completed and belong to the current source offer.'));
+    return result;
+  }
   if (input.attribute_mapping.status === 'blocked' || input.cost_pricing.status !== 'completed' || input.category_decision.status === 'blocked') {
     result.errors.push(issue('BLOCKED_UPSTREAM', 'Draft generation requires completed pricing and non-blocked category and attribute mapping.'));
     return result;
@@ -84,7 +93,8 @@ function buildDraft(input: RunDraftGenerationInput): ListingDraftV1 {
       result.errors.push(issue('CATEGORY_SNAPSHOT_MISMATCH', `SKU ${sku.source_sku_id} does not match its current category snapshot.`, [sku.source_sku_id]));
       continue;
     }
-    const item = buildItem(sku.source_sku_id, sku.image, input.product, mapped.ozon_attributes, mapped.description_category_id, mapped.type_id, priced, input.profile, result);
+    const bundledImages = input.image_bundle?.sku_images.find((value) => value.source_sku_id === sku.source_sku_id);
+    const item = buildItem(sku.source_sku_id, sku.image, input.product, mapped.ozon_attributes, mapped.description_category_id, mapped.type_id, priced, input.profile, result, bundledImages);
     if (!item) continue;
     validateAttributes(item, sku.source_sku_id, category, result);
     result.items.push(item);
@@ -101,12 +111,15 @@ function buildDraft(input: RunDraftGenerationInput): ListingDraftV1 {
 function buildItem(
   sourceSkuId: string, skuImage: string | null | undefined, product: CanonicalProductV2, attributes: OzonReadyAttributeV1[], categoryId: number, typeId: number,
   priced: CostPricingV1['sku_pricing'][number], profile: DraftGenerationProfileV1 | undefined, result: ListingDraftV1,
+  bundledImages?: ImageBundleV1['sku_images'][number],
 ): ListingDraftItemV1 | null {
   const title = attributeText(attributes, 4180);
   if (!title) { result.errors.push(issue('TITLE_4180_MISSING', `SKU ${sourceSkuId} lacks attribute 4180.`, [sourceSkuId], [4180])); return null; }
-  const images = buildImages([skuImage, product.product.main_image, ...product.product.gallery_images]);
+  const images = bundledImages
+    ? buildImages(bundledImages.images)
+    : buildImages([skuImage, product.product.main_image, ...product.product.gallery_images]);
   if (images.length === 0) { result.errors.push(issue('IMAGES_MISSING', `SKU ${sourceSkuId} has no valid source image.`, [sourceSkuId])); return null; }
-  const weight = Math.ceil(priced.package.actual_weight_g);
+  const weight = Math.ceil(priced.weight_facts?.draft_weight_g ?? priced.package.actual_weight_g);
   const dimensions = [priced.package.length_cm, priced.package.width_cm, priced.package.height_cm].map((value) => Math.ceil(value * 10));
   if (!Number.isFinite(weight) || weight <= 0 || dimensions.some((value) => !Number.isFinite(value) || value <= 0)) {
     result.errors.push(issue('PACKAGE_DIMENSIONS_INVALID', `SKU ${sourceSkuId} has invalid priced package dimensions.`, [sourceSkuId])); return null;
@@ -119,7 +132,9 @@ function buildItem(
   return {
     offer_id: stableOfferId(product.source.offer_id, sourceSkuId), name: title, price: priced.final_price_cny.toFixed(2),
     description_category_id: categoryId, type_id: typeId, weight, depth: dimensions[0]!, width: dimensions[1]!, height: dimensions[2]!,
-    dimension_unit: 'mm', weight_unit: 'g', images, primary_image: images[0]!, attributes: copiedAttributes,
+    dimension_unit: 'mm', weight_unit: 'g', images,
+    primary_image: bundledImages?.primary_image === images[0] ? bundledImages.primary_image : images[0]!,
+    attributes: copiedAttributes,
     complex_attributes: [], currency_code: profile?.currency_code ?? 'CNY',
   };
 }
@@ -154,6 +169,14 @@ function validateAttributes(item: ListingDraftItemV1, skuId: string, category: C
     }
   }
   if (!attributeText(item.attributes, 4191)) result.errors.push(issue('DESCRIPTION_4191_MISSING', `SKU ${skuId} lacks description attribute 4191.`, [skuId], [4191]));
+  const attribute4383 = numericAttribute(item.attributes, 4383);
+  if (attribute4383 !== null && attribute4383 !== item.weight) {
+    result.errors.push(issue('WEIGHT_4383_INCONSISTENT', `SKU ${skuId} attribute 4383 must equal the draft weight ${item.weight}g under legacy-cost-base-v1.`, [skuId], [4383]));
+  }
+  const attribute4497 = numericAttribute(item.attributes, 4497);
+  if (attribute4497 !== null && attribute4497 !== item.weight + 50) {
+    result.errors.push(issue('WEIGHT_4497_INCONSISTENT', `SKU ${skuId} attribute 4497 must equal draft weight + 50g under legacy-cost-base-v1.`, [skuId], [4497]));
+  }
   if (byId.has(10096)) {
     const color = item.attributes.find((attribute) => attribute.id === 10096);
     const multicolor = byId.get(10096)!.values.find((value) => /多色|многоцвет|multicolor/iu.test(value.value));
@@ -178,6 +201,13 @@ function validate9048(groups: CategoryAttributesGroupV1[], mapping: AttributeMap
 
 function attributeText(attributes: OzonReadyAttributeV1[], id: number): string | null {
   return attributes.find((attribute) => attribute.id === id)?.values.map((value) => value.value).join(' ').trim() || null;
+}
+
+function numericAttribute(attributes: OzonReadyAttributeV1[], id: number): number | null {
+  const value = attributeText(attributes, id);
+  if (value === null) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function stableOfferId(offerId: string, skuId: string): string {

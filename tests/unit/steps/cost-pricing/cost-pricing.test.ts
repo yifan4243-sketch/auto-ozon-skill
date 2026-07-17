@@ -99,8 +99,27 @@ describe('cost pricing service', () => {
         commission_amount_cny: 4.2,
         other_rate_amount_cny: 3.5,
         estimated_profit_cny: 9.58,
+        weight_facts: {
+          semantics: 'legacy-cost-base-v1', cost_base_weight_g: 100,
+          attribute_4383_weight_g: 100, attribute_4497_weight_g: 150, draft_weight_g: 100,
+        },
       }],
     });
+  });
+
+  it('solves target-margin pricing against the matching commission tier', async () => {
+    const result = await runCostPricing({
+      product: product(), category_decision: decision(), fx_rate: fx(), commission_snapshot: commission(),
+      profile: { pricing_mode: 'target_margin', retained_target_percent: 20 },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        profile: { pricing_mode: 'target_margin' },
+        sku_pricing: [{ final_price_cny: 31, commission: { rate_percent: 12 } }],
+      },
+    });
+    expect(result.data!.sku_pricing[0]!.estimated_profit_margin_percent).toBeGreaterThanOrEqual(20);
   });
 
   it('requests Agent packaging without fetching FX when source packaging is invalid', async () => {

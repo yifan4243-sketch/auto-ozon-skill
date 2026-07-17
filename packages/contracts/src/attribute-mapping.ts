@@ -1,3 +1,5 @@
+import type { WeightFactsV1 } from './weight-facts.js';
+
 export type AttributeMappingStatusV1 = 'completed' | 'needs_review' | 'blocked';
 export type AttributeMappingConfidenceV1 = 'high' | 'medium' | 'low';
 export type AttributeMappingProvenanceV1 =
@@ -53,6 +55,7 @@ export interface SkuAttributeMappingV1 {
 }
 
 export interface AttributeMappingAgentTaskV1 {
+  execution_owner: 'current_agent';
   source_sku_id: string;
   group_id: string;
   attribute_id: number;
@@ -94,6 +97,7 @@ export interface AttributeMappingV1 {
   schema_version: 1;
   source_offer_id: string;
   status: AttributeMappingStatusV1;
+  weight_semantics: WeightFactsV1['semantics'];
   common_attributes: CommonAttributeMappingV1[];
   variant_attributes: VariantAttributeMappingV1[];
   sku_attributes: SkuAttributeMappingV1[];

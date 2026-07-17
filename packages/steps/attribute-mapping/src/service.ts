@@ -10,6 +10,7 @@ import type {
   OzonReadyAttributeV1,
   SkuAttributeMappingV1,
 } from '@auto-ozon/contracts';
+import { LEGACY_WEIGHT_SEMANTICS_V1 } from '@auto-ozon/contracts';
 import type { WorkflowContext } from '@auto-ozon/artifact-store';
 import { assertWorkflowActive } from '@auto-ozon/artifact-store';
 import { resolveAgentAttribute } from './agent-resolver.js';
@@ -136,6 +137,7 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
     schema_version: 1,
     source_offer_id: input.product.source.offer_id,
     status: 'completed',
+    weight_semantics: LEGACY_WEIGHT_SEMANTICS_V1,
     common_attributes: [],
     variant_attributes: [],
     sku_attributes: [],
@@ -154,6 +156,15 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
   }
   if (input.agent_input && input.agent_input.source_offer_id !== input.product.source.offer_id) {
     result.errors.push(issue('AGENT_OFFER_ID_MISMATCH', 'Agent input belongs to another offer.'));
+  }
+  const sourceBrands = sourceBrandValues(input.product);
+  if (sourceBrands.length > 0) {
+    result.warnings.push(issue(
+      'SOURCE_BRAND_OVERRIDDEN_NO_BRAND',
+      `Source brand facts (${sourceBrands.join(', ')}) were retained for audit but attribute 85 is forced to dictionary ID 126745801 by store policy.`,
+      input.product.skus.map((sku) => sku.source_sku_id),
+      [85],
+    ));
   }
 
   for (const group of input.category_decision.category_groups) {
@@ -189,7 +200,7 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
               input.agent_input,
               sourceSkuId,
               schema,
-              sourceBrandValues(input.product),
+              sourceBrands,
             );
         const mapped = deterministic ?? agent.attribute;
         if (mapped) {
@@ -250,9 +261,10 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
       [...new Set(result.missing_required_attributes.map((missing) => missing.attribute_id))],
     ));
   }
+  const reviewWarnings = result.warnings.filter((warning) => warning.code !== 'SOURCE_BRAND_OVERRIDDEN_NO_BRAND');
   result.status = result.errors.length > 0
     ? 'blocked'
-    : result.warnings.length > 0 || result.unresolved_attributes.length > 0
+    : reviewWarnings.length > 0 || result.unresolved_attributes.length > 0
       ? 'needs_review'
       : 'completed';
   return result;

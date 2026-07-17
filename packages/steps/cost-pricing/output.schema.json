@@ -12,10 +12,11 @@
     "profile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["transport", "sales_unit_quantity", "pricing_multiplier", "retained_target_percent", "label_fee_cny", "domestic_shipping_cny", "other_fixed_cny", "other_rate_percent"],
+      "required": ["transport", "sales_unit_quantity", "pricing_mode", "pricing_multiplier", "retained_target_percent", "label_fee_cny", "domestic_shipping_cny", "other_fixed_cny", "other_rate_percent"],
       "properties": {
         "transport": { "enum": ["air", "air_land", "land"] },
         "sales_unit_quantity": { "type": "integer", "minimum": 1 },
+        "pricing_mode": { "enum": ["multiplier", "target_margin"] },
         "pricing_multiplier": { "type": "number", "exclusiveMinimum": 0 },
         "retained_target_percent": { "type": "number", "minimum": 0 },
         "label_fee_cny": { "type": "number", "minimum": 0 },
@@ -64,14 +65,28 @@
         "price_max_rub": { "type": ["number", "null"] }, "rate_percent": { "type": "number", "minimum": 0, "maximum": 100 }
       }
     },
+    "weightFacts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["semantics", "source", "confidence", "cost_base_weight_g", "attribute_4383_weight_g", "attribute_4497_weight_g", "draft_weight_g", "packaging_increment_g"],
+      "properties": {
+        "semantics": { "const": "legacy-cost-base-v1" },
+        "source": { "enum": ["1688", "agent_estimated"] },
+        "confidence": { "enum": ["high", "low"] },
+        "cost_base_weight_g": { "$ref": "#/$defs/positive" },
+        "attribute_4383_weight_g": { "$ref": "#/$defs/positive" },
+        "attribute_4497_weight_g": { "$ref": "#/$defs/positive" },
+        "draft_weight_g": { "$ref": "#/$defs/positive" },
+        "packaging_increment_g": { "const": 50 }
+      }
+    },
     "sku": {
       "type": "object", "additionalProperties": false,
-      "required": ["source_sku_id", "group_id", "description_category_id", "purchase_price_cny", "purchase_cost_cny", "package", "volume_weight_kg", "charge_weight_g", "cel_group", "cel_rate_per_g_cny", "cel_fixed_fee_cny", "cel_shipping_cny", "landed_cost_cny", "final_price_cny", "final_price_rub", "commission", "commission_amount_cny", "other_rate_amount_cny", "estimated_profit_cny", "estimated_profit_margin_percent"],
+      "required": ["source_sku_id", "group_id", "description_category_id", "purchase_price_cny", "purchase_cost_cny", "package", "weight_facts", "volume_weight_kg", "charge_weight_g", "cel_group", "cel_rate_per_g_cny", "cel_fixed_fee_cny", "cel_shipping_cny", "landed_cost_cny", "final_price_cny", "final_price_rub", "commission", "commission_amount_cny", "other_rate_amount_cny", "estimated_profit_cny", "estimated_profit_margin_percent"],
       "properties": {
         "source_sku_id": { "type": "string", "minLength": 1 }, "group_id": { "type": "string", "minLength": 1 },
         "description_category_id": { "type": "integer", "minimum": 1 },
         "purchase_price_cny": { "$ref": "#/$defs/positive" }, "purchase_cost_cny": { "$ref": "#/$defs/positive" },
-        "package": { "$ref": "#/$defs/package" }, "volume_weight_kg": { "$ref": "#/$defs/positive" },
+        "package": { "$ref": "#/$defs/package" }, "weight_facts": { "$ref": "#/$defs/weightFacts" }, "volume_weight_kg": { "$ref": "#/$defs/positive" },
         "charge_weight_g": { "$ref": "#/$defs/positive" }, "cel_group": { "type": "string", "minLength": 1 },
         "cel_rate_per_g_cny": { "$ref": "#/$defs/positive" }, "cel_fixed_fee_cny": { "$ref": "#/$defs/positive" },
         "cel_shipping_cny": { "$ref": "#/$defs/positive" }, "landed_cost_cny": { "$ref": "#/$defs/positive" },
@@ -83,8 +98,9 @@
     },
     "task": {
       "type": "object", "additionalProperties": false,
-      "required": ["source_sku_id", "group_id", "instruction", "source_facts"],
+      "required": ["execution_owner", "source_sku_id", "group_id", "instruction", "source_facts"],
       "properties": {
+        "execution_owner": { "const": "current_agent" },
         "source_sku_id": { "type": "string", "minLength": 1 }, "group_id": { "type": "string", "minLength": 1 },
         "instruction": { "type": "string", "minLength": 1 }, "source_facts": { "type": "array", "items": { "type": "string" } }
       }
