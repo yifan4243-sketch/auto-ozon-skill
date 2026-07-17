@@ -15,6 +15,7 @@ export interface OzonSkuPublishResultV1 {
   product_id: number | null;
   errors: string[];
   retry_count: number;
+  recoverable?: boolean;
 }
 
 export type OzonPublishStatusV1 = 'completed' | 'partial_failed' | 'polling_timeout' | 'blocked' | 'failed';

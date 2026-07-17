@@ -27,7 +27,7 @@ describe('runSource1688', () => {
     await expect(store.read('source-success', 'source-1688', 'offer-result.json'))
       .resolves.toMatchObject({ mode: 'offers', details: { total: 0 } });
     await expect(store.readManifest('source-success')).resolves.toMatchObject({
-      steps: { 'source-1688': { status: 'succeeded', output: '01-source/offer-result.json' } },
+      steps: { 'source-1688': { status: 'succeeded', output: '01-source/attempt-0001/offer-result.json' } },
     });
   });
 

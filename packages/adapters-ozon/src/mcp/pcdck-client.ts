@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { loadOzonEnvironment } from '../local-env.js';
+import { buildOzonMcpChildEnvironment, loadOzonEnvironment } from '../local-env.js';
 
 export class PcdckOzonMcpClient {
   private client?: Client;
@@ -13,7 +13,7 @@ export class PcdckOzonMcpClient {
     this.transport = new StdioClientTransport({
       command: process.env.OZON_MCP_COMMAND ?? 'uv',
       args: ['--directory', ozonMcpDir, 'run', 'ozon-mcp'],
-      env: loadOzonEnvironment(),
+      env: buildOzonMcpChildEnvironment(loadOzonEnvironment()),
     });
 
     this.client = new Client(
@@ -63,14 +63,6 @@ export async function withPcdckClient<T>(
       if (primaryError === undefined) throw closeError;
     }
   }
-}
-
-export function cleanEnv(env: NodeJS.ProcessEnv): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string',
-    ),
-  );
 }
 
 export function resolveOzonMcpDir(): string {

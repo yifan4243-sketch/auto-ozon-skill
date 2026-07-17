@@ -11,3 +11,5 @@ export * from './attribute-mapping.js';
 export * from './cost-pricing.js';
 export * from './listing-draft.js';
 export * from './ozon-publish.js';
+export * from './domain-error-v1.js';
+export * from './store-profile-v2.js';

@@ -1,8 +1,31 @@
 [
   {
+    "schema_version": 2,
     "store_id": "YOUR_SELLER_CLIENT_ID",
-    "publishing": { "enabled": false },
-    "credentials": { "client_id_env": "OZON_CLIENT_ID", "api_key_env": "OZON_API_KEY" },
+    "store_name": "测试店铺",
+    "market": "RU",
+    "currency_code": "CNY",
+    "credentials": {
+      "client_id": { "provider": "env", "key": "OZON_CLIENT_ID" },
+      "api_key": { "provider": "env", "key": "OZON_API_KEY" }
+    },
+    "publishing": {
+      "enabled": false,
+      "automation_level": "automatic",
+      "allowed_description_category_ids": [],
+      "max_items_per_batch": 100,
+      "daily_listing_limit": 100
+    },
+    "pricing": {
+      "mode": "multiplier",
+      "multiplier": "2",
+      "minimum_margin_percent": "0",
+      "advertising_reserve_percent": "0",
+      "return_loss_reserve_percent": "0",
+      "other_rate_percent": "10",
+      "label_fee_cny": "2",
+      "other_fixed_cny": "0"
+    },
     "polling": { "timeout_ms": 60000, "interval_ms": 1500, "max_recoverable_retries": 2 }
   }
 ]

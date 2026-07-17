@@ -84,6 +84,12 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/config:
+    dependencies:
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/contracts: {}
 
   packages/core:
@@ -204,6 +210,9 @@ importers:
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../artifact-store
+      '@auto-ozon/config':
+        specifier: workspace:*
+        version: link:../config
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../contracts

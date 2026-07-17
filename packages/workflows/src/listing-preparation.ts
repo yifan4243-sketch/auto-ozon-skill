@@ -11,14 +11,16 @@ import type {
   CostPricingV1,
   DraftGenerationProfileV1,
   ListingDraftV1,
-  WorkflowRunManifestV1,
+  WorkflowRunManifestV2,
   WorkflowStepName,
   WorkflowStepStatus,
 } from '@auto-ozon/contracts';
 import {
+  ArtifactStoreError,
   FileArtifactStore,
   createFileWorkflowLogger,
   createRunId,
+  hashWorkflowValue,
   type ArtifactStore,
   type WorkflowContext,
   type WorkflowLogger,
@@ -74,7 +76,7 @@ export interface ListingPreparationResultV1 {
   run_id: string;
   status: WorkflowStepStatus;
   stopped_after: WorkflowStepName | null;
-  manifest: WorkflowRunManifestV1;
+  manifest: WorkflowRunManifestV2;
   source?: CollectedSourcingRun;
   product?: CanonicalProductV2;
   category_decision?: CategoryDecisionV1;
@@ -90,12 +92,21 @@ export async function runListingPreparation(
   const artifactStore = input.artifact_store ?? new FileArtifactStore();
   const runId = input.run_id ?? createRunId();
   try {
-    return await executeListingPreparation({
-      ...input,
-      run_id: runId,
-      artifact_store: artifactStore,
-    });
+    return await artifactStore.withRunLock(runId, () => executeListingPreparation({
+        ...input,
+        run_id: runId,
+        artifact_store: artifactStore,
+      }));
   } catch (error) {
+    if (error instanceof ArtifactStoreError) {
+      return {
+        ok: false,
+        command: 'workflow.listing-preparation',
+        warnings: [],
+        errors: [{ code: error.code, message: error.message, recoverable: error.code !== 'MANIFEST_INVALID' }],
+        nextActions: error.code === 'LEGACY_RUN_UNSUPPORTED' ? ['Start a new run. The legacy run was not modified.'] : [],
+      };
+    }
     await artifactStore.ensureRun(runId);
     return workflowFailure(
       {
@@ -171,12 +182,16 @@ async function executeListingPreparation(
   );
   const shouldForce = (step: WorkflowStepName) =>
     forced.has(step) || stepIndex(step) > earliestForce;
+  if (Number.isFinite(earliestForce)) {
+    await store.markDownstreamStale(runId, LISTING_PREPARATION_ORDER[earliestForce]!);
+  }
   const stopOnReview = input.stop_on_review ?? true;
   const result: Omit<ListingPreparationResultV1, 'manifest' | 'status' | 'stopped_after'> = {
     schema_version: 1,
     run_id: runId,
   };
 
+  await prepareStep(context, 'source-1688', input.source);
   let source = await restore<CollectedSourcingRun>(
     context,
     'source-1688',
@@ -200,6 +215,7 @@ async function executeListingPreparation(
   result.source = source;
   if (stopAfter === 'source-1688') return workflowSuccess(context, 'source-1688', result);
 
+  await prepareStep(context, 'canonicalize-product', { schema_version: 2 });
   let product = await restore<CanonicalProductV2>(
     context,
     'canonicalize-product',
@@ -244,6 +260,10 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'canonicalize-product', result, canonicalStatus);
   }
 
+  await prepareStep(context, 'category-decision', {
+    decision_file: input.category_decision_file ?? null,
+    provider: input.category_decision_provider?.constructor.name ?? null,
+  });
   let decision = await restore<CategoryDecisionV1>(
     context,
     'category-decision',
@@ -285,6 +305,12 @@ async function executeListingPreparation(
     );
   }
 
+  await prepareStep(context, 'cost-pricing', {
+    profile: input.cost_pricing_profile,
+    agent_input: input.cost_pricing_agent_input,
+    commission_snapshot_sha256: input.cost_pricing_commission_snapshot_sha256,
+    fx_rate: input.cost_pricing_fx_rate,
+  });
   const previousPricing = await store.read<CostPricingV1>(
     runId,
     'cost-pricing',
@@ -331,6 +357,9 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'cost-pricing', result, pricingStatus);
   }
 
+  await prepareStep(context, 'category-attributes', {
+    force_refresh: Boolean(input.category_attributes?.force_refresh),
+  });
   let attributes = await restore<CategoryAttributesGroupV1[]>(
     context,
     'category-attributes',
@@ -358,6 +387,7 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'category-attributes', result);
   }
 
+  await prepareStep(context, 'attribute-mapping', input.attribute_mapping_agent_input);
   let mapping = await restore<AttributeMappingV1>(
     context,
     'attribute-mapping',
@@ -390,6 +420,7 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
   }
 
+  await prepareStep(context, 'draft-generation', input.draft_generation_profile);
   let draft = await restore<ListingDraftV1>(
     context,
     'draft-generation',
@@ -441,17 +472,46 @@ async function restore<T>(
   force: boolean,
 ): Promise<T | null> {
   const manifest = await context.artifact_store.readManifest(context.run_id);
-  const record = manifest?.steps[step];
   const beforeStart = stepIndex(step) < stepIndex(startFrom);
-  const reusable = record && ['succeeded', 'needs_review', 'skipped'].includes(record.status);
-  if (!force && (beforeStart || reusable)) {
+  const reusable = await context.artifact_store.isReusable(context.run_id, step);
+  if (!force && reusable) {
     const value = await context.artifact_store.read<T>(context.run_id, step, file);
     if (value) return value;
-    if (beforeStart) {
-      throw new Error(`Cannot resume from ${startFrom}; ${step}/${file} is missing.`);
-    }
+  }
+  if (!force && beforeStart) {
+    throw new Error(`Cannot resume from ${startFrom}; ${step}/${file} is missing, damaged, stale, or incompatible.`);
   }
   return null;
+}
+
+const STEP_IMPLEMENTATION_VERSIONS: Record<WorkflowStepName, string> = {
+  'source-1688': '1',
+  'canonicalize-product': '2',
+  'category-decision': '1',
+  'cost-pricing': '1',
+  'category-attributes': '1',
+  'attribute-mapping': '1',
+  'draft-generation': '1',
+  'listing-submit': '1',
+};
+
+async function prepareStep(
+  context: WorkflowContext,
+  step: WorkflowStepName,
+  input: unknown,
+): Promise<void> {
+  const manifest = await context.artifact_store.readManifest(context.run_id);
+  const index = stepIndex(step);
+  const dependencyHashes = Object.fromEntries(
+    LISTING_PREPARATION_ORDER.slice(0, index)
+      .map((dependency) => [dependency, manifest?.steps[dependency].artifact?.sha256] as const)
+      .filter((entry): entry is readonly [WorkflowStepName, string] => Boolean(entry[1])),
+  );
+  await context.artifact_store.prepareStep(context.run_id, step, {
+    ...(input === undefined ? {} : { input_hash: hashWorkflowValue(input) }),
+    dependency_hashes: dependencyHashes,
+    implementation_version: STEP_IMPLEMENTATION_VERSIONS[step],
+  });
 }
 
 function stepIndex(step: WorkflowStepName): number {

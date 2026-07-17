@@ -16,7 +16,8 @@ import {
   sanitizeSecretText,
   toolAvailability,
 } from '../config.js';
-import { PcdckOzonMcpClient, cleanEnv, resolveOzonMcpDir } from '../mcp/pcdck-client.js';
+import { PcdckOzonMcpClient, resolveOzonMcpDir } from '../mcp/pcdck-client.js';
+import { buildSafeChildEnvironment } from '../local-env.js';
 import type { OzonCommandResult, OzonDoctorCheck, OzonDoctorData } from '../types.js';
 
 export async function ozonDoctor(): Promise<OzonCommandResult<OzonDoctorData>> {
@@ -239,7 +240,7 @@ function checkUv(): { ok: boolean; message: string } {
   const command = process.env.OZON_MCP_COMMAND ?? 'uv';
   const result = spawnSync(command, ['--version'], {
     encoding: 'utf8',
-    env: cleanEnv(process.env),
+    env: buildSafeChildEnvironment(process.env),
     timeout: 15_000,
   });
   if (result.error) return { ok: false, message: sanitizeSecretText(result.error) };
@@ -251,7 +252,7 @@ function checkOzonMcpHelp(vendorDir: string): { ok: boolean; message: string } {
   const command = process.env.OZON_MCP_COMMAND ?? 'uv';
   const result = spawnSync(command, ['--directory', vendorDir, 'run', 'ozon-mcp', '--help'], {
     encoding: 'utf8',
-    env: cleanEnv(process.env),
+    env: buildSafeChildEnvironment(process.env),
     timeout: 30_000,
   });
   if (result.error) return { ok: false, message: sanitizeSecretText(result.error) };

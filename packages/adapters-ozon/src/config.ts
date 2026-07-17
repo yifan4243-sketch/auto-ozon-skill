@@ -113,8 +113,7 @@ export function extractToolNames(result: unknown): string[] {
 export function sanitizeSecretText(value: unknown): string {
   let text = value instanceof Error ? value.message : String(value);
   const env = loadOzonEnvironment();
-  for (const key of SECRET_ENV_KEYS) {
-    const secret = env[key];
+  for (const [key, secret] of Object.entries(env)) {
     if (secret) text = text.split(secret).join(`[${key}_REDACTED]`);
   }
   return text;

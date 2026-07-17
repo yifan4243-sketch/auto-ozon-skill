@@ -12,7 +12,9 @@ export function profilesDir(): string {
 
 export function defaultProfileName(profile?: string): string {
   const name = profile?.trim();
-  return name ? name : 'default';
+  const resolved = name ? name : 'default';
+  assertSafeProfileName(resolved);
+  return resolved;
 }
 
 export function profileRuntimeDir(profile?: string): string {
@@ -45,7 +47,12 @@ export function loginQrFile(): string {
 }
 
 export function profilePath(name = 'default'): string {
-  return path.join(profilesDir(), defaultProfileName(name));
+  const base = path.resolve(profilesDir());
+  const resolved = path.resolve(base, defaultProfileName(name));
+  if (resolved !== base && !resolved.startsWith(`${base}${path.sep}`)) {
+    throw new Error(`Profile path escapes the profile root: ${name}`);
+  }
+  return resolved;
 }
 
 export async function ensureRoot(): Promise<void> {
@@ -54,4 +61,12 @@ export async function ensureRoot(): Promise<void> {
 
 export async function ensureProfileRuntimeDir(profile?: string): Promise<void> {
   await fs.mkdir(profileRuntimeDir(profile), { recursive: true });
+}
+
+export function assertSafeProfileName(name: string): void {
+  if (!/^[A-Za-z0-9_-]{1,64}$/u.test(name)) {
+    throw new Error(
+      `Invalid 1688 profile name: ${name}. Use 1-64 ASCII letters, digits, underscores, or hyphens.`,
+    );
+  }
 }

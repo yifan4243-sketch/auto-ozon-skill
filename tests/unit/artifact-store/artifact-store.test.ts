@@ -32,14 +32,14 @@ describe('FileArtifactStore', () => {
     });
     await store.writeCache('category-attributes', '17028741-92537', { values: [1] });
 
-    expect(output).toBe('03-category-decision/decision.json');
+    expect(output).toBe('03-category-decision/attempt-0001/decision.json');
     expect(await store.read('run-1', 'category-decision', 'decision.json')).toEqual({
       status: 'decided',
     });
     expect(await store.readCache('category-attributes', '17028741-92537')).toEqual({
       values: [1],
     });
-    expect(await fs.stat(path.join(root, 'runs', 'run-1', '03-category-decision'))).toBeTruthy();
+    expect(await fs.stat(path.join(root, 'runs', 'run-1', '03-category-decision', 'attempt-0001'))).toBeTruthy();
     expect(await fs.stat(path.join(root, 'cache', 'category-attributes'))).toBeTruthy();
   });
 
@@ -98,5 +98,59 @@ describe('FileArtifactStore', () => {
     expect(text).toContain('offer_id');
     expect(text).not.toContain('must-not-leak');
     expect(text).not.toContain('token');
+  });
+
+  it('rejects corrupted artifacts and keeps orphan attempts invisible', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-integrity-'));
+    temporaryDirectories.push(root);
+    const store = new FileArtifactStore({ runsRoot: path.join(root, 'runs') });
+    await store.updateStep('integrity-1', 'source-1688', {
+      status: 'running',
+      input_hash: 'input-a',
+      dependency_hashes: {},
+      implementation_version: '2',
+    });
+    const output = await store.write('integrity-1', 'source-1688', 'offer-result.json', { ok: true });
+    await store.updateStep('integrity-1', 'source-1688', { status: 'succeeded', output });
+    await fs.mkdir(path.join(root, 'runs', 'integrity-1', '01-source', 'attempt-9999'), { recursive: true });
+    await fs.writeFile(path.join(root, 'runs', 'integrity-1', '01-source', 'attempt-9999', 'offer-result.json'), '{"orphan":true}');
+
+    expect(await store.isReusable('integrity-1', 'source-1688', {
+      input_hash: 'input-a', dependency_hashes: {}, implementation_version: '2',
+    })).toBe(true);
+    await fs.writeFile(path.join(root, 'runs', 'integrity-1', output), '{"tampered":true}');
+    expect(await store.read('integrity-1', 'source-1688', 'offer-result.json')).toBeNull();
+    expect(await store.isReusable('integrity-1', 'source-1688')).toBe(false);
+  });
+
+  it('recovers historical running attempts as interrupted without deleting evidence', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-interrupted-'));
+    temporaryDirectories.push(root);
+    const options = { runsRoot: path.join(root, 'runs') };
+    const firstProcess = new FileArtifactStore(options);
+    await firstProcess.updateStep('crash-1', 'source-1688', { status: 'running' });
+    const secondProcess = new FileArtifactStore(options);
+    const recovered = await secondProcess.ensureRun('crash-1');
+    expect(recovered.status).toBe('interrupted');
+    expect(recovered.steps['source-1688']).toMatchObject({
+      status: 'interrupted', error: { code: 'STEP_INTERRUPTED', recoverable: true },
+    });
+  });
+
+  it('prevents concurrent writers and cascades stale status downstream', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-lock-'));
+    temporaryDirectories.push(root);
+    const store = new FileArtifactStore({ runsRoot: path.join(root, 'runs') });
+    await store.ensureRun('locked-1');
+    await store.updateStep('locked-1', 'category-decision', { status: 'running' });
+    await store.updateStep('locked-1', 'category-decision', { status: 'succeeded' });
+    await store.updateStep('locked-1', 'cost-pricing', { status: 'running' });
+    await store.updateStep('locked-1', 'cost-pricing', { status: 'succeeded' });
+    const stale = await store.markDownstreamStale('locked-1', 'category-decision');
+    expect(stale.steps['cost-pricing'].status).toBe('stale');
+
+    await store.withRunLock('locked-1', async () => {
+      await expect(store.withRunLock('locked-1', async () => undefined)).rejects.toMatchObject({ code: 'RUN_LOCKED' });
+    });
   });
 });

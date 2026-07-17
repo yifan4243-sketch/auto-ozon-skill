@@ -44,7 +44,7 @@ async function submit(input: RunListingSubmitInput): Promise<OzonPublishResultV1
   while (true) {
     const pending = input.draft.items.filter((item) => row(result, item.offer_id)?.status === 'pending');
     if (pending.length === 0) {
-      const retryable = result.sku_results.filter((item) => item.status === 'failed' && item.retry_count < input.profile.polling.max_recoverable_retries && isRecoverable(item.errors));
+      const retryable = result.sku_results.filter((item) => item.status === 'failed' && item.retry_count < input.profile.polling.max_recoverable_retries && isRecoverable(item.errors, item.recoverable));
       if (retryable.length === 0) break;
       for (const item of retryable) { item.retry_count += 1; item.status = 'pending'; }
       continue;
@@ -62,13 +62,13 @@ async function pollTask(transport: SellerImportTransportV1, taskId: string, offe
   do { info = await transport.getImportInfo(taskId); if (!info.complete && Date.now() < deadline) await delay(interval); } while (!info.complete && Date.now() < deadline);
   if (!info.complete) return false;
   const expected = new Set(offerIds); const received = new Set(info.items.map((item) => item.offer_id));
-  for (const remote of info.items) { if (!expected.has(remote.offer_id)) continue; const current = row(result, remote.offer_id); if (!current) continue; current.status = remote.status === 'imported' ? 'imported' : remote.status === 'pending' ? 'pending' : 'failed'; current.errors = remote.errors ?? []; }
+  for (const remote of info.items) { if (!expected.has(remote.offer_id)) continue; const current = row(result, remote.offer_id); if (!current) continue; current.status = remote.status === 'imported' ? 'imported' : remote.status === 'pending' ? 'pending' : 'failed'; current.errors = remote.errors ?? []; current.recoverable = remote.recoverable; }
   for (const offerId of offerIds) { if (!received.has(offerId)) { const current = row(result, offerId); if (current) { current.status = 'failed'; current.errors = ['IMPORT_RESULT_MISSING']; } } }
   return true;
 }
 function timeout(result: OzonPublishResultV1): OzonPublishResultV1 { result.status = 'polling_timeout'; if (!result.warnings.includes('POLLING_TIMEOUT')) result.warnings.push('POLLING_TIMEOUT'); return result; }
 function row(result: OzonPublishResultV1, offerId: string) { return result.sku_results.find((item) => item.offer_id === offerId); }
-function isRecoverable(errors: string[]): boolean { return !errors.some((value) => /(?:attribute|validation|required|category|image|invalid)/iu.test(value)); }
+function isRecoverable(errors: string[], explicit?: boolean): boolean { return explicit ?? !errors.some((value) => /(?:attribute|validation|required|category|image|invalid|auth|permission)/iu.test(value)); }
 function stable(value: unknown): string { if (value === null || typeof value !== 'object') return JSON.stringify(value); if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`; const object = value as Record<string, unknown>; return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stable(object[key])}`).join(',')}}`; }
 function hash(value: unknown): string { return createHash('sha256').update(stable(value)).digest('hex'); }
 function delay(milliseconds: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }

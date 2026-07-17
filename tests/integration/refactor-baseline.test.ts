@@ -28,13 +28,12 @@ const baseline = JSON.parse(fs.readFileSync(
 };
 
 describe('refactor baseline equivalence', () => {
-  it('keeps every real cup artifact byte-for-byte unchanged', () => {
-    const productRoot = path.join(root, 'data/products', baseline.offer_id);
+  it('keeps committed collection compatibility fixtures byte-for-byte unchanged', () => {
     const actual = Object.fromEntries(
       Object.keys(baseline.artifact_sha256).map((relative) => [
         relative,
         crypto.createHash('sha256')
-          .update(fs.readFileSync(path.join(productRoot, relative)))
+          .update(fs.readFileSync(path.join(root, relative)))
           .digest('hex')
           .toUpperCase(),
       ]),

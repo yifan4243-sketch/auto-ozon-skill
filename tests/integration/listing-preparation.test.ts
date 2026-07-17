@@ -142,8 +142,8 @@ describe('listing-preparation workflow', () => {
   it('rejects legacy manifests without moving or rewriting their artifacts', async () => {
     const { store, runId, root } = await seededSourceRun();
     const manifestPath = path.join(root, 'runs', runId, 'manifest.json');
-    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as { steps: Record<string, unknown> };
-    delete manifest.steps['draft-generation'];
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as { schema_version: number };
+    manifest.schema_version = 1;
     await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
     const result = await runListingPreparation({
@@ -153,9 +153,9 @@ describe('listing-preparation workflow', () => {
     });
     expect(result).toMatchObject({
       ok: false,
-      errors: [{ code: 'LEGACY_STEP_LAYOUT_UNSUPPORTED' }],
+      errors: [{ code: 'LEGACY_RUN_UNSUPPORTED' }],
     });
-    await expect(fs.stat(path.join(root, 'runs', runId, '01-source', 'offer-result.json'))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, 'runs', runId, '01-source', 'attempt-0001', 'offer-result.json'))).resolves.toBeTruthy();
   });
 });
 

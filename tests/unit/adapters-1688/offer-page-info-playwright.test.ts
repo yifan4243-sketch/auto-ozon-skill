@@ -2,22 +2,31 @@ import {
   chromium,
   type Browser,
 } from '../../../packages/adapters-1688/node_modules/playwright/index.js';
+import fs from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readPageInfo } from '../../../packages/adapters-1688/src/engine/commands/offers.js';
 
-describe('1688 offer page information in a real browser context', () => {
-  let browser: Browser;
+const bundledChromiumAvailable = fs.existsSync(chromium.executablePath());
+const describeWithBrowser = bundledChromiumAvailable ? describe : describe.skip;
 
-  beforeAll(async () => {
-    browser = await chromium.launch({ headless: true, channel: 'chrome' });
-  });
+describeWithBrowser('1688 offer page information in a real browser context', () => {
+  let browser: Browser | undefined;
+
+  if (bundledChromiumAvailable) {
+    beforeAll(async () => {
+      browser = await chromium.launch({
+        headless: true,
+        executablePath: chromium.executablePath(),
+      });
+    });
+  }
 
   afterAll(async () => {
-    await browser.close();
+    await browser?.close();
   });
 
   it('reads window.context without relying on a host __name helper', async () => {
-    const page = await browser.newPage();
+    const page = await browser!.newPage();
     await page.setContent('<html><head><title>测试商品 - 阿里巴巴</title></head><body></body></html>');
     await page.evaluate(() => {
       Reflect.deleteProperty(globalThis, '__name');
@@ -63,7 +72,7 @@ describe('1688 offer page information in a real browser context', () => {
   }, 30_000);
 
   it('uses the DOM fallback without relying on a host __name helper', async () => {
-    const page = await browser.newPage();
+    const page = await browser!.newPage();
     await page.setContent(`
       <html>
         <head><title>备用商品 - 阿里巴巴</title></head>
