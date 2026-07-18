@@ -2,9 +2,9 @@ import type { ListingBatchResultV1, WorkflowRunManifestV2 } from '@auto-ozon/con
 import type { PostgresQueryClientV1 } from '@auto-ozon/job-store';
 import type { ReviewConsoleStateReaderV1, ReviewConsoleStateSnapshotV1 } from './review-console.js';
 
-/** Durable read model for team review-console deployments. The caller owns the
- * PostgreSQL pool and OIDC middleware; no database credential is ever exposed
- * to the browser. */
+/** Optional PostgreSQL state read model for the localhost console. This does
+ * not provide public hosting, shared artifact storage, OIDC, RBAC, or a
+ * multi-node team deployment. The caller owns the PostgreSQL pool. */
 export class PostgresReviewConsoleStateReader implements ReviewConsoleStateReaderV1 {
   constructor(private readonly client: PostgresQueryClientV1) {}
 

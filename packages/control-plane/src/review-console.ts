@@ -10,21 +10,13 @@ import { validateStoreProfileV2 } from '@auto-ozon/config';
 import { runListingPreparation, setStorePublishingConsent } from '@auto-ozon/workflows';
 import { getReviewBundle, submitBatchAgentDecision } from './mcp-server.js';
 
-export type ReviewRoleV1 = 'viewer' | 'operator' | 'publisher';
-
-export interface ReviewConsolePrincipalV1 {
-  subject: string;
-  roles: ReviewRoleV1[];
-}
-
 export interface ReviewConsoleOptionsV1 {
   host?: '127.0.0.1';
   port?: number;
   repo_root?: string;
-  mode?: 'local' | 'team';
-  oidc_authorizer?: (authorizationHeader: string | undefined) => Promise<ReviewConsolePrincipalV1 | null>;
-  /** Team deployments can read durable job/run state from PostgreSQL while
-   * immutable artifact bodies remain on the configured shared artifact root. */
+  mode?: 'local';
+  /** Optional durable state read model. This does not provide shared artifacts,
+   * public hosting, OIDC, RBAC, or multi-node team deployment. */
   state_reader?: ReviewConsoleStateReaderV1;
 }
 
@@ -54,18 +46,18 @@ export async function startReviewConsole(
 ): Promise<RunningReviewConsoleV1> {
   const root = path.resolve(options.repo_root ?? resolveRepoRoot());
   const host = options.host ?? '127.0.0.1';
-  const mode = options.mode ?? 'local';
+  const requestedMode = (options as { mode?: unknown }).mode ?? 'local';
   if (host !== '127.0.0.1') throw new Error('REVIEW_CONSOLE_LOCALHOST_ONLY');
-  if (mode === 'team' && !options.oidc_authorizer) throw new Error('OIDC_AUTHORIZER_REQUIRED');
+  if (requestedMode !== 'local') throw new Error('REVIEW_CONSOLE_TEAM_MODE_UNSUPPORTED');
   const session = crypto.randomBytes(32).toString('base64url');
   const csrf = crypto.randomBytes(32).toString('base64url');
+  const cspNonce = crypto.randomBytes(24).toString('base64url');
   let origin = '';
 
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', origin || `http://${host}`);
-      const requiredRole = request.method === 'GET' ? 'viewer' : routeRole(url.pathname);
-      if (!(await authorized(request, requiredRole, mode, session, options.oidc_authorizer))) {
+      if (!authorized(request, session)) {
         sendJson(response, 401, { error: { code: 'UNAUTHORIZED', message: 'Authentication required.' } });
         return;
       }
@@ -75,8 +67,8 @@ export async function startReviewConsole(
       }
 
       if (request.method === 'GET' && url.pathname === '/') {
-        response.setHeader('Set-Cookie', `auto_ozon_review=${session}; HttpOnly; SameSite=Strict; Path=/`);
-        sendHtml(response, renderShell(csrf));
+        response.setHeader('Set-Cookie', `auto_ozon_review=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800; Priority=High`);
+        sendHtml(response, renderShell(csrf, cspNonce), cspNonce);
         return;
       }
       if (request.method === 'GET' && url.pathname === '/api/overview') {
@@ -214,28 +206,9 @@ async function safeDirectories(root: string): Promise<string[]> {
   }
 }
 
-async function authorized(
-  request: IncomingMessage,
-  role: ReviewRoleV1,
-  mode: 'local' | 'team',
-  session: string,
-  oidcAuthorizer?: ReviewConsoleOptionsV1['oidc_authorizer'],
-): Promise<boolean> {
-  if (mode === 'local') {
-    if (request.method === 'GET' && request.url === '/') return true;
-    return parseCookies(request.headers.cookie).auto_ozon_review === session;
-  }
-  const principal = await oidcAuthorizer?.(request.headers.authorization);
-  return Boolean(principal && permits(principal.roles, role));
-}
-
-function permits(roles: ReviewRoleV1[], required: ReviewRoleV1): boolean {
-  const rank: Record<ReviewRoleV1, number> = { viewer: 1, operator: 2, publisher: 3 };
-  return roles.some((role) => rank[role] >= rank[required]);
-}
-
-function routeRole(pathname: string): ReviewRoleV1 {
-  return pathname.includes('/publishing') ? 'publisher' : 'operator';
+function authorized(request: IncomingMessage, session: string): boolean {
+  if (request.method === 'GET' && request.url === '/') return true;
+  return parseCookies(request.headers.cookie).auto_ozon_review === session;
 }
 
 function validMutationRequest(request: IncomingMessage, origin: string, csrf: string): boolean {
@@ -258,29 +231,32 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
   return value as Record<string, unknown>;
 }
 
-function renderShell(csrf: string): string {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="${csrf}"><title>Auto Ozon 审核台</title><style>
+function renderShell(csrf: string, nonce: string): string {
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="${csrf}"><title>Auto Ozon 审核台</title><style nonce="${nonce}">
   :root{color-scheme:dark;--bg:#0a0d12;--panel:#111722;--line:#263142;--text:#edf3fa;--muted:#93a4b8;--ok:#35d07f;--warn:#ffbf47;--bad:#ff6577;--brand:#5b8cff}*{box-sizing:border-box}body{margin:0;font:14px/1.5 ui-sans-serif,system-ui;background:radial-gradient(circle at 80% 0,#172441 0,transparent 35%),var(--bg);color:var(--text)}header{padding:32px max(24px,5vw) 20px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:28px}header p{color:var(--muted);margin:6px 0 0}main{padding:24px max(24px,5vw) 60px;display:grid;gap:20px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.card,.panel{background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 14px 40px #0004}.metric{font-size:30px;font-weight:750}.muted{color:var(--muted)}h2{margin:0 0 14px;font-size:18px}.row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:12px 0;border-top:1px solid var(--line)}.row:first-of-type{border-top:0}.pill{padding:3px 9px;border-radius:999px;background:#263142;color:var(--muted)}button{border:0;border-radius:9px;padding:8px 12px;background:var(--brand);color:white;font-weight:650;cursor:pointer}button.secondary{background:#263142}button.danger{background:#7e2f3d}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}input,select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;background:#070a0f;color:var(--text);padding:10px;margin:5px 0 10px}textarea{min-height:150px;font-family:ui-monospace,monospace}pre{white-space:pre-wrap;max-height:520px;overflow:auto;background:#070a0f;padding:14px;border-radius:10px;color:#bed1e8}@media(max-width:900px){.grid{grid-template-columns:1fr}}
-  </style></head><body><header><h1>Auto Ozon 审核台</h1><p>本地显式启动 · 凭据永不回显 · 工件与发布链路可追溯</p></header><main><section class="cards" id="metrics"></section><section class="grid"><div class="panel"><h2>店铺</h2><div id="stores"></div></div><div class="panel"><h2>批次</h2><div id="batches"></div></div></section><section class="panel"><h2>商品 Run</h2><div id="runs"></div></section><section class="panel" id="detailPanel" hidden><h2>审核详情</h2><div class="actions"><select id="rerunStep"><option value="canonicalize-product">标准化</option><option value="cost-pricing">成本定价</option><option value="category-attributes">类目属性</option><option value="draft-generation">图片与草稿</option></select><button onclick="rerunCurrent()">重跑所选步骤</button></div><pre id="detail"></pre></section><section class="panel"><h2>提交 Agent 修复值</h2><div class="grid"><div><label>批次 ID<input id="decisionBatch"></label><label>1688 Offer ID<input id="decisionOffer"></label><label>决策类型<select id="decisionKind"><option value="category">类目</option><option value="pricing">包装估算</option><option value="attributes">属性与俄语内容</option><option value="images">图片文字/水印审核</option></select></label></div><div><label>AgentDecisionEnvelopeV1 JSON<textarea id="decisionValue" spellcheck="false">{}</textarea></label><button onclick="submitDecision()">验证并保存</button></div></div><pre id="actionResult" hidden></pre></section></main><script>
+  </style></head><body><header><h1>Auto Ozon 审核台</h1><p>仅限本机 · 凭据永不回显 · 工件与发布链路可追溯</p></header><main><section class="cards" id="metrics"></section><section class="grid"><div class="panel"><h2>店铺</h2><div id="stores"></div></div><div class="panel"><h2>批次</h2><div id="batches"></div></div></section><section class="panel"><h2>商品 Run</h2><div id="runs"></div></section><section class="panel" id="detailPanel" hidden><h2>审核详情</h2><div class="actions"><select id="rerunStep"><option value="canonicalize-product">标准化</option><option value="cost-pricing">成本定价</option><option value="category-attributes">类目属性</option><option value="draft-generation">图片与草稿</option></select><button id="rerunButton">重跑所选步骤</button></div><pre id="detail"></pre></section><section class="panel"><h2>提交 Agent 修复值</h2><div class="grid"><div><label>批次 ID<input id="decisionBatch"></label><label>1688 Offer ID<input id="decisionOffer"></label><label>决策类型<select id="decisionKind"><option value="category">类目</option><option value="pricing">包装估算</option><option value="attributes">属性与俄语内容</option><option value="images">图片文字/水印审核</option></select></label></div><div><label>AgentDecisionEnvelopeV1 JSON<textarea id="decisionValue" spellcheck="false">{}</textarea></label><button id="submitDecisionButton">验证并保存</button></div></div><pre id="actionResult" hidden></pre></section></main><script nonce="${nonce}">
   const csrf=document.querySelector('meta[name=csrf-token]').content;const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   async function api(url,options={}){const r=await fetch(url,{...options,headers:{'content-type':'application/json','x-csrf-token':csrf,...options.headers}});const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.statusText);return j}
-  async function load(){const d=await api('/api/overview');metrics.innerHTML=[['店铺',d.stores.length],['批次',d.batches.length],['商品 Run',d.runs.length],['异常',d.runs.filter(r=>['blocked','failed','needs_review','interrupted'].includes(r.status)).length]].map(x=>'<div class=card><div class=muted>'+x[0]+'</div><div class=metric>'+x[1]+'</div></div>').join('');stores.innerHTML=d.stores.map(s=>'<div class=row><div><b>'+e(s.store_name)+'</b><div class=muted>'+e(s.store_id)+' · '+e(s.currency_code)+'</div></div><button class="'+(s.publishing_enabled?'danger':'')+'" onclick="toggleStore(\''+e(s.store_id)+'\','+!s.publishing_enabled+')">'+(s.publishing_enabled?'禁用发布':'启用发布')+'</button></div>').join('')||'<p class=muted>尚未配置店铺</p>';batches.innerHTML=d.batches.map(b=>'<div class=row><div><b>'+e(b.batch_id)+'</b><div class=muted>'+e(b.status)+' · 成功 '+b.succeeded_count+'/'+b.requested_listing_count+'</div></div><span class=pill>'+b.candidate_count+' 候选</span></div>').join('')||'<p class=muted>暂无批次</p>';runs.innerHTML=d.runs.map(r=>'<div class=row><div><b>'+e(r.run_id)+'</b><div class=muted>'+e(r.current_step||'未开始')+' · '+e(r.status)+'</div></div><button class=secondary onclick="showRun(\''+e(r.run_id)+'\')">查看</button></div>').join('')||'<p class=muted>暂无 Run</p>'}
+  async function load(){const d=await api('/api/overview');metrics.innerHTML=[['店铺',d.stores.length],['批次',d.batches.length],['商品 Run',d.runs.length],['异常',d.runs.filter(r=>['blocked','failed','needs_review','interrupted'].includes(r.status)).length]].map(x=>'<div class=card><div class=muted>'+x[0]+'</div><div class=metric>'+x[1]+'</div></div>').join('');stores.innerHTML=d.stores.map(s=>'<div class=row><div><b>'+e(s.store_name)+'</b><div class=muted>'+e(s.store_id)+' · '+e(s.currency_code)+'</div></div><button class="publish-toggle '+(s.publishing_enabled?'danger':'')+'" data-store="'+e(s.store_id)+'" data-enabled="'+String(!s.publishing_enabled)+'">'+(s.publishing_enabled?'禁用发布':'启用发布')+'</button></div>').join('')||'<p class=muted>尚未配置店铺</p>';batches.innerHTML=d.batches.map(b=>'<div class=row><div><b>'+e(b.batch_id)+'</b><div class=muted>'+e(b.status)+' · 成功 '+b.succeeded_count+'/'+b.requested_listing_count+'</div></div><span class=pill>'+b.candidate_count+' 候选</span></div>').join('')||'<p class=muted>暂无批次</p>';runs.innerHTML=d.runs.map(r=>'<div class=row><div><b>'+e(r.run_id)+'</b><div class=muted>'+e(r.current_step||'未开始')+' · '+e(r.status)+'</div></div><button class="secondary run-detail" data-run="'+e(r.run_id)+'">查看</button></div>').join('')||'<p class=muted>暂无 Run</p>'}
   async function toggleStore(id,enabled){if(!confirm((enabled?'启用':'禁用')+'该店铺自动发布？'))return;await api('/api/stores/'+encodeURIComponent(id)+'/publishing',{method:'POST',body:JSON.stringify({enabled})});await load()}
   let currentRun='';async function showRun(id){currentRun=id;const d=await api('/api/runs/'+encodeURIComponent(id));detail.textContent=JSON.stringify(d,null,2);detailPanel.hidden=false;detailPanel.scrollIntoView({behavior:'smooth'})}
   async function rerunCurrent(){if(!currentRun)return;const d=await api('/api/runs/'+encodeURIComponent(currentRun)+'/rerun',{method:'POST',body:JSON.stringify({step:rerunStep.value})});actionResult.hidden=false;actionResult.textContent=JSON.stringify(d,null,2);await showRun(currentRun);await load()}
   async function submitDecision(){let envelope;try{envelope=JSON.parse(decisionValue.value)}catch{alert('决策 JSON 无效');return}const d=await api('/api/batches/'+encodeURIComponent(decisionBatch.value)+'/decisions',{method:'POST',body:JSON.stringify({offer_id:decisionOffer.value,kind:decisionKind.value,envelope})});actionResult.hidden=false;actionResult.textContent=JSON.stringify(d,null,2);await load()}
+  stores.addEventListener('click',event=>{const button=event.target.closest('.publish-toggle');if(button)toggleStore(button.dataset.store,button.dataset.enabled==='true')});
+  runs.addEventListener('click',event=>{const button=event.target.closest('.run-detail');if(button)showRun(button.dataset.run)});
+  rerunButton.addEventListener('click',rerunCurrent);submitDecisionButton.addEventListener('click',submitDecision);
   load().catch(err=>document.body.insertAdjacentHTML('beforeend','<pre>'+e(err.message)+'</pre>'));
   </script></body></html>`;
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown): void {
   const body = `${JSON.stringify(value, null, 2)}\n`;
-  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; frame-ancestors 'none'; sandbox", 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff' });
   response.end(body);
 }
 
-function sendHtml(response: ServerResponse, body: string): void {
-  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store', 'content-security-policy': "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'", 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff' });
+function sendHtml(response: ServerResponse, body: string, nonce: string): void {
+  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store', 'content-security-policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; img-src 'none'; font-src 'none'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, 'referrer-policy': 'no-referrer', 'permissions-policy': 'camera=(), microphone=(), geolocation=()', 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff' });
   response.end(body);
 }
 
