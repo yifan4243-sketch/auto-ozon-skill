@@ -65,6 +65,11 @@ import {
   assertCriticalArtifact,
   validateListingDraftArtifact,
 } from '@auto-ozon/artifact-validation';
+import {
+  assessProductRisk,
+  productRiskFacts,
+  type ProductRiskAssessmentV1,
+} from './product-risk-policy.js';
 
 export interface RunListingPreparationInput {
   run_id?: string;
@@ -115,6 +120,7 @@ export interface ListingPreparationResultV1 {
   manifest: WorkflowRunManifestV2;
   source?: CollectedSourcingRun;
   product?: CanonicalProductV2;
+  qualification_risk?: ProductRiskAssessmentV1;
   category_decision?: CategoryDecisionV1;
   cost_pricing?: CostPricingV1;
   category_attributes?: CategoryAttributesGroupV1[];
@@ -324,9 +330,32 @@ async function executeListingPreparation(
     });
     return workflowSuccess(context, 'canonicalize-product', result, 'blocked');
   }
-  const canonicalStatus = product.validation.status === 'blocked'
+  let riskAssessment = await store.read<ProductRiskAssessmentV1>(
+    runId,
+    'canonicalize-product',
+    'product-risk-assessment-v1.json',
+  );
+  if (!riskAssessment) {
+    riskAssessment = assessProductRisk(productRiskFacts(product));
+    await store.write(runId, 'canonicalize-product', 'product-risk-assessment-v1.json', riskAssessment);
+  }
+  result.qualification_risk = riskAssessment;
+  if (riskAssessment.recommended_action !== 'allow') {
+    await store.updateStep(runId, 'canonicalize-product', {
+      status: riskAssessment.recommended_action === 'block' ? 'blocked' : 'needs_review',
+      error: {
+        code: riskAssessment.recommended_action === 'block' ? 'PRODUCT_RISK_BLOCKED' : 'PRODUCT_RISK_REVIEW_REQUIRED',
+        message: riskAssessment.recommended_action === 'block'
+          ? 'Product matches a blocking rule in the versioned sourcing-risk policy.'
+          : 'Product matches a rule that requires review in the versioned sourcing-risk policy.',
+        recoverable: riskAssessment.recommended_action === 'needs_review',
+        detail: { risk_assessment: riskAssessment },
+      },
+    });
+  }
+  const canonicalStatus = product.validation.status === 'blocked' || riskAssessment.recommended_action === 'block'
     ? 'blocked'
-    : product.validation.status === 'needs_review'
+    : product.validation.status === 'needs_review' || riskAssessment.recommended_action === 'needs_review'
       ? 'needs_review'
       : 'succeeded';
   if (canonicalStatus === 'blocked' || (canonicalStatus === 'needs_review' && stopOnReview)) {
@@ -377,16 +406,39 @@ async function executeListingPreparation(
     decision = step.data;
   }
   result.category_decision = decision;
-  if (decision.status === 'blocked' || (decision.status === 'needs_review' && stopOnReview)) {
-    return workflowSuccess(context, 'category-decision', result, decision.status);
+  let categoryRiskAssessment = await store.read<ProductRiskAssessmentV1>(
+    runId,
+    'category-decision',
+    'category-risk-assessment-v1.json',
+  );
+  if (!categoryRiskAssessment) {
+    categoryRiskAssessment = assessProductRisk(productRiskFacts(product, decision));
+    await store.write(runId, 'category-decision', 'category-risk-assessment-v1.json', categoryRiskAssessment);
+  }
+  result.qualification_risk = categoryRiskAssessment;
+  if (categoryRiskAssessment.recommended_action !== 'allow') {
+    await store.updateStep(runId, 'category-decision', {
+      status: categoryRiskAssessment.recommended_action === 'block' ? 'blocked' : 'needs_review',
+      error: {
+        code: categoryRiskAssessment.recommended_action === 'block' ? 'PRODUCT_CATEGORY_RISK_BLOCKED' : 'PRODUCT_CATEGORY_RISK_REVIEW_REQUIRED',
+        message: categoryRiskAssessment.recommended_action === 'block'
+          ? 'The selected category matches a blocking rule in the versioned sourcing-risk policy.'
+          : 'The selected category matches a rule that requires review in the versioned sourcing-risk policy.',
+        recoverable: categoryRiskAssessment.recommended_action === 'needs_review',
+        detail: { risk_assessment: categoryRiskAssessment },
+      },
+    });
+  }
+  const categoryStatus = decision.status === 'blocked' || categoryRiskAssessment.recommended_action === 'block'
+    ? 'blocked'
+    : decision.status === 'needs_review' || categoryRiskAssessment.recommended_action === 'needs_review'
+      ? 'needs_review'
+      : 'succeeded';
+  if (categoryStatus === 'blocked' || (categoryStatus === 'needs_review' && stopOnReview)) {
+    return workflowSuccess(context, 'category-decision', result, categoryStatus);
   }
   if (stopAfter === 'category-decision') {
-    return workflowSuccess(
-      context,
-      'category-decision',
-      result,
-      decision.status === 'decided' ? 'succeeded' : decision.status,
-    );
+    return workflowSuccess(context, 'category-decision', result, categoryStatus);
   }
 
   await prepareStep(context, 'cost-pricing', {
@@ -738,10 +790,6 @@ function validateProductQualification(
     && product.skus.every((sku) => !sku.image)) {
     return { code: 'PRODUCT_IMAGE_MISSING', message: 'Product has no usable source image.' };
   }
-  const riskText = `${product.product.title_zh} ${product.source.source_category_path_zh.join(' ')} ${Object.entries(product.product.attributes).map(([key, value]) => `${key} ${value}`).join(' ')}`;
-  if (/药品|医疗器械|食品|饮料|酒|烟草|电子烟|成人用品|武器|易燃|爆炸|活体|种子|农药|杀虫剂|液体香水|婴儿配方|电池|蓄电池/iu.test(riskText)) {
-    return { code: 'PROHIBITED_PRODUCT_RISK', message: 'Product facts match the conservative prohibited/high-risk sourcing policy.' };
-  }
   return null;
 }
 
@@ -779,8 +827,8 @@ async function buildCategoryAgentTask(product: CanonicalProductV2): Promise<Cate
 
 const STEP_IMPLEMENTATION_VERSIONS: Record<WorkflowStepName, string> = {
   'source-1688': '1',
-  'canonicalize-product': '2',
-  'category-decision': '1',
+  'canonicalize-product': '3',
+  'category-decision': '2',
   'cost-pricing': '2',
   'category-attributes': '1',
   'attribute-mapping': '2',

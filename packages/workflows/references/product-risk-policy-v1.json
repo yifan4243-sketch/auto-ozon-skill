@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "policy_version": "product-risk-policy-v1-2026-07",
+  "policy_scope": "internal_conservative_sourcing_gate",
+  "rules": [
+    {
+      "rule_id": "weapons-and-explosives",
+      "severity": "critical",
+      "action": "block",
+      "keywords": {
+        "zh": ["武器", "枪支", "弹药", "爆炸物", "炸药"],
+        "ru": ["оружие", "боеприпасы", "боеприпасов", "взрывчатка"],
+        "en": ["weapon", "firearm", "ammunition", "explosive"]
+      },
+      "category_ids": [],
+      "attribute_patterns": [],
+      "exclusions": ["玩具枪", "toy gun", "игрушечный пистолет"],
+      "message": "Product facts indicate weapons, ammunition, or explosives."
+    },
+    {
+      "rule_id": "tobacco-and-nicotine",
+      "severity": "critical",
+      "action": "block",
+      "keywords": {
+        "zh": ["烟草", "香烟", "电子烟", "烟弹"],
+        "ru": ["табак", "сигареты", "электронная сигарета"],
+        "en": ["tobacco", "cigarette", "e-cigarette", "vape cartridge"]
+      },
+      "category_ids": [],
+      "attribute_patterns": [],
+      "exclusions": ["烟盒", "香烟收纳盒", "cigarette case", "портсигар"],
+      "message": "Product facts indicate tobacco or nicotine products."
+    },
+    {
+      "rule_id": "live-organisms",
+      "severity": "critical",
+      "action": "block",
+      "keywords": {
+        "zh": ["活体动物", "活体昆虫"],
+        "ru": ["живое животное", "живые насекомые"],
+        "en": ["live animal", "live insect"]
+      },
+      "category_ids": [],
+      "attribute_patterns": [],
+      "exclusions": ["动物模型", "仿真昆虫", "animal model", "модель животного"],
+      "message": "Product facts indicate live organisms."
+    },
+    {
+      "rule_id": "regulated-health-and-ingestibles",
+      "severity": "high",
+      "action": "needs_review",
+      "keywords": {
+        "zh": ["药品", "医疗器械", "婴儿配方", "食品", "饮料", "白酒", "啤酒", "葡萄酒"],
+        "ru": ["лекарство", "медицинское изделие", "детская смесь", "продукты питания", "напиток", "алкоголь"],
+        "en": ["medicine", "medical device", "infant formula", "food", "beverage", "alcohol"]
+      },
+      "category_ids": [],
+      "attribute_patterns": [],
+      "exclusions": ["食品收纳盒", "饮料杯", "啤酒杯", "葡萄酒杯", "medicine box", "food container", "wine glass", "контейнер для еды", "бокал для вина"],
+      "message": "Product may require regulatory or qualification review."
+    },
+    {
+      "rule_id": "hazardous-chemicals-and-liquids",
+      "severity": "high",
+      "action": "needs_review",
+      "keywords": {
+        "zh": ["易燃液体", "农药", "杀虫剂", "液体香水"],
+        "ru": ["легковоспламеняющаяся жидкость", "пестицид", "инсектицид", "жидкие духи"],
+        "en": ["flammable liquid", "pesticide", "insecticide", "liquid perfume"]
+      },
+      "category_ids": [],
+      "attribute_patterns": [],
+      "exclusions": ["香水瓶", "perfume bottle", "флакон для духов"],
+      "message": "Product may be a hazardous chemical or restricted liquid."
+    },
+    {
+      "rule_id": "batteries",
+      "severity": "high",
+      "action": "needs_review",
+      "keywords": {
+        "zh": ["锂电池", "蓄电池", "电池"],
+        "ru": ["литиевая батарея", "литиевой батареей", "аккумулятор", "батарея", "батареей"],
+        "en": ["lithium battery", "rechargeable battery", "battery"]
+      },
+      "category_ids": [],
+      "attribute_patterns": ["电池类型", "battery type", "тип аккумулятора"],
+      "exclusions": ["电池收纳盒", "电池盒", "电池保护盒", "battery storage box", "battery case", "контейнер для батареек", "футляр для батареек"],
+      "message": "Product may contain or be a battery and requires logistics review."
+    },
+    {
+      "rule_id": "adult-products-and-seeds",
+      "severity": "high",
+      "action": "needs_review",
+      "keywords": {
+        "zh": ["成人用品", "植物种子", "农作物种子"],
+        "ru": ["товары для взрослых", "семена растений"],
+        "en": ["adult product", "plant seeds"]
+      },
+      "category_ids": [],
+      "attribute_patterns": [],
+      "exclusions": ["种子收纳盒", "seed storage box", "контейнер для семян"],
+      "message": "Product may require restricted-category review."
+    }
+  ]
+}

@@ -160,6 +160,68 @@ describe('listing-preparation workflow', () => {
     await expect(fs.stat(path.join(root, 'runs', runId, '01-source', 'attempt-0001', 'offer-result.json'))).resolves.toBeTruthy();
   });
 
+  it('persists structured risk evidence and blocks a clearly prohibited product', async () => {
+    const { store, runId } = await seededSourceRun('户外武器弹药套装');
+    const result = await runListingPreparation({
+      run_id: runId,
+      start_from: 'canonicalize-product',
+      stop_after: 'canonicalize-product',
+      artifact_store: store,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      data: {
+        status: 'blocked',
+        qualification_risk: {
+          policy_version: 'product-risk-policy-v1-2026-07',
+          recommended_action: 'block',
+        },
+      },
+    });
+    expect(result.data?.qualification_risk?.matches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        rule_id: 'weapons-and-explosives',
+        matched_field: 'product.title_zh',
+        recommended_action: 'block',
+      }),
+    ]));
+    const manifest = await store.readManifest(runId);
+    expect(manifest?.steps['canonicalize-product'].error).toMatchObject({
+      code: 'PRODUCT_RISK_BLOCKED',
+      recoverable: false,
+      sanitized_detail: {
+        risk_assessment: { policy_version: 'product-risk-policy-v1-2026-07', recommended_action: 'block' },
+      },
+    });
+    await expect(store.read(runId, 'canonicalize-product', 'product-risk-assessment-v1.json')).resolves.toMatchObject({
+      recommended_action: 'block',
+    });
+  });
+
+  it('stops at review instead of blocking a regulated battery product', async () => {
+    const { store, runId } = await seededSourceRun('露营灯内置锂电池');
+    const result = await runListingPreparation({
+      run_id: runId,
+      start_from: 'canonicalize-product',
+      stop_after: 'canonicalize-product',
+      artifact_store: store,
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        status: 'needs_review',
+        qualification_risk: {
+          recommended_action: 'needs_review',
+        },
+      },
+    });
+    expect(result.data?.qualification_risk?.matches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rule_id: 'batteries', suppressed: false }),
+    ]));
+    expect((await store.readManifest(runId))?.steps['canonicalize-product'].error?.code).toBe('PRODUCT_RISK_REVIEW_REQUIRED');
+  });
+
   it('returns a structured corruption error before accessing a damaged persisted product', async () => {
     const { store, runId, root } = await seededSourceRun();
     const prepared = await runListingPreparation({
@@ -188,7 +250,7 @@ describe('listing-preparation workflow', () => {
   });
 });
 
-async function seededSourceRun() {
+async function seededSourceRun(title?: string) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-workflow-'));
   roots.push(root);
   const store = new FileArtifactStore({
@@ -202,6 +264,7 @@ async function seededSourceRun() {
       'utf8',
     ),
   ) as OfferResult;
+  if (title) offer.title = title;
   await store.ensureRun(runId);
   const output = await store.write(runId, 'source-1688', 'offer-result.json', {
     mode: 'offers',

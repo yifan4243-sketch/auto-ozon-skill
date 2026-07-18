@@ -38,6 +38,7 @@
   },
   "files": [
     "dist",
-    "image-generation-config.schema.json"
+    "image-generation-config.schema.json",
+    "references"
   ]
 }
