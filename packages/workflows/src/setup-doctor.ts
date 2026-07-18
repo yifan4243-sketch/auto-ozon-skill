@@ -12,12 +12,19 @@ import type {
 import { resolveRepoRoot } from '@auto-ozon/artifact-store';
 import { EnvSecretProvider, FileStoreRegistry, resolvePerformanceCredentials, resolveStoreCredentials } from '@auto-ozon/config';
 import { loadOzonEnvironment } from '@auto-ozon/adapters-ozon';
-import { loadOzonCategoryTree } from '@auto-ozon/step-category-decision';
+import { loadOzonCategoryTree, type OzonCategoryTreeDocument } from '@auto-ozon/step-category-decision';
 import { validateImageGenerationConfig } from './image-generation-config.js';
 
 export interface SetupDoctorOptionsV1 {
   repo_root?: string;
   environment?: Readonly<Record<string, string | undefined>>;
+  /** Injectable host probes keep Doctor deterministic in offline tests. */
+  runtime?: {
+    node_version?: string;
+    command_exists?: (command: string) => boolean;
+    browser_available?: boolean;
+    load_category_tree?: (filePath: string) => Promise<OzonCategoryTreeDocument>;
+  };
 }
 
 export async function runSetupDoctor(
@@ -29,24 +36,29 @@ export async function runSetupDoctor(
   const environmentInput: NodeJS.ProcessEnv = options.environment
     ? { ...options.environment }
     : process.env;
-  const environment = { ...loadOzonEnvironment(environmentInput, root) };
+  const environment: NodeJS.ProcessEnv = {
+    ...loadOzonEnvironment(environmentInput, root),
+    BB1688_HOME: environmentInput.BB1688_HOME,
+  };
+  const commandAvailable = options.runtime?.command_exists ?? commandExists;
 
-  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  const nodeVersion = options.runtime?.node_version ?? process.version;
+  const nodeMajor = Number(nodeVersion.replace(/^v/u, '').split('.')[0]);
   checks.push(check(
     'NODE_20',
     Number.isInteger(nodeMajor) && nodeMajor >= 20,
-    `Node.js ${process.version}`,
+    `Node.js ${nodeVersion}`,
     'Install Node.js 20 or newer.',
   ));
   checks.push(check(
     'PNPM_AVAILABLE',
-    commandExists('pnpm'),
+    commandAvailable('pnpm'),
     'pnpm command is available.',
     'Enable Corepack or install pnpm.',
   ));
   checks.push(check(
     'BROWSER_AVAILABLE',
-    Boolean(findChrome() || findPlaywrightChromium()),
+    options.runtime?.browser_available ?? Boolean(findChrome() || findPlaywrightChromium()),
     'Chrome or Playwright Chromium is available.',
     'Install Google Chrome or run: pnpm exec playwright install chromium',
   ));
@@ -164,7 +176,12 @@ export async function runSetupDoctor(
   }
 
   try {
-    const tree = await loadOzonCategoryTree();
+    const categoryTreeFile = options.repo_root
+      ? path.join(root, 'data', 'cache', 'ozon', 'category-tree', 'current.json')
+      : undefined;
+    const tree = options.runtime?.load_category_tree
+      ? await options.runtime.load_category_tree(categoryTreeFile ?? '')
+      : await loadOzonCategoryTree(categoryTreeFile);
     checks.push({
       code: 'CATEGORY_SNAPSHOT',
       status: 'passed',
@@ -184,7 +201,7 @@ export async function runSetupDoctor(
   const mcpProject = path.join(root, 'vendor', 'ozon-mcp', 'pyproject.toml');
   checks.push(check(
     'OZON_MCP',
-    fs.existsSync(mcpProject) && commandExists('uv'),
+    fs.existsSync(mcpProject) && commandAvailable('uv'),
     'Ozon MCP source and uv runtime are available.',
     'Initialize the Ozon MCP submodule and install uv, then run uv sync.',
   ));

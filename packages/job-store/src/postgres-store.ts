@@ -6,11 +6,6 @@ export interface PostgresQueryClientV1 {
 }
 
 export const POSTGRES_JOB_STORE_SCHEMA_V1 = `
-CREATE TABLE IF NOT EXISTS authorization_records (
-  authorization_id TEXT PRIMARY KEY, consent_id TEXT, run_id TEXT NOT NULL, store_id TEXT NOT NULL,
-  profile_hash TEXT NOT NULL, draft_sha256 TEXT NOT NULL, payload_json JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL
-);
-ALTER TABLE authorization_records ADD COLUMN IF NOT EXISTS consent_id TEXT;
 CREATE TABLE IF NOT EXISTS store_publishing_consents (
   consent_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, enabled BOOLEAN NOT NULL, actor TEXT NOT NULL,
   source TEXT NOT NULL, profile_hash TEXT NOT NULL, policy_version TEXT NOT NULL,
@@ -18,6 +13,19 @@ CREATE TABLE IF NOT EXISTS store_publishing_consents (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS active_store_publishing_consent
   ON store_publishing_consents(store_id) WHERE revoked_at IS NULL AND enabled=TRUE;
+CREATE TABLE IF NOT EXISTS authorization_records (
+  authorization_id TEXT PRIMARY KEY,
+  consent_id TEXT NOT NULL REFERENCES store_publishing_consents(consent_id),
+  run_id TEXT NOT NULL, store_id TEXT NOT NULL, profile_hash TEXT NOT NULL,
+  draft_sha256 TEXT NOT NULL, payload_json JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL
+);
+ALTER TABLE authorization_records ADD COLUMN IF NOT EXISTS consent_id TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='authorization_records_consent_fk') THEN
+    ALTER TABLE authorization_records ADD CONSTRAINT authorization_records_consent_fk
+      FOREIGN KEY (consent_id) REFERENCES store_publishing_consents(consent_id);
+  END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS listing_jobs (
   job_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, status TEXT NOT NULL, spec_json JSONB NOT NULL,
   result_json JSONB, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
