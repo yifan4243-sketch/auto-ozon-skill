@@ -53,6 +53,7 @@ export async function inspectRemoteImage(
         if (redirects === MAX_REDIRECTS) throw new Error('IMAGE_REDIRECT_LIMIT_EXCEEDED');
         const location = response.headers.get('location');
         if (!location) throw new Error('IMAGE_REDIRECT_LOCATION_MISSING');
+        await response.body?.cancel('IMAGE_REDIRECT').catch(() => undefined);
         current = new URL(location, current);
         continue;
       }
@@ -111,17 +112,12 @@ export function isForbiddenAddress(rawAddress: string): boolean {
   const address = normalizeHostname(rawAddress);
   const family = net.isIP(address);
   if (family === 4) {
-    const parts = address.split('.').map(Number);
-    if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
-    const [a, b] = parts as [number, number, number, number];
-    return a === 0 || a === 10 || a === 127
-      || (a === 100 && b >= 64 && b <= 127)
-      || (a === 169 && b === 254)
-      || (a === 172 && b >= 16 && b <= 31)
-      || (a === 192 && [0, 2, 168].includes(b))
-      || (a === 198 && (b === 18 || b === 19 || b === 51))
-      || (a === 203 && b === 0)
-      || a >= 224;
+    return [
+      ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+      ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+      ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
+      ['224.0.0.0', 4], ['240.0.0.0', 4],
+    ].some(([network, prefix]) => ipv4InCidr(address, network as string, prefix as number));
   }
   if (family === 6) {
     const value = address.toLowerCase();
@@ -147,7 +143,7 @@ export function decodeImageMetadata(bytes: Buffer): { mediaType: ImageAssetV1['m
       if (bytes[offset] !== 0xff) { offset += 1; continue; }
       const marker = bytes[offset + 1]!;
       if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
-        return dimensions('image/jpeg', bytes.readUInt16BE(offset + 5), bytes.readUInt16BE(offset + 7));
+        return dimensions('image/jpeg', bytes.readUInt16BE(offset + 7), bytes.readUInt16BE(offset + 5));
       }
       if (marker === 0xd9 || marker === 0xda) break;
       const length = bytes.readUInt16BE(offset + 2);
@@ -224,4 +220,15 @@ function dimensions(mediaType: ImageAssetV1['media_type'], width: number, height
 }
 function readUInt24LE(bytes: Buffer, offset: number): number {
   return bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16);
+}
+
+function ipv4InCidr(address: string, network: string, prefix: number): boolean {
+  const value = ipv4ToNumber(address);
+  const base = ipv4ToNumber(network);
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  return (value & mask) === (base & mask);
+}
+
+function ipv4ToNumber(address: string): number {
+  return address.split('.').reduce((value, part) => ((value << 8) | Number(part)) >>> 0, 0);
 }

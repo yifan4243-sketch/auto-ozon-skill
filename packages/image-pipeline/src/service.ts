@@ -1,12 +1,19 @@
 import crypto from 'node:crypto';
 import type {
   CanonicalProductV2,
-  ImageAssetV1,
   ImageBundleIssueV1,
   ImageBundleV1,
   ImageGenerationProviderV1,
   ImageReviewAgentInputV1,
 } from '@auto-ozon/contracts';
+import {
+  DEFAULT_IMAGE_CONCURRENCY,
+  DEFAULT_IMAGE_TOTAL_TIMEOUT_MS,
+  inspectRemoteImage,
+  type ImageFetchPolicyV1,
+  type ImageHostResolverV1,
+  type InspectedRemoteImageV1,
+} from './remote-image.js';
 
 export const DEFAULT_IMAGE_PROMPT_VERSION = 'ozon-product-scenes-v1';
 export const DEFAULT_IMAGE_COUNT = 3;
@@ -34,21 +41,24 @@ export interface RunImagePipelineInputV1 {
   provider?: ImageGenerationProviderV1;
   agent_review?: ImageReviewAgentInputV1;
   fetch?: typeof fetch;
+  resolver?: ImageHostResolverV1;
+  network?: ImageFetchPolicyV1;
   signal?: AbortSignal;
 }
-
-interface InspectedImage {
-  bytes: Buffer;
-  mediaType: ImageAssetV1['media_type'];
-  width: number;
-  height: number;
-  contentSha256: string;
-}
-
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MIN_IMAGE_SIDE_PX = 200;
+type ImageInspectionResult =
+  | { url: string; ok: true; inspected: InspectedRemoteImageV1 }
+  | { url: string; ok: false; error: unknown };
 
 export async function runImagePipeline(input: RunImagePipelineInputV1): Promise<ImageBundleV1> {
+  const totalController = new AbortController();
+  const forwardAbort = () => totalController.abort(input.signal?.reason);
+  if (input.signal?.aborted) forwardAbort();
+  else input.signal?.addEventListener('abort', forwardAbort, { once: true });
+  const totalTimeout = setTimeout(
+    () => totalController.abort(new Error('IMAGE_PIPELINE_TOTAL_TIMEOUT')),
+    positiveInteger(input.network?.total_timeout_ms, DEFAULT_IMAGE_TOTAL_TIMEOUT_MS),
+  );
   const result: ImageBundleV1 = {
     schema_version: 1,
     source_offer_id: input.product.source.offer_id,
@@ -92,24 +102,31 @@ export async function runImagePipeline(input: RunImagePipelineInputV1): Promise<
         result.errors.push(issue('IMAGE_COUNT_INVALID', 'Generated image count must be an integer from 1 to 15.'));
       } else {
         const references = validUniqueUrls([...sourceBySku.values()].flat()).slice(0, 10);
-        const response = await input.provider.generate({
-          source_offer_id: input.product.source.offer_id,
-          reference_image_urls: generation.use_reference_images === false ? [] : references,
-          prompt: generation.prompt?.trim() || DEFAULT_IMAGE_PROMPT,
-          count,
-        }, input.signal);
-        generated = validUniqueUrls(response.image_urls).slice(0, count);
-        result.generation = {
-          enabled: true,
-          provider_id: response.provider_id,
-          model_id: response.model_id,
-          prompt_version: DEFAULT_IMAGE_PROMPT_VERSION,
-          call_id: response.call_id,
-          requested_count: count,
-          generated_count: generated.length,
-          used_reference_images: generation.use_reference_images !== false && references.length > 0,
-        };
-        if (generated.length < count) result.warnings.push(issue('GENERATED_IMAGE_COUNT_SHORT', `Provider returned ${generated.length} valid image URLs; ${count} were requested.`));
+        try {
+          const response = await input.provider.generate({
+            source_offer_id: input.product.source.offer_id,
+            reference_image_urls: generation.use_reference_images === false ? [] : references,
+            prompt: generation.prompt?.trim() || DEFAULT_IMAGE_PROMPT,
+            count,
+          }, totalController.signal);
+          generated = validUniqueUrls(response.image_urls).slice(0, count);
+          result.generation = {
+            enabled: true,
+            provider_id: response.provider_id,
+            model_id: response.model_id,
+            prompt_version: DEFAULT_IMAGE_PROMPT_VERSION,
+            call_id: response.call_id,
+            requested_count: count,
+            generated_count: generated.length,
+            used_reference_images: generation.use_reference_images !== false && references.length > 0,
+          };
+          if (generated.length < count) result.warnings.push(issue('GENERATED_IMAGE_COUNT_SHORT', `Provider returned ${generated.length} valid image URLs; ${count} were requested.`));
+        } catch (error) {
+          result.errors.push(issue(
+            totalController.signal.aborted ? 'IMAGE_PIPELINE_TOTAL_TIMEOUT' : 'IMAGE_GENERATION_FAILED',
+            error instanceof Error ? error.message : String(error),
+          ));
+        }
       }
     }
   }
@@ -123,12 +140,20 @@ export async function runImagePipeline(input: RunImagePipelineInputV1): Promise<
   // per-SKU gallery limit means only a subset can enter sku_images[].
   const allUrls = validUniqueUrls([...sourceBySku.values()].flat().concat(generated));
   const canonicalUrl = new Map<string, string>();
-  const inspectedByUrl = new Map<string, InspectedImage>();
+  const inspectedByUrl = new Map<string, InspectedRemoteImageV1>();
   const firstUrlByContent = new Map<string, string>();
-  for (const url of allUrls) {
-    const sourceSkuIds = sourceSkuIdsForUrl(input.product, sourceBySku, requestedBySku, url);
+  const inspections = await mapConcurrent<string, ImageInspectionResult>(allUrls, positiveInteger(input.network?.concurrency, DEFAULT_IMAGE_CONCURRENCY), async (url) => {
     try {
-      const inspected = await inspectImage(url, input.fetch ?? fetch, input.signal);
+      return { url, ok: true, inspected: await inspectRemoteImage(url, input.fetch ?? fetch, input.resolver, input.network, totalController.signal) };
+    } catch (error) {
+      return { url, ok: false, error };
+    }
+  });
+  for (const inspection of inspections) {
+    const { url } = inspection;
+    const sourceSkuIds = sourceSkuIdsForUrl(input.product, sourceBySku, requestedBySku, url);
+    if (inspection.ok) {
+      const inspected = inspection.inspected;
       const existing = firstUrlByContent.get(inspected.contentSha256);
       if (existing) {
         canonicalUrl.set(url, existing);
@@ -143,8 +168,13 @@ export async function runImagePipeline(input: RunImagePipelineInputV1): Promise<
       }
       const ratio = inspected.width / inspected.height;
       if (ratio < 0.5 || ratio > 2) result.warnings.push(issue('IMAGE_ASPECT_RATIO_EXTREME', `Image ${url} has aspect ratio ${ratio.toFixed(3)}.`, sourceSkuIds));
-    } catch (error) {
-      result.errors.push(issue('IMAGE_INSPECTION_FAILED', `${url}: ${error instanceof Error ? error.message : String(error)}`, sourceSkuIds));
+    } else {
+      const error = inspection.error;
+      result.errors.push(issue(
+        totalController.signal.aborted ? 'IMAGE_PIPELINE_TOTAL_TIMEOUT' : 'IMAGE_INSPECTION_FAILED',
+        `${url}: ${error instanceof Error ? error.message : String(error)}`,
+        sourceSkuIds,
+      ));
     }
   }
 
@@ -202,78 +232,9 @@ export async function runImagePipeline(input: RunImagePipelineInputV1): Promise<
     if (primary) primary.role = 'primary_candidate';
   }
   result.status = result.errors.length > 0 ? 'blocked' : result.agent_tasks.length > 0 ? 'needs_review' : 'completed';
+  clearTimeout(totalTimeout);
+  input.signal?.removeEventListener('abort', forwardAbort);
   return result;
-}
-
-async function inspectImage(url: string, execute: typeof fetch, signal?: AbortSignal): Promise<InspectedImage> {
-  const controller = new AbortController();
-  const abort = () => controller.abort(signal?.reason);
-  if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-  try {
-    const response = await execute(url, { method: 'GET', redirect: 'follow', signal: controller.signal });
-    if (!response.ok) throw new Error(`HTTP_${response.status}`);
-    const declaredLength = Number(response.headers.get('content-length'));
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) throw new Error('IMAGE_TOO_LARGE');
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) throw new Error(bytes.length === 0 ? 'IMAGE_EMPTY' : 'IMAGE_TOO_LARGE');
-    const metadata = decodeImageMetadata(bytes);
-    const declaredType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
-    if (declaredType && declaredType !== 'application/octet-stream' && declaredType !== metadata.mediaType) throw new Error('IMAGE_CONTENT_TYPE_MISMATCH');
-    return { bytes, ...metadata, contentSha256: crypto.createHash('sha256').update(bytes).digest('hex') };
-  } catch (error) {
-    if (controller.signal.aborted) throw new Error('IMAGE_FETCH_TIMEOUT_OR_ABORTED');
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-    signal?.removeEventListener('abort', abort);
-  }
-}
-
-function decodeImageMetadata(bytes: Buffer): { mediaType: ImageAssetV1['media_type']; width: number; height: number } {
-  if (bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
-    const width = bytes.readUInt32BE(16); const height = bytes.readUInt32BE(20);
-    return dimensions('image/png', width, height);
-  }
-  if (bytes.length >= 12 && bytes[0] === 0xff && bytes[1] === 0xd8) {
-    let offset = 2;
-    while (offset + 9 < bytes.length) {
-      if (bytes[offset] !== 0xff) { offset += 1; continue; }
-      const marker = bytes[offset + 1]!;
-      if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
-        return dimensions('image/jpeg', bytes.readUInt16BE(offset + 5), bytes.readUInt16BE(offset + 7));
-      }
-      if (marker === 0xd9 || marker === 0xda) break;
-      const length = bytes.readUInt16BE(offset + 2);
-      if (length < 2) break;
-      offset += 2 + length;
-    }
-    throw new Error('JPEG_DIMENSIONS_INVALID');
-  }
-  if (bytes.length >= 30 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') {
-    const chunk = bytes.toString('ascii', 12, 16);
-    if (chunk === 'VP8X') return dimensions('image/webp', 1 + readUInt24LE(bytes, 24), 1 + readUInt24LE(bytes, 27));
-    if (chunk === 'VP8 ' && bytes.length >= 30 && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
-      return dimensions('image/webp', bytes.readUInt16LE(26) & 0x3fff, bytes.readUInt16LE(28) & 0x3fff);
-    }
-    if (chunk === 'VP8L' && bytes.length >= 25 && bytes[20] === 0x2f) {
-      const bits = bytes.readUInt32LE(21);
-      return dimensions('image/webp', (bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
-    }
-    throw new Error('WEBP_DIMENSIONS_INVALID');
-  }
-  throw new Error('IMAGE_FORMAT_UNSUPPORTED_OR_DAMAGED');
-}
-
-function dimensions(mediaType: ImageAssetV1['media_type'], width: number, height: number) {
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0 || width > 100_000 || height > 100_000) {
-    throw new Error('IMAGE_DIMENSIONS_INVALID');
-  }
-  return { mediaType, width, height };
-}
-
-function readUInt24LE(bytes: Buffer, offset: number): number {
-  return bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16);
 }
 
 function validUniqueUrls(values: Array<string | null | undefined>): string[] {
@@ -304,4 +265,21 @@ function sourceSkuIdsForUrl(
   return product.skus
     .filter((sku) => sourceBySku.get(sku.source_sku_id)?.includes(url) || requestedBySku.get(sku.source_sku_id)?.includes(url))
     .map((sku) => sku.source_sku_id);
+}
+
+async function mapConcurrent<T, R>(values: readonly T[], concurrency: number, worker: (value: T) => Promise<R>): Promise<R[]> {
+  const output = new Array<R>(values.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const index = cursor;
+      cursor += 1;
+      output[index] = await worker(values[index]!);
+    }
+  }));
+  return output;
+}
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return Number.isSafeInteger(value) && value! > 0 ? value! : fallback;
 }
