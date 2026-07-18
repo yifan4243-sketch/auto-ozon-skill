@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AuthorizationRecordV1, CommandResult, ListingDraftV2, OutboxRecordV1, OzonPublishResultV1, PreflightReportV1, PublishIntentV1, SellerImportTransportV1, StorePublishProfileV1 } from '@auto-ozon/contracts';
 import { assertWorkflowActive, type WorkflowContext } from '@auto-ozon/artifact-store';
 import type { PublishReliabilityStore } from '@auto-ozon/job-store';
-import { validateListingDraftArtifact } from '@auto-ozon/step-draft-generation';
+import { validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
 
 const AMBIGUOUS_SUBMISSION_GRACE_MS = 10 * 60_000;
 const NEGATIVE_RECONCILIATION_GAP_MS = 60_000;

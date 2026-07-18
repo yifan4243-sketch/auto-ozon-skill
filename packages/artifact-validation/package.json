@@ -1,5 +1,5 @@
 {
-  "name": "@auto-ozon/step-listing-submit",
+  "name": "@auto-ozon/artifact-validation",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,12 +16,12 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@auto-ozon/artifact-validation": "workspace:*",
     "@auto-ozon/artifact-store": "workspace:*",
     "@auto-ozon/contracts": "workspace:*",
-    "@auto-ozon/job-store": "workspace:*"
+    "ajv": "^8.20.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "schemas"
   ]
 }

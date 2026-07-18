@@ -16,9 +16,9 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@auto-ozon/artifact-validation": "workspace:*",
     "@auto-ozon/artifact-store": "workspace:*",
-    "@auto-ozon/contracts": "workspace:*",
-    "ajv": "^8.20.0"
+    "@auto-ozon/contracts": "workspace:*"
   },
   "files": [
     "dist",

@@ -11,6 +11,9 @@
       "path": "packages/adapters-ozon"
     },
     {
+      "path": "packages/artifact-validation"
+    },
+    {
       "path": "packages/artifact-store"
     },
     {

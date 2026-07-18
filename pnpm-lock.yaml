@@ -90,6 +90,18 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/artifact-validation:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../artifact-store
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+
   packages/batch-orchestrator:
     dependencies:
       '@auto-ozon/contracts':
@@ -241,27 +253,27 @@ importers:
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../../artifact-store
+      '@auto-ozon/artifact-validation':
+        specifier: workspace:*
+        version: link:../../artifact-validation
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../../contracts
-      ajv:
-        specifier: ^8.20.0
-        version: 8.20.0
 
   packages/steps/listing-submit:
     dependencies:
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../../artifact-store
+      '@auto-ozon/artifact-validation':
+        specifier: workspace:*
+        version: link:../../artifact-validation
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../../contracts
       '@auto-ozon/job-store':
         specifier: workspace:*
         version: link:../../job-store
-      '@auto-ozon/step-draft-generation':
-        specifier: workspace:*
-        version: link:../draft-generation
 
   packages/steps/source-1688:
     dependencies:
@@ -286,6 +298,9 @@ importers:
       '@auto-ozon/artifact-store':
         specifier: workspace:*
         version: link:../artifact-store
+      '@auto-ozon/artifact-validation':
+        specifier: workspace:*
+        version: link:../artifact-validation
       '@auto-ozon/batch-orchestrator':
         specifier: workspace:*
         version: link:../batch-orchestrator

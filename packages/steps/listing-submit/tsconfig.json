@@ -10,6 +10,9 @@
   ],
   "references": [
     {
+      "path": "../../artifact-validation"
+    },
+    {
       "path": "../../artifact-store"
     },
     {
@@ -17,9 +20,6 @@
     },
     {
       "path": "../../job-store"
-    },
-    {
-      "path": "../draft-generation"
     }
   ]
 }

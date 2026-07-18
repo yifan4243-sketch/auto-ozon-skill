@@ -86,7 +86,7 @@ function records(): { intent: PublishIntentV1; outbox: OutboxRecordV1 } {
   return { intent, outbox: { schema_version: 1, outbox_id: 'outbox-a', intent_id: intent.intent_id, status: 'pending', attempts: 0, last_error_code: null, created_at: now, updated_at: now } };
 }
 
-const profile = { store_id: '500', publishing: { enabled: true }, credentials: { client_id_env: 'X', api_key_env: 'Y' }, polling: { timeout_ms: 10, interval_ms: 0, max_recoverable_retries: 2 as const } };
+const profile = { store_id: '500', publishing: { enabled: true }, credentials: { client_id_env: 'X', api_key_env: 'Y' }, polling: { timeout_ms: 1_000, interval_ms: 0, max_recoverable_retries: 2 as const } };
 const draft: ListingDraftV2 = {
   schema_version: 2,
   source_offer_id: '1688',

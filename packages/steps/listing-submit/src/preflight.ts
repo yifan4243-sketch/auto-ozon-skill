@@ -12,7 +12,7 @@ import type {
   PreflightReportV1,
   StoreProfileV2,
 } from '@auto-ozon/contracts';
-import { validateListingDraftArtifact } from '@auto-ozon/step-draft-generation';
+import { validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
 
 export function validatePublishPreflight(input: {
   run_id: string; draft: unknown; store: StoreProfileV2;

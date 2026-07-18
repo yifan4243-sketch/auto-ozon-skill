@@ -10,6 +10,9 @@
   ],
   "references": [
     {
+      "path": "../../artifact-validation"
+    },
+    {
       "path": "../../artifact-store"
     },
     {

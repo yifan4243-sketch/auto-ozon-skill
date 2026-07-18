@@ -4,7 +4,7 @@ import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@
 import { OzonSellerImportClient } from '@auto-ozon/adapters-ozon';
 import { loadOzonEnvironment } from '@auto-ozon/adapters-ozon';
 import { runListingSubmit, validatePublishPreflight, stableHash } from '@auto-ozon/step-listing-submit';
-import { validateListingDraftArtifact } from '@auto-ozon/step-draft-generation';
+import { validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
 import { SqliteJobStore, type PublishReliabilityStore } from '@auto-ozon/job-store';
 
 export interface ListingSubmitOptions { run_id: string; store_id: string; artifact_store?: ArtifactStore; reliability_store?: PublishReliabilityStore; }
