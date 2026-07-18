@@ -37,6 +37,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Static checks
+        run: pnpm lint
+
+      - name: Scan tracked files for secrets
+        run: pnpm scan:secrets
+
+      - name: Audit production dependencies
+        if: runner.os == 'Linux'
+        run: pnpm audit:dependencies
+
       - name: Verify dependency graph
         run: pnpm verify:graph
 
@@ -51,6 +61,17 @@ jobs:
 
       - name: Test full suite without real Seller writes
         run: pnpm test:fast
+
+      - name: Coverage report and critical-module thresholds
+        if: runner.os == 'Linux'
+        run: pnpm test:coverage
+
+      - name: Upload coverage report
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/
 
       - name: Check build pollution
         shell: bash
