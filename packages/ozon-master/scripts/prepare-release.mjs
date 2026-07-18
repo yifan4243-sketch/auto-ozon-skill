@@ -13,7 +13,7 @@ const commit = git(['rev-parse', 'HEAD']);
 const tree = git(['rev-parse', 'HEAD^{tree}']);
 const gitRef = process.env.OZON_MASTER_RELEASE_TAG
   ?? `v${String(packageJson.version).replace('-rc.', '-rc')}`;
-const tagCommit = git(['rev-parse', `${gitRef}^{commit}`]);
+const tagCommit = git(['rev-parse', '--verify', `${gitRef}^{commit}`]);
 if (tagCommit !== commit) throw new Error(`Release tag ${gitRef} does not point to HEAD.`);
 const archive = execFileSync('git', ['archive', '--format=tar', 'HEAD'], { cwd: repositoryRoot, maxBuffer: 512 * 1024 * 1024 });
 const manifest = {

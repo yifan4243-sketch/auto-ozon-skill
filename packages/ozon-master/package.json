@@ -19,8 +19,10 @@
     "access": "public"
   },
   "scripts": {
-    "prepack": "node scripts/prepare-release.mjs",
-    "postpack": "node scripts/reset-release-manifest.mjs",
+    "prepack": "node scripts/prepare-package.mjs",
+    "release:prepare": "node scripts/prepare-release.mjs",
+    "release:verify": "node scripts/verify-release.mjs",
+    "release:reset": "node scripts/reset-release-manifest.mjs",
     "test": "node --test test/*.check.mjs",
     "pack:check": "npm pack --dry-run"
   },

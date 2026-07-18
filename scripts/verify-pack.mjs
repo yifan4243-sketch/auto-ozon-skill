@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const destination = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-ozon-pack-'));
+const statusBefore = gitStatus(root);
 try {
   const workspaces = await discover(root);
   for (const workspace of workspaces) {
@@ -15,10 +16,21 @@ try {
     const listing = execute('tar', ['-tf', path.join(destination, archive)], root);
     if (/(?:^|\/)src\//mu.test(listing)) throw new Error(`${workspace.name}: packed archive contains src/`);
     if (!/(?:^|\/)dist\//mu.test(listing) && workspace.name !== 'ozon-master') throw new Error(`${workspace.name}: packed archive does not contain dist/`);
+    const forbidden = [
+      /(?:^|\/)(?:node_modules|coverage|\.cache|\.turbo|test-results|playwright-report)(?:\/|$)/mu,
+      /(?:^|\/)(?:\.env(?:\..*)?|ozon-stores\.local\.json|state\.json|cookies?\.json|.*\.sqlite3?)(?:$|\/)/mui,
+      /(?:^|\/)(?:tests?|__tests__|fixtures?)(?:\/|$)/mui,
+    ];
+    if (forbidden.some((pattern) => pattern.test(listing))) throw new Error(`${workspace.name}: packed archive contains forbidden local, test, cache, credential, or database content`);
   }
+  const statusAfter = gitStatus(root);
+  if (statusAfter !== statusBefore) throw new Error('pack verification polluted the Git worktree');
   process.stdout.write(`verified ${workspaces.length} workspace archives\n`);
 } finally {
   await fs.rm(destination, { recursive: true, force: true });
+}
+function gitStatus(cwd) {
+  return execute('git', ['status', '--porcelain=v1', '--untracked-files=all'], cwd);
 }
 
 function execute(command, args, cwd) {

@@ -1,0 +1,36 @@
+name: Release verification
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Prepare and verify immutable release manifest
+        shell: bash
+        run: |
+          test -z "$(git status --porcelain)"
+          pnpm --dir packages/ozon-master release:prepare
+          pnpm --dir packages/ozon-master release:verify
+          pnpm --dir packages/ozon-master pack:check
+          pnpm --dir packages/ozon-master release:reset
+          test -z "$(git status --porcelain)"
