@@ -38,7 +38,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install deterministic Playwright Chromium
-        run: pnpm exec playwright install chromium
+        run: pnpm --filter @auto-ozon/adapters-1688 exec playwright install chromium
 
       - name: Static checks
         run: pnpm lint
