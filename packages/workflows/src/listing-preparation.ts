@@ -244,6 +244,13 @@ async function executeListingPreparation(
   if (Number.isFinite(earliestForce)) {
     await store.markDownstreamStale(runId, LISTING_PREPARATION_ORDER[earliestForce]!);
   }
+  const prepareRequestedStep = async (step: WorkflowStepName, value: unknown): Promise<void> => {
+    // Inputs for steps before start_from are deliberately absent on a resume.
+    // Comparing those absent values with the original execution metadata would
+    // incorrectly stale valid upstream artifacts (for example a category
+    // decision merely because its provider is not needed by draft-generation).
+    if (stepIndex(step) >= stepIndex(startFrom)) await prepareStep(context, step, value);
+  };
   const legacyDraft = await store.read<unknown>(runId, 'draft-generation', 'listing-draft-v1.json');
   const currentDraft = await store.read<unknown>(runId, 'draft-generation', 'listing-draft-v2.json');
   if (legacyDraft && !currentDraft) {
@@ -265,7 +272,7 @@ async function executeListingPreparation(
     run_id: runId,
   };
 
-  await prepareStep(context, 'source-1688', input.source);
+  await prepareRequestedStep('source-1688', input.source);
   let source = await restore<CollectedSourcingRun>(
     context,
     'source-1688',
@@ -289,7 +296,7 @@ async function executeListingPreparation(
   result.source = source;
   if (stopAfter === 'source-1688') return workflowSuccess(context, 'source-1688', result);
 
-  await prepareStep(context, 'canonicalize-product', { schema_version: 2, qualification: input.qualification ?? null });
+  await prepareRequestedStep('canonicalize-product', { schema_version: 2, qualification: input.qualification ?? null });
   let product = await restore<CanonicalProductV2>(
     context,
     'canonicalize-product',
@@ -365,7 +372,7 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'canonicalize-product', result, canonicalStatus);
   }
 
-  await prepareStep(context, 'category-decision', {
+  await prepareRequestedStep('category-decision', {
     decision_file: input.category_decision_file ?? null,
     provider: input.category_decision_provider?.constructor.name ?? null,
   });
@@ -441,7 +448,7 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'category-decision', result, categoryStatus);
   }
 
-  await prepareStep(context, 'cost-pricing', {
+  await prepareRequestedStep('cost-pricing', {
     profile: input.cost_pricing_profile,
     agent_input: input.cost_pricing_agent_input,
     package_inputs: input.cost_pricing_package_inputs,
@@ -496,7 +503,7 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'cost-pricing', result, pricingStatus);
   }
 
-  await prepareStep(context, 'category-attributes', {
+  await prepareRequestedStep('category-attributes', {
     force_refresh: Boolean(input.category_attributes?.force_refresh),
   });
   let attributes = await restore<CategoryAttributesGroupV1[]>(
@@ -526,7 +533,7 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'category-attributes', result);
   }
 
-  await prepareStep(context, 'attribute-mapping', input.attribute_mapping_agent_input);
+  await prepareRequestedStep('attribute-mapping', input.attribute_mapping_agent_input);
   let mapping = await restore<AttributeMappingV2>(
     context,
     'attribute-mapping',
@@ -599,7 +606,7 @@ async function executeListingPreparation(
     return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
   }
 
-  await prepareStep(context, 'draft-generation', {
+  await prepareRequestedStep('draft-generation', {
     profile: input.draft_generation_profile,
     image_bundle: input.image_bundle,
     image_generation: input.image_generation,

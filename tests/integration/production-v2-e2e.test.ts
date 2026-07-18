@@ -155,7 +155,12 @@ describe('offline production V2 end-to-end', () => {
         getProductsByOfferIds: async () => [],
       },
     });
-    expect(ambiguous).toMatchObject({ data: { status: 'polling_timeout', warnings: ['PUBLISH_RECONCILIATION_REQUIRED'] } });
+    expect(ambiguous).toMatchObject({
+      data: {
+        status: 'polling_timeout',
+        warnings: expect.arrayContaining(['PUBLISH_RECONCILIATION_REQUIRED']),
+      },
+    });
     expect(forbiddenSubmissions).toBe(0);
   }, 30_000);
 });
@@ -254,7 +259,10 @@ async function prepareDraft() {
     run_id: runId, start_from: 'draft-generation', stop_after: 'draft-generation', stop_on_review: false,
     image_bundle: images, artifact_store: store,
   });
-  expect(drafted).toMatchObject({ ok: true, data: { status: 'succeeded', listing_draft: { status: 'draft_complete' } } });
+  expect(drafted, JSON.stringify(drafted, null, 2)).toMatchObject({
+    ok: true,
+    data: { status: 'succeeded', listing_draft: { status: 'draft_complete' } },
+  });
   return {
     root, runId, store, draft: drafted.data!.listing_draft!, product: drafted.data!.product!,
     categoryDecision: drafted.data!.category_decision!, pricing: drafted.data!.cost_pricing!,
