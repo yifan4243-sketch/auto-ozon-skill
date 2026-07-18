@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '../../../packages/config/src/index.js';
+import { EnvSecretProvider, FileStoreRegistry, resolvePerformanceCredentials, resolveStoreCredentials } from '../../../packages/config/src/index.js';
 
 const temporary: string[] = [];
 afterEach(() => temporary.splice(0).forEach((directory) => fs.rmSync(directory, { recursive: true, force: true })));
@@ -26,6 +26,24 @@ describe('StoreRegistryV2', () => {
     expect(() => writeAndRead({ ...profile(), store_id: '../escape' })).toThrow(/STORE_ID_INVALID/u);
     expect(() => resolveStoreCredentials(profile(), new EnvSecretProvider({ OZON_CLIENT_ID_525: '999', OZON_API_KEY_525: 'key' }))).toThrow(/STORE_ID_CREDENTIAL_MISMATCH/u);
     expect(() => writeAndRead({ ...profile(), pricing: { ...profile().pricing, multiplier: undefined } })).toThrow(/requires a positive multiplier/u);
+  });
+
+  it('keeps optional Performance credentials separate from Seller credentials', () => {
+    const configured = writeAndRead({
+      ...profile(),
+      performance_credentials: {
+        client_id: { provider: 'env', key: 'OZON_PERFORMANCE_CLIENT_ID_525' },
+        client_secret: { provider: 'env', key: 'OZON_PERFORMANCE_CLIENT_SECRET_525' },
+      },
+    });
+    const provider = new EnvSecretProvider({
+      OZON_CLIENT_ID_525: '525', OZON_API_KEY_525: 'seller-key',
+      OZON_PERFORMANCE_CLIENT_ID_525: 'performance-id',
+      OZON_PERFORMANCE_CLIENT_SECRET_525: 'performance-secret',
+    });
+    expect(resolveStoreCredentials(configured, provider)).toEqual({ clientId: '525', apiKey: 'seller-key' });
+    expect(resolvePerformanceCredentials(configured, provider)).toEqual({ clientId: 'performance-id', clientSecret: 'performance-secret' });
+    expect(() => resolvePerformanceCredentials(profile(), provider)).toThrow('PERFORMANCE_CREDENTIALS_NOT_CONFIGURED');
   });
 });
 

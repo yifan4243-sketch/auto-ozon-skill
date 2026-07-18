@@ -10,7 +10,7 @@ import type {
   SetupStoreStatusV1,
 } from '@auto-ozon/contracts';
 import { resolveRepoRoot } from '@auto-ozon/artifact-store';
-import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@auto-ozon/config';
+import { EnvSecretProvider, FileStoreRegistry, resolvePerformanceCredentials, resolveStoreCredentials } from '@auto-ozon/config';
 import { loadOzonEnvironment } from '@auto-ozon/adapters-ozon';
 import { loadOzonCategoryTree } from '@auto-ozon/step-category-decision';
 import { validateImageGenerationConfig } from './image-generation-config.js';
@@ -64,19 +64,28 @@ export async function runSetupDoctor(
     const registry = new FileStoreRegistry(path.join(root, 'data', 'config', 'ozon-stores.local.json'));
     const secretProvider = new EnvSecretProvider(environment);
     for (const profile of registry.list()) {
-      let credentialsConfigured = false;
+      let sellerCredentialsConfigured = false;
+      let performanceCredentialsConfigured = false;
       try {
         resolveStoreCredentials(profile, secretProvider);
-        credentialsConfigured = true;
+        sellerCredentialsConfigured = true;
       } catch {
-        credentialsConfigured = false;
+        sellerCredentialsConfigured = false;
+      }
+      try {
+        resolvePerformanceCredentials(profile, secretProvider);
+        performanceCredentialsConfigured = true;
+      } catch {
+        performanceCredentialsConfigured = false;
       }
       stores.push({
         store_id: profile.store_id,
         store_name: profile.store_name,
         publishing_enabled: profile.publishing.enabled,
         currency_code: profile.currency_code,
-        credentials_configured: credentialsConfigured,
+        seller_credentials_configured: sellerCredentialsConfigured,
+        performance_credentials_configured: performanceCredentialsConfigured,
+        credentials_configured: sellerCredentialsConfigured,
       });
     }
     checks.push(check(
@@ -87,11 +96,20 @@ export async function runSetupDoctor(
       { store_count: stores.length },
     ));
     checks.push(check(
-      'STORE_CREDENTIALS',
-      stores.length > 0 && stores.every((store) => store.credentials_configured),
-      `${stores.filter((store) => store.credentials_configured).length}/${stores.length} store credential pair(s) resolve locally.`,
+      'STORE_SELLER_CREDENTIALS',
+      stores.length > 0 && stores.every((store) => store.seller_credentials_configured),
+      `${stores.filter((store) => store.seller_credentials_configured).length}/${stores.length} Seller credential pair(s) resolve locally.`,
       'Set each store profile client-id and API-key SecretRef in the local environment.',
     ));
+    const configuredPerformance = stores.filter((store) => store.performance_credentials_configured).length;
+    checks.push({
+      code: 'STORE_PERFORMANCE_CREDENTIALS',
+      status: configuredPerformance === stores.length && stores.length > 0 ? 'passed' : 'warning',
+      message: `${configuredPerformance}/${stores.length} Performance credential pair(s) resolve locally. Performance discovery remains available without them.`,
+      fix: configuredPerformance === stores.length && stores.length > 0
+        ? null
+        : 'Add performance_credentials SecretRefs only for stores that use authenticated Performance API calls.',
+    });
   } catch (error) {
     checks.push({
       code: 'STORE_REGISTRY',

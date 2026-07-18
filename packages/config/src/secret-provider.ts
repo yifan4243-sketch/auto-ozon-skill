@@ -19,6 +19,11 @@ export interface ResolvedStoreCredentials {
   apiKey: string;
 }
 
+export interface ResolvedPerformanceCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
 export function resolveStoreCredentials(
   profile: StoreProfileV2,
   provider: SecretProvider,
@@ -28,4 +33,15 @@ export function resolveStoreCredentials(
   if (!clientId || !apiKey) throw new Error('STORE_CREDENTIALS_MISSING');
   if (clientId !== profile.store_id) throw new Error('STORE_ID_CREDENTIAL_MISMATCH');
   return { clientId, apiKey };
+}
+
+export function resolvePerformanceCredentials(
+  profile: StoreProfileV2,
+  provider: SecretProvider,
+): ResolvedPerformanceCredentials {
+  if (!profile.performance_credentials) throw new Error('PERFORMANCE_CREDENTIALS_NOT_CONFIGURED');
+  const clientId = provider.get(profile.performance_credentials.client_id, `store:${profile.store_id}:performance-client-id`);
+  const clientSecret = provider.get(profile.performance_credentials.client_secret, `store:${profile.store_id}:performance-client-secret`);
+  if (!clientId || !clientSecret) throw new Error('PERFORMANCE_CREDENTIALS_MISSING');
+  return { clientId, clientSecret };
 }

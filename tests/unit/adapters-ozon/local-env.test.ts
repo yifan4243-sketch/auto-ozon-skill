@@ -6,6 +6,7 @@ import {
   buildOzonMcpChildEnvironment,
   buildSafeChildEnvironment,
   loadOzonEnvironment,
+  withOzonMcpCredentials,
 } from '../../../packages/adapters-ozon/src/local-env.js';
 import { sanitizeSecretText } from '../../../packages/adapters-ozon/src/config.js';
 
@@ -52,7 +53,7 @@ describe('local Ozon environment', () => {
       IMAGE_GENERATION_API_KEY: 'must-not-leak-either',
     };
     const credentials = loadOzonEnvironment(environment, 'Z:\\missing-workspace');
-    const child = buildOzonMcpChildEnvironment(credentials, environment);
+    const child = buildOzonMcpChildEnvironment(credentials, environment, 'seller');
 
     expect(child).toMatchObject({
       PATH: 'safe-path',
@@ -65,6 +66,45 @@ describe('local Ozon environment', () => {
     expect(child).not.toHaveProperty('GITHUB_TOKEN');
     expect(child).not.toHaveProperty('IMAGE_GENERATION_API_KEY');
     expect(buildSafeChildEnvironment(environment)).not.toHaveProperty('OZON_API_KEY');
+  });
+
+  it('forwards only the credential family requested by the current operation', () => {
+    const credentials = {
+      OZON_CLIENT_ID: 'seller-id', OZON_API_KEY: 'seller-key',
+      OZON_PERFORMANCE_CLIENT_ID: 'performance-id', OZON_PERFORMANCE_CLIENT_SECRET: 'performance-secret',
+    };
+    const system = { PATH: 'safe', GITHUB_TOKEN: 'never-forward' };
+    expect(buildOzonMcpChildEnvironment(credentials, system, 'seller')).toEqual({
+      PATH: 'safe', OZON_CLIENT_ID: 'seller-id', OZON_API_KEY: 'seller-key',
+    });
+    expect(buildOzonMcpChildEnvironment(credentials, system, 'performance')).toEqual({
+      PATH: 'safe', OZON_PERFORMANCE_CLIENT_ID: 'performance-id', OZON_PERFORMANCE_CLIENT_SECRET: 'performance-secret',
+    });
+    expect(buildOzonMcpChildEnvironment(credentials, system, 'both')).toMatchObject(credentials);
+    expect(buildOzonMcpChildEnvironment(credentials, system, 'none')).toEqual({ PATH: 'safe' });
+  });
+
+  it('keeps concurrent Seller and Performance scopes isolated', async () => {
+    const barrier = deferred<void>();
+    const seller = withOzonMcpCredentials({
+      OZON_CLIENT_ID: 'seller-a', OZON_API_KEY: 'key-a',
+      OZON_PERFORMANCE_CLIENT_ID: 'must-not-leak-a', OZON_PERFORMANCE_CLIENT_SECRET: 'must-not-leak-a-secret',
+    }, async () => {
+      await barrier.promise;
+      return buildOzonMcpChildEnvironment(undefined, { PATH: 'safe' });
+    }, 'seller');
+    const performance = withOzonMcpCredentials({
+      OZON_CLIENT_ID: 'must-not-leak-b', OZON_API_KEY: 'must-not-leak-b-key',
+      OZON_PERFORMANCE_CLIENT_ID: 'performance-b', OZON_PERFORMANCE_CLIENT_SECRET: 'secret-b',
+    }, async () => {
+      barrier.resolve(undefined);
+      await Promise.resolve();
+      return buildOzonMcpChildEnvironment(undefined, { PATH: 'safe' });
+    }, 'performance');
+    await expect(Promise.all([seller, performance])).resolves.toEqual([
+      { PATH: 'safe', OZON_CLIENT_ID: 'seller-a', OZON_API_KEY: 'key-a' },
+      { PATH: 'safe', OZON_PERFORMANCE_CLIENT_ID: 'performance-b', OZON_PERFORMANCE_CLIENT_SECRET: 'secret-b' },
+    ]);
   });
 
   it('redacts dynamically named store credentials', () => {
@@ -80,3 +120,9 @@ describe('local Ozon environment', () => {
     }
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}

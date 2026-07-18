@@ -45,12 +45,12 @@ export function registerOzonCommands(
   ozon.hook('preAction', () => {
     const storeId = ozon.opts().storeId as string | undefined;
     if (!storeId) {
-      setOzonMcpCommandCredentials({});
+      setOzonMcpCommandCredentials({}, 'none');
       return;
     }
     const profile = new FileStoreRegistry().get(storeId);
     const credentials = resolveStoreCredentials(profile, new EnvSecretProvider(loadOzonEnvironment()));
-    setOzonMcpCommandCredentials({ OZON_CLIENT_ID: credentials.clientId, OZON_API_KEY: credentials.apiKey });
+    setOzonMcpCommandCredentials({ OZON_CLIENT_ID: credentials.clientId, OZON_API_KEY: credentials.apiKey }, 'seller');
   });
 
   ozon

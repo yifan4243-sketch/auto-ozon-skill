@@ -13,6 +13,11 @@ export interface StoreProfileV2 {
     client_id: SecretRefV1;
     api_key: SecretRefV1;
   };
+  /** Optional and distinct from Seller API credentials. */
+  performance_credentials?: {
+    client_id: SecretRefV1;
+    client_secret: SecretRefV1;
+  };
   publishing: {
     enabled: boolean;
     automation_level: 'automatic';

@@ -2,12 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-const LOCAL_OZON_KEYS = [
+const SELLER_OZON_KEYS = [
   'OZON_CLIENT_ID',
   'OZON_API_KEY',
+] as const;
+const PERFORMANCE_OZON_KEYS = [
   'OZON_PERFORMANCE_CLIENT_ID',
   'OZON_PERFORMANCE_CLIENT_SECRET',
 ] as const;
+const LOCAL_OZON_KEYS = [...SELLER_OZON_KEYS, ...PERFORMANCE_OZON_KEYS] as const;
 
 const SAFE_CHILD_ENV_KEYS = [
   'PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP',
@@ -15,8 +18,11 @@ const SAFE_CHILD_ENV_KEYS = [
 ] as const;
 
 const OZON_CREDENTIAL_KEY = /^OZON_(?:CLIENT_ID|API_KEY)(?:_[A-Za-z0-9_]+)?$|^OZON_PERFORMANCE_(?:CLIENT_ID|CLIENT_SECRET)(?:_[A-Za-z0-9_]+)?$/u;
-const credentialScope = new AsyncLocalStorage<Record<string, string>>();
+export type OzonCredentialPurposeV1 = 'none' | 'seller' | 'performance' | 'both';
+interface OzonCredentialScopeV1 { credentials: Record<string, string>; purpose: OzonCredentialPurposeV1 }
+const credentialScope = new AsyncLocalStorage<OzonCredentialScopeV1>();
 let commandCredentials: Record<string, string> = {};
+let commandPurpose: OzonCredentialPurposeV1 = 'none';
 
 export function loadOzonEnvironment(
   env: NodeJS.ProcessEnv = process.env,
@@ -43,9 +49,10 @@ export function loadOzonEnvironment(
 export function buildOzonMcpChildEnvironment(
   credentials: Record<string, string> = getActiveOzonMcpCredentials(),
   systemEnvironment: NodeJS.ProcessEnv = process.env,
+  purpose: OzonCredentialPurposeV1 = getActiveOzonMcpCredentialPurpose(),
 ): Record<string, string> {
   const child = buildSafeChildEnvironment(systemEnvironment);
-  for (const key of LOCAL_OZON_KEYS) {
+  for (const key of credentialKeysForPurpose(purpose)) {
     const value = credentials[key];
     if (value) child[key] = value;
   }
@@ -60,19 +67,35 @@ export function buildOzonMcpChildEnvironment(
 export function withOzonMcpCredentials<T>(
   credentials: Record<string, string>,
   operation: () => Promise<T>,
+  purpose: OzonCredentialPurposeV1 = 'seller',
 ): Promise<T> {
-  return credentialScope.run(selectStandardMcpCredentials(credentials), operation);
+  return credentialScope.run({ credentials: selectStandardMcpCredentials(credentials), purpose }, operation);
 }
 
 /** CLI processes execute one command. This setter is cleared/replaced by the
  * `ozon` parent command before its child action starts. Library workflows use
  * `withOzonMcpCredentials` instead. */
-export function setOzonMcpCommandCredentials(credentials: Record<string, string>): void {
+export function setOzonMcpCommandCredentials(
+  credentials: Record<string, string>,
+  purpose: OzonCredentialPurposeV1 = 'both',
+): void {
   commandCredentials = selectStandardMcpCredentials(credentials);
+  commandPurpose = purpose;
 }
 
 export function getActiveOzonMcpCredentials(): Record<string, string> {
-  return { ...(credentialScope.getStore() ?? commandCredentials) };
+  return { ...(credentialScope.getStore()?.credentials ?? commandCredentials) };
+}
+
+export function getActiveOzonMcpCredentialPurpose(): OzonCredentialPurposeV1 {
+  return credentialScope.getStore()?.purpose ?? commandPurpose;
+}
+
+function credentialKeysForPurpose(purpose: OzonCredentialPurposeV1): readonly string[] {
+  if (purpose === 'seller') return SELLER_OZON_KEYS;
+  if (purpose === 'performance') return PERFORMANCE_OZON_KEYS;
+  if (purpose === 'both') return LOCAL_OZON_KEYS;
+  return [];
 }
 
 export function buildSafeChildEnvironment(

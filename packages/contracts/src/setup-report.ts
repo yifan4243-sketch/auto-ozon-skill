@@ -13,6 +13,9 @@ export interface SetupStoreStatusV1 {
   store_name: string;
   publishing_enabled: boolean;
   currency_code: 'CNY' | 'RUB';
+  seller_credentials_configured: boolean;
+  performance_credentials_configured: boolean;
+  /** @deprecated Use seller_credentials_configured. */
   credentials_configured: boolean;
 }
 
