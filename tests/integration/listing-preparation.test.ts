@@ -16,7 +16,7 @@ afterEach(async () => {
 describe('listing-preparation workflow', () => {
   it('runs canonical through attribute mapping and reuses completed artifacts', async () => {
     const { store, runId } = await seededSourceRun();
-    const getAttributes = vi.fn(async () => ({ result: [] }));
+    const getAttributes = vi.fn(async () => ({ result: contentAttributes() }));
     const transport = {
       getAttributes,
       getAttributeValuesPage: vi.fn(async () => ({ result: [], has_next: false })),
@@ -30,6 +30,7 @@ describe('listing-preparation workflow', () => {
       category_attributes: { transport },
       cost_pricing_fx_rate: testFxRate(),
       cost_pricing_agent_input: testPricingAgentInput(),
+      attribute_mapping_agent_input: testAttributeAgentInput(),
       stop_after: 'attribute-mapping',
       stop_on_review: false,
       artifact_store: store,
@@ -53,7 +54,7 @@ describe('listing-preparation workflow', () => {
       'attribute-mapping': { status: 'succeeded' },
     });
     await expect(
-      store.exists(runId, 'attribute-mapping', 'attribute-mapping-v1.json'),
+      store.exists(runId, 'attribute-mapping', 'attribute-mapping-v2.json'),
     ).resolves.toBe(true);
 
     getAttributes.mockClear();
@@ -78,6 +79,7 @@ describe('listing-preparation workflow', () => {
       category_decision_provider: provider,
       category_attributes: { transport },
       cost_pricing_fx_rate: testFxRate(),
+      attribute_mapping_agent_input: testAttributeAgentInput(),
       force_steps: ['category-attributes'],
       stop_after: 'attribute-mapping',
       stop_on_review: false,
@@ -251,6 +253,50 @@ function testPricingAgentInput() {
       height_cm: 10,
       rationale: 'Integration fixture estimate.',
       evidence: ['fixture package dimensions'],
+    }],
+  };
+}
+
+function contentAttributes() {
+  return [4180, 4191, 23171].map((id) => ({
+    id,
+    name: id === 4180 ? '名称' : id === 4191 ? '简介' : '#主题标签',
+    description: '',
+    type: 'String',
+    is_required: false,
+    is_collection: false,
+    is_aspect: false,
+    dictionary_id: 0,
+    group_id: 1,
+    group_name: '基本属性',
+    category_dependent: true,
+  }));
+}
+
+function testAttributeAgentInput() {
+  const evidence = [{ source: 'canonical_v2' as const, field: 'product.title_zh', value: '加厚塑料收纳盒 家用透明整理箱' }];
+  const paragraphs = Array.from({ length: 4 }, () =>
+    'Контейнер для хранения описан по сохранённому названию поставщика как прозрачное изделие для домашней организации вещей без дополнительных неподтверждённых характеристик.');
+  return {
+    source_offer_id: '123456789',
+    sku_inputs: [{
+      source_sku_id: 'sku-1',
+      attributes: [
+        { attribute_id: 4180, values: [{ value: 'Прозрачный контейнер для хранения' }], confidence: 'high' as const, evidence },
+        {
+          attribute_id: 4191,
+          values: [{ value: paragraphs.join('\n\n') }],
+          confidence: 'high' as const,
+          evidence,
+          content_claims: paragraphs.map((claim_text) => ({ claim_text, evidence })),
+        },
+        {
+          attribute_id: 23171,
+          values: [{ value: Array.from({ length: 20 }, (_, index) => `#контейнер_${index + 1}`).join(' ') }],
+          confidence: 'high' as const,
+          evidence,
+        },
+      ],
     }],
   };
 }

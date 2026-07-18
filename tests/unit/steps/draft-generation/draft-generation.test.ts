@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { runDraftGeneration } from '../../../../packages/steps/draft-generation/src/index.js';
 
 function input(includeTimestamp = true) {
+  const description = Array.from({ length: 4 }, () =>
+    'Керамическая дорожная кружка описана только по сохранённым данным поставщика и отличается цветовым вариантом.').join('\n\n');
   const attributes = [
     { id: 4180, complex_id: 0, values: [{ value: 'Кружка дорожная' }] },
-    { id: 4191, complex_id: 0, values: [{ value: 'Описание из шага заполнения.' }] },
+    { id: 4191, complex_id: 0, values: [{ value: description }] },
     { id: 4383, complex_id: 0, values: [{ value: '300' }] },
     { id: 4497, complex_id: 0, values: [{ value: '350' }] },
     ...(includeTimestamp ? [{ id: 9048, complex_id: 0, values: [{ value: '20260716130000' }] }] : []),
@@ -12,14 +14,30 @@ function input(includeTimestamp = true) {
   ];
   return {
     product: {
+      schema_version: 2,
       source: { offer_id: '1688-offer', collected_at: '2026-07-16T00:00:00.000Z' },
       product: { main_image: 'https://img.example.com/main.jpg', gallery_images: ['https://img.example.com/main.jpg', 'https://img.example.com/second.jpg'] },
       skus: [{ source_sku_id: 'red', image: 'https://img.example.com/red.jpg' }],
     },
-    category_decision: { status: 'decided', source_offer_id: '1688-offer' },
+    category_decision: {
+      schema_version: 1,
+      status: 'decided',
+      source_offer_id: '1688-offer',
+      category_snapshot: {
+        schema_version: 1, source: 'ozon-seller-api',
+        captured_at: '2026-07-16T00:00:00.000Z', valid_from: '2026-07-16T00:00:00.000Z',
+        valid_to: '2026-07-23T00:00:00.000Z', sha256: 'b'.repeat(64),
+      },
+    },
     category_attributes: [{
       group_ids: ['group-1'], category: { description_category_id: 10, type_id: 20 },
-      attributes_schema: { attributes: [
+      attributes_schema: {
+        snapshot: {
+          schema_version: 1, source: 'ozon-seller-api',
+          captured_at: '2026-07-16T00:00:00.000Z', valid_from: '2026-07-16T00:00:00.000Z',
+          valid_to: '2026-07-23T00:00:00.000Z', sha256: 'a'.repeat(64),
+        },
+        attributes: [
         { id: 4180, dictionary_id: 0, values: [] }, { id: 4191, dictionary_id: 0, values: [] },
         { id: 4383, dictionary_id: 0, values: [] }, { id: 4497, dictionary_id: 0, values: [] },
         { id: 10096, dictionary_id: 1, values: [{ id: 7, value: 'Многоцветный' }] },
@@ -30,9 +48,27 @@ function input(includeTimestamp = true) {
       source_sku_id: 'red', final_price_cny: 25, package: { actual_weight_g: 300, length_cm: 20, width_cm: 10, height_cm: 8 },
       weight_facts: { semantics: 'legacy-cost-base-v1', draft_weight_g: 300 },
     }] },
-    attribute_mapping: { source_offer_id: '1688-offer', status: 'completed', sku_attributes: [{
+    attribute_mapping: { schema_version: 2, source_offer_id: '1688-offer', status: 'completed', sku_attributes: [{
       source_sku_id: 'red', group_id: 'group-1', description_category_id: 10, type_id: 20, ozon_attributes: attributes,
     }] },
+    content_bundle: {
+      schema_version: 1,
+      source_offer_id: '1688-offer',
+      status: 'completed',
+      sku_content: [{
+        source_sku_id: 'red',
+        title_ru: 'Кружка дорожная',
+        description_ru: description,
+        hashtags_ru: Array.from({ length: 20 }, (_, index) => `#кружка_${index + 1}`),
+        confidence: 'high',
+        evidence_refs: [{ json_pointer: '/canonical_v2/product/title_zh', value: '陶瓷杯' }],
+        claims: description.split('\n\n').map((claim_text) => ({
+          claim_text,
+          evidence_refs: [{ json_pointer: '/canonical_v2/product/title_zh', value: '陶瓷杯' }],
+        })),
+      }],
+      errors: [],
+    },
   } as never;
 }
 

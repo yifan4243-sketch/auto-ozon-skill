@@ -88,7 +88,7 @@ describe('CLI registration', () => {
 
   it('does not register dropped command groups', () => {
     const program = buildProgram();
-    expect(program.commands.map((command) => command.name())).toEqual(['1688', 'source', 'ozon', 'workflow']);
+    expect(program.commands.map((command) => command.name())).toEqual(['1688', 'source', 'ozon', 'setup', 'review-console', 'workflow']);
     const dropped = ['serve', 'research', 'compare', 'supplier', 'cart', 'checkout', 'order', 'seller', 'feedback'];
     for (const name of dropped) {
       expect(findCommand(program, name)).toBeUndefined();

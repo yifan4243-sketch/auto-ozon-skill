@@ -5,6 +5,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 const LOCAL_OZON_KEYS = [
   'OZON_CLIENT_ID',
   'OZON_API_KEY',
+  'OZON_PERFORMANCE_CLIENT_ID',
+  'OZON_PERFORMANCE_CLIENT_SECRET',
 ] as const;
 
 const SAFE_CHILD_ENV_KEYS = [

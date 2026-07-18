@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AuthorizationRecordV1, CommandResult, ListingDraftV2, OutboxRecordV1, OzonPublishResultV1, PreflightReportV1, PublishIntentV1, SellerImportTransportV1, StorePublishProfileV1 } from '@auto-ozon/contracts';
 import { assertWorkflowActive, type WorkflowContext } from '@auto-ozon/artifact-store';
 import type { PublishReliabilityStore } from '@auto-ozon/job-store';
+import { validateListingDraftArtifact } from '@auto-ozon/step-draft-generation';
 
 const AMBIGUOUS_SUBMISSION_GRACE_MS = 10 * 60_000;
 const NEGATIVE_RECONCILIATION_GAP_MS = 60_000;
@@ -16,6 +17,28 @@ export interface RunListingSubmitInput {
 export async function runListingSubmit(input: RunListingSubmitInput, context?: WorkflowContext): Promise<CommandResult<OzonPublishResultV1>> {
   try {
     if (context) { assertWorkflowActive(context); await context.artifact_store.updateStep(context.run_id, 'listing-submit', { status: 'running' }); }
+    const draftValidation = validateListingDraftArtifact(input.draft);
+    if (!draftValidation.ok) {
+      if (context) await context.artifact_store.updateStep(context.run_id, 'listing-submit', {
+        status: 'blocked',
+        error: {
+          code: draftValidation.code,
+          message: draftValidation.errors.join('; '),
+          recoverable: true,
+        },
+      });
+      return {
+        ok: false,
+        command: 'listing.submit',
+        warnings: [],
+        errors: [{
+          code: draftValidation.code,
+          message: draftValidation.errors.join('; '),
+          recoverable: true,
+        }],
+        nextActions: ['Regenerate a valid ListingDraftV2 before publishing.'],
+      };
+    }
     const result = await submit(input);
     if (context) { const output = await context.artifact_store.write(context.run_id, 'listing-submit', 'ozon-publish-result-v1.json', result); await context.artifact_store.updateStep(context.run_id, 'listing-submit', { status: result.status === 'completed' ? 'succeeded' : result.status === 'partial_failed' || result.status === 'polling_timeout' ? 'needs_review' : 'blocked', output }); }
     return { ok: result.status === 'completed' || result.status === 'partial_failed' || result.status === 'polling_timeout', command: 'listing.submit', data: result, warnings: result.warnings.map((message) => ({ code: 'OZON_PUBLISH_WARNING', message })), errors: result.errors.map((message) => ({ code: 'OZON_PUBLISH_FAILED', message, recoverable: true })), nextActions: result.status === 'polling_timeout' ? ['Run workflow listing resume with the same run and store ID.'] : [] };

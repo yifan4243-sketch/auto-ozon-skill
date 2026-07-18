@@ -1,8 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source_offer_id": "900000000010",
   "status": "completed",
   "weight_semantics": "legacy-cost-base-v1",
+  "category_snapshot_refs": [
+    {
+      "group_id": "main",
+      "description_category_id": 17027931,
+      "type_id": 94600,
+      "captured_at": "2026-07-13T00:00:00.000Z",
+      "valid_to": "2026-07-20T00:00:00.000Z",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
   "common_attributes": [
     {
       "group_id": "main",
@@ -11,7 +21,8 @@
         "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }],
         "provenance": "default",
         "confidence": "medium",
-        "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }]
+        "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }],
+        "audit": { "source_path": "/policy/no brand policy", "raw_value": "无品牌", "normalized_values": ["无品牌"], "mapping_method": "default", "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
       }
     }
   ],
@@ -37,14 +48,16 @@
           "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }],
           "provenance": "default",
           "confidence": "medium",
-          "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }]
+          "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }],
+          "audit": { "source_path": "/policy/no brand policy", "raw_value": "无品牌", "normalized_values": ["无品牌"], "mapping_method": "default", "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
         },
         {
           "attribute_id": 10096,
           "values": [{ "dictionary_value_id": 1001, "value": "红色" }],
           "provenance": "source",
           "confidence": "high",
-          "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "红色" }]
+          "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "红色" }],
+          "audit": { "source_path": "/canonical_v2/sku.specs.颜色", "raw_value": "红色", "normalized_values": ["红色"], "mapping_method": "source", "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
         }
       ],
       "ozon_attributes": [
@@ -63,14 +76,16 @@
           "values": [{ "dictionary_value_id": 126745801, "value": "无品牌" }],
           "provenance": "default",
           "confidence": "medium",
-          "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }]
+          "evidence": [{ "source": "policy", "field": "no brand policy", "value": "无品牌" }],
+          "audit": { "source_path": "/policy/no brand policy", "raw_value": "无品牌", "normalized_values": ["无品牌"], "mapping_method": "default", "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
         },
         {
           "attribute_id": 10096,
           "values": [{ "dictionary_value_id": 1002, "value": "蓝色" }],
           "provenance": "source",
           "confidence": "high",
-          "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "蓝色" }]
+          "evidence": [{ "source": "canonical_v2", "field": "sku.specs.颜色", "value": "蓝色" }],
+          "audit": { "source_path": "/canonical_v2/sku.specs.颜色", "raw_value": "蓝色", "normalized_values": ["蓝色"], "mapping_method": "source", "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
         }
       ],
       "ozon_attributes": [

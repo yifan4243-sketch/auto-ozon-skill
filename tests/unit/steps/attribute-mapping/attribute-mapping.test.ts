@@ -67,20 +67,20 @@ describe('runAttributeMapping', () => {
     expect(validateAttributeMappingSchema(result.data)).toEqual({ valid: true, errors: [] });
   });
 
-  it('blocks missing required attributes', async () => {
+  it('returns needs_review and explicit current-Agent tasks when Agent input is missing', async () => {
     const fixture = inputFixture();
     fixture.agent_input = undefined;
     const result = await runAttributeMapping(fixture);
 
-    expect(result.ok).toBe(false);
-    expect(result.data?.status).toBe('blocked');
+    expect(result.ok).toBe(true);
+    expect(result.data?.status).toBe('needs_review');
     expect(result.data?.missing_required_attributes).toEqual(expect.arrayContaining([
       expect.objectContaining({ attribute_id: 4180, source_sku_ids: ['red'] }),
       expect.objectContaining({ attribute_id: 8229, source_sku_ids: ['red'] }),
       expect.objectContaining({ attribute_id: 23171, source_sku_ids: ['blue'] }),
     ]));
     expect(result.data?.agent_tasks.length).toBeGreaterThan(0);
-    expect(result.errors.map((error) => error.code)).toContain('MISSING_REQUIRED_ATTRIBUTES');
+    expect(result.warnings.map((warning) => warning.code)).toContain('AGENT_INPUT_REQUIRED');
     expect(validateAttributeMappingSchema(result.data).valid).toBe(true);
   });
 
@@ -136,11 +136,11 @@ describe('runAttributeMapping', () => {
     expect(await store.exists(
       'mapping-run',
       'attribute-mapping',
-      'attribute-mapping-v1.json',
+      'attribute-mapping-v2.json',
     )).toBe(true);
     expect((await store.readManifest('mapping-run'))?.steps['attribute-mapping']).toMatchObject({
       status: 'succeeded',
-      output: '06-attribute-mapping/attempt-0001/attribute-mapping-v1.json',
+      output: '06-attribute-mapping/attempt-0001/attribute-mapping-v2.json',
     });
   });
 
@@ -229,7 +229,7 @@ describe('runAttributeMapping', () => {
     const result = await runAttributeMapping(fixture);
     expect(result.ok).toBe(true);
     expect(result.data?.status).toBe('completed');
-    expect(result.warnings.map((warning) => warning.code)).toContain('SOURCE_BRAND_OVERRIDDEN_NO_BRAND');
+    expect(result.warnings.map((warning) => warning.code)).toContain('SOURCE_BRAND_OVERRIDDEN_BY_POLICY');
     expect(result.data?.sku_attributes.every((sku) => sku.attributes.some((attribute) =>
       attribute.attribute_id === 85 && attribute.values[0]?.dictionary_value_id === 126745801,
     ))).toBe(true);
@@ -301,6 +301,14 @@ function inputFixture(): {
   };
   const category_decision: CategoryDecisionV1 = {
     schema_version: 1,
+    category_snapshot: {
+      schema_version: 1,
+      source: 'ozon-seller-api',
+      captured_at: '2026-07-13T00:00:00.000Z',
+      valid_from: '2026-07-13T00:00:00.000Z',
+      valid_to: '2026-07-20T00:00:00.000Z',
+      sha256: 'b'.repeat(64),
+    },
     source_offer_id: product.source.offer_id,
     product_understanding: { summary_zh: '陶瓷杯', product_family_zh: '杯具', evidence: [] },
     representative_sku_ids: ['red'],
@@ -329,6 +337,14 @@ function inputFixture(): {
       language: 'ZH_HANS',
       ok: true,
       fetched_at: '2026-07-13T00:00:00.000Z',
+      snapshot: {
+        schema_version: 1,
+        source: 'ozon-seller-api',
+        captured_at: '2026-07-13T00:00:00.000Z',
+        valid_from: '2026-07-13T00:00:00.000Z',
+        valid_to: '2026-07-20T00:00:00.000Z',
+        sha256: 'a'.repeat(64),
+      },
       category: {
         description_category_id: selected.description_category_id,
         type_id: selected.type_id,
@@ -417,12 +433,19 @@ function agentAttributes(sourceSkuId: string): AttributeMappingAgentInputV1['sku
     ? { dictionary_value_id: 1, value: '红色' }
     : { dictionary_value_id: 2, value: '蓝色' };
   const descriptionParagraph = 'Керамическая чашка предназначена для ежедневного использования дома и в офисе. Форма изделия удобна для горячих и прохладных напитков, а характеристики основаны на данных поставщика. ';
-  const description = Array.from({ length: 4 }, () => descriptionParagraph).join('\n');
+  const paragraphs = Array.from({ length: 4 }, () => descriptionParagraph.trim());
+  const description = paragraphs.join('\n\n');
   const hashtags = Array.from({ length: 20 }, (_, index) => `#чашка_${index + 1}`).join(' ');
-  const evidence = [{ source: 'agent_input' as const, field: 'retained 1688 facts', value: sourceSkuId }];
+  const evidence = [{ source: 'canonical_v2' as const, field: 'product.title_zh', value: '陶瓷杯' }];
   return [
     { attribute_id: 4180, values: [{ value: `Чашка керамическая ${sourceSkuId === 'red' ? 'красная' : 'синяя'}` }], confidence: 'high', evidence },
-    { attribute_id: 4191, values: [{ value: description }], confidence: 'high', evidence },
+    {
+      attribute_id: 4191,
+      values: [{ value: description }],
+      confidence: 'high',
+      evidence,
+      content_claims: paragraphs.map((claim_text) => ({ claim_text, evidence })),
+    },
     { attribute_id: 8229, values: [{ dictionary_value_id: 30, value: '茶杯' }], confidence: 'high', evidence },
     { attribute_id: 10096, values: [color], confidence: 'high', evidence },
     { attribute_id: 23171, values: [{ value: hashtags }], confidence: 'high', evidence },

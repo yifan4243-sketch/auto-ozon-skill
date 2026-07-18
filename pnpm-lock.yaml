@@ -259,6 +259,9 @@ importers:
       '@auto-ozon/job-store':
         specifier: workspace:*
         version: link:../../job-store
+      '@auto-ozon/step-draft-generation':
+        specifier: workspace:*
+        version: link:../draft-generation
 
   packages/steps/source-1688:
     dependencies:

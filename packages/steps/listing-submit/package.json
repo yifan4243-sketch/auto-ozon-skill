@@ -18,7 +18,8 @@
   "dependencies": {
     "@auto-ozon/artifact-store": "workspace:*",
     "@auto-ozon/contracts": "workspace:*",
-    "@auto-ozon/job-store": "workspace:*"
+    "@auto-ozon/job-store": "workspace:*",
+    "@auto-ozon/step-draft-generation": "workspace:*"
   },
   "files": [
     "dist"

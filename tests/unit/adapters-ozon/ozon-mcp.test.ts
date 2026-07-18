@@ -82,6 +82,8 @@ describe('ozon doctor', () => {
       }),
     });
 
+    const { loadOzonEnvironment, setOzonMcpCommandCredentials } = await import('../../../packages/adapters-ozon/src/local-env.js');
+    setOzonMcpCommandCredentials(loadOzonEnvironment());
     const { ozonDoctor } = await import('../../../packages/adapters-ozon/src/client.js');
     const result = await ozonDoctor();
     const serialized = JSON.stringify(result);

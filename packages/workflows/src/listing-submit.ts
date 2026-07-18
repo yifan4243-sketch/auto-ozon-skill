@@ -4,6 +4,7 @@ import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@
 import { OzonSellerImportClient } from '@auto-ozon/adapters-ozon';
 import { loadOzonEnvironment } from '@auto-ozon/adapters-ozon';
 import { runListingSubmit, validatePublishPreflight, stableHash } from '@auto-ozon/step-listing-submit';
+import { validateListingDraftArtifact } from '@auto-ozon/step-draft-generation';
 import { SqliteJobStore, type PublishReliabilityStore } from '@auto-ozon/job-store';
 
 export interface ListingSubmitOptions { run_id: string; store_id: string; artifact_store?: ArtifactStore; reliability_store?: PublishReliabilityStore; }
@@ -18,13 +19,24 @@ export async function runListingPublish(options: ListingSubmitOptions): Promise<
 }
 
 async function runListingPublishLocked(options: ListingSubmitOptions, store: ArtifactStore): Promise<CommandResult<OzonPublishResultV1>> {
-  const draft = await store.read<ListingDraftV2>(options.run_id, 'draft-generation', 'listing-draft-v2.json');
-  if (!draft) {
+  const manifestBeforeDraft = await store.readManifest(options.run_id);
+  const draftArtifactRecorded = Boolean(manifestBeforeDraft?.steps['draft-generation'].artifacts.some((artifact) =>
+    artifact.path.endsWith('/listing-draft-v2.json')));
+  const draftValue = await store.read<unknown>(options.run_id, 'draft-generation', 'listing-draft-v2.json');
+  if (!draftValue) {
+    if (draftArtifactRecorded) {
+      return failed('DRAFT_ARTIFACT_CORRUPTED', 'The recorded ListingDraftV2 artifact is unreadable or its size/SHA-256 no longer matches the manifest.');
+    }
     const legacy = await store.read<unknown>(options.run_id, 'draft-generation', 'listing-draft-v1.json');
     return legacy
       ? failed('LEGACY_DRAFT_CONTRACT_UNSUPPORTED', 'ListingDraftV1 is read-only and cannot be published. Start a new ListingDraftV2 run.')
       : failed('LISTING_DRAFT_MISSING', 'A completed ListingDraftV2 is required before publishing.');
   }
+  const draftValidation = validateListingDraftArtifact(draftValue);
+  if (!draftValidation.ok) {
+    return failed(draftValidation.code, draftValidation.errors.join('; '));
+  }
+  const draft: ListingDraftV2 = draftValidation.value;
   let profile: StorePublishProfileV1;
   let storeProfile: StoreProfileV2;
   let clientId: string;
@@ -49,7 +61,7 @@ async function runListingPublishLocked(options: ListingSubmitOptions, store: Art
     const code = error instanceof Error ? error.message : 'STORE_PROFILE_INVALID';
     return failed(code, 'The selected local store profile or its credentials are invalid.');
   }
-  const manifest = await store.readManifest(options.run_id);
+  const manifest = manifestBeforeDraft;
   await store.prepareStep(options.run_id, 'listing-submit', {
     input_hash: hashWorkflowValue({ store_id: options.store_id, draft }),
     dependency_hashes: manifest?.steps['draft-generation'].artifacts.length

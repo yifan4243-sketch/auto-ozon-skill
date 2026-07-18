@@ -17,6 +17,9 @@
     },
     {
       "path": "../../job-store"
+    },
+    {
+      "path": "../draft-generation"
     }
   ]
 }

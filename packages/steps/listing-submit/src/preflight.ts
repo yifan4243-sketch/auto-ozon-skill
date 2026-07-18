@@ -12,9 +12,10 @@ import type {
   PreflightReportV1,
   StoreProfileV2,
 } from '@auto-ozon/contracts';
+import { validateListingDraftArtifact } from '@auto-ozon/step-draft-generation';
 
 export function validatePublishPreflight(input: {
-  run_id: string; draft: ListingDraftV2; store: StoreProfileV2;
+  run_id: string; draft: unknown; store: StoreProfileV2;
   product?: CanonicalProductV2 | null; category_decision?: CategoryDecisionV1 | null;
   pricing?: CostPricingV1 | null; attributes?: AttributeMappingV2 | null;
   category_attributes?: CategoryAttributesGroupV1[] | null; content?: ContentBundleV1 | null;
@@ -22,30 +23,44 @@ export function validatePublishPreflight(input: {
   pending_item_count?: number; now?: string;
 }): PreflightReportV1 {
   const checks: PreflightCheckV1[] = [];
-  check(checks, 'DRAFT_SCHEMA', input.draft.schema_version === 2, '发布只接受 ListingDraftV2。');
-  check(checks, 'DRAFT_STATUS', input.draft.status === 'draft_complete', '草稿必须为 draft_complete。');
-  check(checks, 'DRAFT_ITEMS', input.draft.items.length > 0, '草稿必须至少包含一个 SKU。');
+  const draftValidation = validateListingDraftArtifact(input.draft);
+  if (!draftValidation.ok) {
+    check(checks, 'DRAFT_SCHEMA', false, `${draftValidation.code}: ${draftValidation.errors.join('; ')}`);
+    return {
+      schema_version: 1,
+      run_id: input.run_id,
+      store_id: input.store.store_id,
+      draft_sha256: stableHash(input.draft),
+      checked_at: input.now ?? new Date().toISOString(),
+      status: 'blocked',
+      checks,
+    };
+  }
+  const draft = draftValidation.value;
+  check(checks, 'DRAFT_SCHEMA', true, '发布只接受 ListingDraftV2。');
+  check(checks, 'DRAFT_STATUS', draft.status === 'draft_complete', '草稿必须为 draft_complete。');
+  check(checks, 'DRAFT_ITEMS', draft.items.length > 0, '草稿必须至少包含一个 SKU。');
   check(checks, 'PUBLISHING_ENABLED', input.store.publishing.enabled, '店铺必须预先启用自动发布。');
-  check(checks, 'BATCH_LIMIT', input.draft.items.length <= input.store.publishing.max_items_per_batch, '草稿 SKU 数不能超过店铺单批上限。');
-  check(checks, 'DAILY_LIMIT', (input.daily_succeeded_count ?? 0) + (input.pending_item_count ?? input.draft.items.length) <= input.store.publishing.daily_listing_limit, '店铺当天成功数量加本批待提交 SKU 数不能超过每日上限。');
-  check(checks, 'CURRENCY', input.draft.items.every((item) => item.currency_code === input.store.currency_code), '草稿币种必须匹配店铺币种。');
-  const offerIds = input.draft.items.map((item) => item.offer_id);
+  check(checks, 'BATCH_LIMIT', draft.items.length <= input.store.publishing.max_items_per_batch, '草稿 SKU 数不能超过店铺单批上限。');
+  check(checks, 'DAILY_LIMIT', (input.daily_succeeded_count ?? 0) + (input.pending_item_count ?? draft.items.length) <= input.store.publishing.daily_listing_limit, '店铺当天成功数量加本批待提交 SKU 数不能超过每日上限。');
+  check(checks, 'CURRENCY', draft.items.every((item) => item.currency_code === input.store.currency_code), '草稿币种必须匹配店铺币种。');
+  const offerIds = draft.items.map((item) => item.offer_id);
   check(checks, 'OFFER_ID_UNIQUE', new Set(offerIds).size === offerIds.length, 'offer_id 必须唯一。', offerIds);
   const allowed = new Set(input.store.publishing.allowed_description_category_ids);
-  check(checks, 'CATEGORY_ALLOWLIST', allowed.size === 0 || input.draft.items.every((item) => allowed.has(item.description_category_id)), '类目必须在店铺允许列表中。');
-  check(checks, 'PRICE', input.draft.items.every((item) => /^\d+(?:\.\d{1,2})?$/u.test(item.price) && Number(item.price) > 0), '价格必须是正数且最多两位小数。');
-  check(checks, 'WEIGHT_DIMENSIONS', input.draft.items.every((item) => item.weight > 3 && item.depth > 0 && item.width > 0 && item.height > 0), '重量和尺寸必须有效。');
-  check(checks, 'IMAGES', input.draft.items.every((item) => item.images.length > 0 && item.images.includes(item.primary_image)), '每个 SKU 必须有图片且主图属于图片数组。');
-  check(checks, 'PRIMARY_IMAGE_FIRST', input.draft.items.every((item) => item.primary_image === item.images[0]), '每个 SKU 的主图必须是构建完成后的 images[0]。');
-  check(checks, 'SKU_BINDINGS', validSkuBindings(input.draft), '草稿必须保留完整且唯一的 source_sku_id 到 offer_id 绑定。');
-  check(checks, 'ATTRIBUTES', Boolean(input.category_attributes?.length) && input.draft.items.every((item) => invalidAttributeIds(item, input.category_attributes!).length === 0), '当前类目快照中的必填属性和字典值必须完整有效。');
+  check(checks, 'CATEGORY_ALLOWLIST', allowed.size === 0 || draft.items.every((item) => allowed.has(item.description_category_id)), '类目必须在店铺允许列表中。');
+  check(checks, 'PRICE', draft.items.every((item) => /^\d+(?:\.\d{1,2})?$/u.test(item.price) && Number(item.price) > 0), '价格必须是正数且最多两位小数。');
+  check(checks, 'WEIGHT_DIMENSIONS', draft.items.every((item) => item.weight > 3 && item.depth > 0 && item.width > 0 && item.height > 0), '重量和尺寸必须有效。');
+  check(checks, 'IMAGES', draft.items.every((item) => item.images.length > 0 && item.images.includes(item.primary_image)), '每个 SKU 必须有图片且主图属于图片数组。');
+  check(checks, 'PRIMARY_IMAGE_FIRST', draft.items.every((item) => item.primary_image === item.images[0]), '每个 SKU 的主图必须是构建完成后的 images[0]。');
+  check(checks, 'SKU_BINDINGS', validSkuBindings(draft), '草稿必须保留完整且唯一的 source_sku_id 到 offer_id 绑定。');
+  check(checks, 'ATTRIBUTES', Boolean(input.category_attributes?.length) && draft.items.every((item) => invalidAttributeIds(item, input.category_attributes!).length === 0), '当前类目快照中的必填属性和字典值必须完整有效。');
   check(checks, 'CATEGORY_SNAPSHOT_FRESH', Boolean(input.category_attributes?.length) && input.category_attributes!.every((group) => Date.parse(group.attributes_schema.snapshot.valid_to) > Date.parse(input.now ?? new Date().toISOString())), '类目属性快照必须存在且未过期。');
-  check(checks, 'CATEGORY_TREE_SNAPSHOT_FRESH', Boolean(input.draft.category_tree_snapshot) && Date.parse(input.draft.category_tree_snapshot!.valid_to) > Date.parse(input.now ?? new Date().toISOString()), '类目树快照必须存在且未过期。');
-  check(checks, 'CATEGORY_TREE_SNAPSHOT_MATCH', Boolean(input.category_decision?.category_snapshot) && stableHash(input.category_decision!.category_snapshot) === stableHash(input.draft.category_tree_snapshot), '草稿必须绑定当前类目决定使用的类目树快照。');
-  check(checks, 'ATTRIBUTE_SNAPSHOT_BINDINGS', attributeSnapshotsMatch(input.draft, input.category_attributes), '草稿中的类目属性快照引用必须与当前产物完全一致。');
-  check(checks, 'UPSTREAM_ARTIFACT_HASHES', upstreamHashesMatch(input), '草稿绑定的所有上游产物哈希必须与当前不可变产物一致。');
-  check(checks, 'CONTENT_BUNDLE', input.content?.status === 'completed' && skuCoverage(input.draft, input.content?.sku_content.map((item) => item.source_sku_id)), '俄语 ContentBundle 必须完成并覆盖全部 SKU。');
-  check(checks, 'IMAGE_BUNDLE', input.images?.status === 'completed' && skuCoverage(input.draft, input.images?.sku_images.map((item) => item.source_sku_id)), 'ImageBundle 必须完成并覆盖全部 SKU。');
+  check(checks, 'CATEGORY_TREE_SNAPSHOT_FRESH', Boolean(draft.category_tree_snapshot) && Date.parse(draft.category_tree_snapshot!.valid_to) > Date.parse(input.now ?? new Date().toISOString()), '类目树快照必须存在且未过期。');
+  check(checks, 'CATEGORY_TREE_SNAPSHOT_MATCH', Boolean(input.category_decision?.category_snapshot) && stableHash(input.category_decision!.category_snapshot) === stableHash(draft.category_tree_snapshot), '草稿必须绑定当前类目决定使用的类目树快照。');
+  check(checks, 'ATTRIBUTE_SNAPSHOT_BINDINGS', attributeSnapshotsMatch(draft, input.category_attributes), '草稿中的类目属性快照引用必须与当前产物完全一致。');
+  check(checks, 'UPSTREAM_ARTIFACT_HASHES', upstreamHashesMatch({ ...input, draft }), '草稿绑定的所有上游产物哈希必须与当前不可变产物一致。');
+  check(checks, 'CONTENT_BUNDLE', input.content?.status === 'completed' && skuCoverage(draft, input.content?.sku_content.map((item) => item.source_sku_id)), '俄语 ContentBundle 必须完成并覆盖全部 SKU。');
+  check(checks, 'IMAGE_BUNDLE', input.images?.status === 'completed' && skuCoverage(draft, input.images?.sku_images.map((item) => item.source_sku_id)), 'ImageBundle 必须完成并覆盖全部 SKU。');
   if (input.pricing) {
     check(checks, 'PRICING_STATUS', input.pricing.status === 'completed', '成本定价必须完成。');
     check(checks, 'MINIMUM_MARGIN', input.pricing.sku_pricing.every((sku) => sku.estimated_profit_margin_percent >= Number(input.store.pricing.minimum_margin_percent)), '预计利润率不能低于店铺底线。');
@@ -54,7 +69,7 @@ export function validatePublishPreflight(input: {
   else check(checks, 'ATTRIBUTE_MAPPING_ARTIFACT', false, '缺少属性填写产物。');
   return {
     schema_version: 1, run_id: input.run_id, store_id: input.store.store_id,
-    draft_sha256: stableHash(input.draft.items), checked_at: input.now ?? new Date().toISOString(),
+    draft_sha256: stableHash(draft.items), checked_at: input.now ?? new Date().toISOString(),
     status: checks.some((item) => item.status === 'failed') ? 'blocked' : 'passed', checks,
   };
 }
@@ -109,7 +124,7 @@ function attributeSnapshotsMatch(draft: ListingDraftV2, groups: CategoryAttribut
   return stableHash(current) === stableHash(draft.attribute_snapshot_refs);
 }
 
-function upstreamHashesMatch(input: Parameters<typeof validatePublishPreflight>[0]): boolean {
+function upstreamHashesMatch(input: Parameters<typeof validatePublishPreflight>[0] & { draft: ListingDraftV2 }): boolean {
   if (!input.product || !input.category_decision || !input.pricing || !input.category_attributes
     || !input.attributes || !input.content || !input.images) return false;
   const expected = {
