@@ -60,6 +60,11 @@ import { loadOzonEnvironment, withOzonMcpCredentials } from '@auto-ozon/adapters
 import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@auto-ozon/config';
 import { LISTING_PREPARATION_ORDER } from './step-registry.js';
 import { SqliteJobStore, type WorkflowJobStateStore } from '@auto-ozon/job-store';
+import {
+  PersistedArtifactValidationError,
+  assertCriticalArtifact,
+  validateListingDraftArtifact,
+} from '@auto-ozon/artifact-validation';
 
 export interface RunListingPreparationInput {
   run_id?: string;
@@ -133,6 +138,15 @@ export async function runListingPreparation(
         artifact_store: artifactStore,
       }));
   } catch (error) {
+    if (error instanceof PersistedArtifactValidationError) {
+      return {
+        ok: false,
+        command: 'workflow.listing-preparation',
+        warnings: [],
+        errors: [{ code: error.code, message: error.message, detail: { artifact_kind: error.artifact_kind, validation_errors: error.validation_errors }, recoverable: true }],
+        nextActions: ['Regenerate the invalid persisted artifact and resume the run.'],
+      };
+    }
     if (error instanceof ArtifactStoreError) {
       return {
         ok: false,
@@ -485,11 +499,22 @@ async function executeListingPreparation(
     mapping = step.data;
   }
   result.attribute_mapping = mapping;
-  let contentBundle = await store.read<ContentBundleV1>(
+  const storedContentBundle = await store.read<unknown>(
     runId,
     'attribute-mapping',
     'content-bundle-v1.json',
   );
+  if (!storedContentBundle && (await store.readManifest(runId))?.steps['attribute-mapping'].artifacts
+    .some((artifact) => artifact.path.endsWith('/content-bundle-v1.json'))) {
+    throw new PersistedArtifactValidationError(
+      'CONTENT_BUNDLE_ARTIFACT_CORRUPTED',
+      'content_bundle_v1',
+      ['The manifest-recorded content bundle is unreadable or its integrity check failed.'],
+    );
+  }
+  let contentBundle = storedContentBundle
+    ? assertCriticalArtifact('content_bundle_v1', storedContentBundle)
+    : null;
   if (!contentBundle || contentBundle.source_offer_id !== mapping.source_offer_id) {
     contentBundle = buildContentBundle(mapping);
     await store.write(
@@ -539,7 +564,9 @@ async function executeListingPreparation(
   );
   if (!draft) {
     await store.updateStep(runId, 'draft-generation', { status: 'running' });
-    const imageBundle = input.image_bundle ?? await runImagePipeline({
+    const imageBundle = input.image_bundle
+      ? assertCriticalArtifact('image_bundle_v1', input.image_bundle)
+      : await runImagePipeline({
       product,
       generation: input.image_generation,
       provider: input.image_generation_provider,
@@ -604,13 +631,70 @@ async function restore<T>(
   const beforeStart = stepIndex(step) < stepIndex(startFrom);
   const reusable = await context.artifact_store.isReusable(context.run_id, step);
   if (!force && reusable) {
-    const value = await context.artifact_store.read<T>(context.run_id, step, file);
-    if (value) return value;
+    const value = await context.artifact_store.read<unknown>(context.run_id, step, file);
+    if (value) return validateRestoredArtifact(file, value) as T;
+    const kind = artifactKindForFile(file);
+    if (kind) {
+      throw new PersistedArtifactValidationError(
+        `${artifactCodePrefix(kind)}_ARTIFACT_CORRUPTED`,
+        kind,
+        [`The reusable manifest artifact ${step}/${file} is unreadable or failed its size/SHA-256 check.`],
+      );
+    }
   }
   if (!force && beforeStart) {
+    const recorded = manifest?.steps[step].artifacts.some((artifact) => artifact.path.endsWith(`/${file}`));
+    if (recorded) {
+      const value = await context.artifact_store.read<unknown>(context.run_id, step, file);
+      if (value === null) {
+        const kind = artifactKindForFile(file);
+        if (kind) {
+          throw new PersistedArtifactValidationError(
+            `${artifactCodePrefix(kind)}_ARTIFACT_CORRUPTED`,
+            kind,
+            [`The manifest-recorded ${step}/${file} is unreadable or failed its size/SHA-256 check.`],
+          );
+        }
+      } else {
+        validateRestoredArtifact(file, value);
+      }
+    }
     throw new Error(`Cannot resume from ${startFrom}; ${step}/${file} is missing, damaged, stale, or incompatible.`);
   }
   return null;
+}
+
+function artifactKindForFile(file: string): string | null {
+  switch (file) {
+    case 'canonical-product-v2.json': return 'canonical_product_v2';
+    case 'category-decision-v1.json': return 'category_decision_v1';
+    case 'cost-pricing-v1.json': return 'cost_pricing_v1';
+    case 'category-attributes-v1.json': return 'category_attributes_group_v1';
+    case 'attribute-mapping-v2.json': return 'attribute_mapping_v2';
+    case 'listing-draft-v2.json': return 'listing_draft_v2';
+    default: return null;
+  }
+}
+
+function artifactCodePrefix(kind: string): string {
+  if (kind === 'listing_draft_v2') return 'DRAFT';
+  return kind.replace(/_v\d+$/u, '').replace(/_group$/u, '').toUpperCase();
+}
+
+function validateRestoredArtifact(file: string, value: unknown): unknown {
+  switch (file) {
+    case 'canonical-product-v2.json': return assertCriticalArtifact('canonical_product_v2', value);
+    case 'category-decision-v1.json': return assertCriticalArtifact('category_decision_v1', value);
+    case 'cost-pricing-v1.json': return assertCriticalArtifact('cost_pricing_v1', value);
+    case 'category-attributes-v1.json': return assertCriticalArtifact('category_attributes_group_v1', value);
+    case 'attribute-mapping-v2.json': return assertCriticalArtifact('attribute_mapping_v2', value);
+    case 'listing-draft-v2.json': {
+      const validation = validateListingDraftArtifact(value);
+      if (!validation.ok) throw new PersistedArtifactValidationError(validation.code, 'listing_draft_v2', validation.errors);
+      return validation.value;
+    }
+    default: return value;
+  }
 }
 
 async function withSelectedStoreMcpCredentials<T>(storeId: string, operation: () => Promise<T>): Promise<T> {

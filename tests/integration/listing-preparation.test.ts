@@ -159,6 +159,33 @@ describe('listing-preparation workflow', () => {
     });
     await expect(fs.stat(path.join(root, 'runs', runId, '01-source', 'attempt-0001', 'offer-result.json'))).resolves.toBeTruthy();
   });
+
+  it('returns a structured corruption error before accessing a damaged persisted product', async () => {
+    const { store, runId, root } = await seededSourceRun();
+    const prepared = await runListingPreparation({
+      run_id: runId,
+      start_from: 'canonicalize-product',
+      stop_after: 'canonicalize-product',
+      artifact_store: store,
+    });
+    expect(prepared.ok).toBe(true);
+    const manifest = await store.readManifest(runId);
+    const productArtifact = manifest!.steps['canonicalize-product'].artifacts.find((artifact) =>
+      artifact.path.endsWith('/canonical-product-v2.json'))!;
+    await fs.writeFile(path.join(root, 'runs', runId, productArtifact.path), '{"tampered":true}', 'utf8');
+
+    const resumed = await runListingPreparation({
+      run_id: runId,
+      start_from: 'category-decision',
+      stop_after: 'category-decision',
+      category_decision_provider: decisionProvider(),
+      artifact_store: store,
+    });
+    expect(resumed).toMatchObject({
+      ok: false,
+      errors: [{ code: 'CANONICAL_PRODUCT_ARTIFACT_CORRUPTED' }],
+    });
+  });
 });
 
 async function seededSourceRun() {

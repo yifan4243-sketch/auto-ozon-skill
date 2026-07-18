@@ -4,7 +4,13 @@ import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@
 import { OzonSellerImportClient } from '@auto-ozon/adapters-ozon';
 import { loadOzonEnvironment } from '@auto-ozon/adapters-ozon';
 import { runListingSubmit, validatePublishPreflight, stableHash } from '@auto-ozon/step-listing-submit';
-import { validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
+import {
+  PersistedArtifactValidationError,
+  assertCriticalArtifact,
+  validateListingDraftArtifact,
+  type CriticalArtifactKind,
+  type CriticalArtifactTypeMap,
+} from '@auto-ozon/artifact-validation';
 import { SqliteJobStore, type PublishReliabilityStore } from '@auto-ozon/job-store';
 
 export interface ListingSubmitOptions { run_id: string; store_id: string; artifact_store?: ArtifactStore; reliability_store?: PublishReliabilityStore; }
@@ -14,6 +20,7 @@ export async function runListingPublish(options: ListingSubmitOptions): Promise<
     return await store.withRunLock(options.run_id, () => runListingPublishLocked(options, store));
   } catch (error) {
     if (error instanceof ArtifactStoreError) return failed(error.code, error.message);
+    if (error instanceof PersistedArtifactValidationError) return failed(error.code, error.message);
     return failed('LISTING_PUBLISH_FAILED', error instanceof Error ? error.message : String(error));
   }
 }
@@ -73,13 +80,13 @@ async function runListingPublishLocked(options: ListingSubmitOptions, store: Art
   // prevents a resume from overwriting preflight or result artifacts produced
   // by an earlier attempt with the same draft hash.
   await store.updateStep(options.run_id, 'listing-submit', { status: 'running' });
-  const pricing = await store.read<CostPricingV1>(options.run_id, 'cost-pricing', 'cost-pricing-v1.json');
-  const product = await store.read<CanonicalProductV2>(options.run_id, 'canonicalize-product', 'canonical-product-v2.json');
-  const categoryDecision = await store.read<CategoryDecisionV1>(options.run_id, 'category-decision', 'category-decision-v1.json');
-  const attributes = await store.read<AttributeMappingV2>(options.run_id, 'attribute-mapping', 'attribute-mapping-v2.json');
-  const content = await store.read<ContentBundleV1>(options.run_id, 'attribute-mapping', 'content-bundle-v1.json');
-  const categoryAttributes = await store.read<CategoryAttributesGroupV1[]>(options.run_id, 'category-attributes', 'category-attributes-v1.json');
-  const images = await store.read<ImageBundleV1>(options.run_id, 'draft-generation', 'image-bundle-v1.json');
+  const pricing = await readCriticalArtifact(store, options.run_id, 'cost-pricing', 'cost-pricing-v1.json', 'cost_pricing_v1');
+  const product = await readCriticalArtifact(store, options.run_id, 'canonicalize-product', 'canonical-product-v2.json', 'canonical_product_v2');
+  const categoryDecision = await readCriticalArtifact(store, options.run_id, 'category-decision', 'category-decision-v1.json', 'category_decision_v1');
+  const attributes = await readCriticalArtifact(store, options.run_id, 'attribute-mapping', 'attribute-mapping-v2.json', 'attribute_mapping_v2');
+  const content = await readCriticalArtifact(store, options.run_id, 'attribute-mapping', 'content-bundle-v1.json', 'content_bundle_v1');
+  const categoryAttributes = await readCriticalArtifact(store, options.run_id, 'category-attributes', 'category-attributes-v1.json', 'category_attributes_group_v1');
+  const images = await readCriticalArtifact(store, options.run_id, 'draft-generation', 'image-bundle-v1.json', 'image_bundle_v1');
   const reliabilityStore = options.reliability_store ?? new SqliteJobStore();
   try {
     const dailySucceededCount = await reliabilityStore.countSucceededSince(options.store_id, startOfMoscowDayIso());
@@ -122,6 +129,28 @@ async function runListingPublishLocked(options: ListingSubmitOptions, store: Art
 function startOfMoscowDayIso(now = new Date()): string {
   const moscow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
   return new Date(Date.UTC(moscow.getUTCFullYear(), moscow.getUTCMonth(), moscow.getUTCDate()) - 3 * 60 * 60 * 1000).toISOString();
+}
+
+async function readCriticalArtifact<K extends CriticalArtifactKind>(
+  store: ArtifactStore,
+  runId: string,
+  step: Parameters<ArtifactStore['read']>[1],
+  file: string,
+  kind: K,
+): Promise<CriticalArtifactTypeMap[K]> {
+  const value = await store.read<unknown>(runId, step, file);
+  if (value === null) {
+    const manifest = await store.readManifest(runId);
+    const recorded = manifest?.steps[step].artifacts.some((artifact) => artifact.path.endsWith(`/${file}`));
+    if (recorded) {
+      throw new PersistedArtifactValidationError(
+        `${kind.replace(/_v\d+$/u, '').replace(/_group$/u, '').toUpperCase()}_ARTIFACT_CORRUPTED`,
+        kind,
+        [`The manifest-recorded ${file} is unreadable or failed its size/SHA-256 check.`],
+      );
+    }
+  }
+  return assertCriticalArtifact(kind, value);
 }
 
 export async function getListingPublishStatus(runId: string, artifactStore: ArtifactStore = new FileArtifactStore()): Promise<CommandResult<OzonPublishResultV1>> {

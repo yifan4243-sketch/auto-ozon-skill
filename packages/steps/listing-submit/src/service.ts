@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AuthorizationRecordV1, CommandResult, ListingDraftV2, OutboxRecordV1, OzonPublishResultV1, PreflightReportV1, PublishIntentV1, SellerImportTransportV1, StorePublishProfileV1 } from '@auto-ozon/contracts';
 import { assertWorkflowActive, type WorkflowContext } from '@auto-ozon/artifact-store';
 import type { PublishReliabilityStore } from '@auto-ozon/job-store';
-import { validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
+import { PersistedArtifactValidationError, assertCriticalArtifact, validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
 
 const AMBIGUOUS_SUBMISSION_GRACE_MS = 10 * 60_000;
 const NEGATIVE_RECONCILIATION_GAP_MS = 60_000;
@@ -157,7 +157,8 @@ async function reconcileAndPrepareIntents(
   const store = input.reliability_store!;
   const runId = input.run_id;
   const items = input.draft.items;
-  const uncertain = await store.listUncertainIntents(input.profile.store_id, items.map((item) => item.offer_id));
+  const uncertain = (await store.listUncertainIntents(input.profile.store_id, items.map((item) => item.offer_id)))
+    .map((intent) => assertCriticalArtifact('publish_intent_v1', intent));
   const remoteProducts = uncertain.length ? await input.transport.getProductsByOfferIds([...new Set(uncertain.map((item) => item.offer_id))]) : [];
   const remoteByOffer = new Map(remoteProducts.map((item) => [item.offer_id, item.product_id]));
   for (const prior of uncertain) {
@@ -198,7 +199,8 @@ async function reconcileAndPrepareIntents(
   const records: Array<{ intent: PublishIntentV1; outbox: OutboxRecordV1 }> = [];
   for (const item of items) {
     const itemHash = hash(item);
-    const existing = await store.getIntent(input.profile.store_id, item.offer_id, itemHash);
+    const storedIntent = await store.getIntent(input.profile.store_id, item.offer_id, itemHash);
+    const existing = storedIntent ? assertCriticalArtifact('publish_intent_v1', storedIntent) : null;
     if (existing) {
       intentIds.set(item.offer_id, existing.intent_id);
       if (existing.status === 'succeeded') {
@@ -239,6 +241,14 @@ function hash(value: unknown): string { return createHash('sha256').update(stabl
 function delay(milliseconds: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
 function redact(value: string): string { return value.replace(/(Api-Key|Authorization)\s*[:=]\s*[^\s,}]+/giu, '$1=[REDACTED]'); }
 function normalizeSubmitError(error: unknown): { code: string; message: string; recoverable: boolean; detail?: unknown } {
+  if (error instanceof PersistedArtifactValidationError) {
+    return {
+      code: error.code,
+      message: error.message,
+      recoverable: true,
+      detail: { artifact_kind: error.artifact_kind, validation_errors: error.validation_errors },
+    };
+  }
   if (error && typeof error === 'object' && 'detail' in error) {
     const detail = (error as { detail?: unknown }).detail;
     if (detail && typeof detail === 'object') {

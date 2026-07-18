@@ -8,6 +8,7 @@ import type {
   SellerImportTransportV1,
   StorePublishProfileV1,
 } from '../../../../packages/contracts/src/index.js';
+import type { PublishReliabilityStore } from '../../../../packages/job-store/src/index.js';
 
 const item = (offer_id: string) => ({
   offer_id,
@@ -103,6 +104,22 @@ describe('listing-submit', () => {
     const resumed: SellerImportTransportV1 = { submit: async () => { submitted += 1; return { task_id: 'unexpected' }; }, getImportInfo: async () => { polled += 1; return { complete: true, items: [{ offer_id: 'a', status: 'imported' }, { offer_id: 'b', status: 'imported' }] }; }, getProductsByOfferIds: async () => [{ offer_id: 'a', product_id: 1 }, { offer_id: 'b', product_id: 2 }] };
     const result = await runListingSubmit(input(resumed, draft, timedOut.data!));
     expect(polled).toBeGreaterThan(0); expect(submitted).toBe(0); expect(result.data?.status).toBe('completed');
+  });
+
+  it('returns a structured error for a corrupted persisted publish intent', async () => {
+    const transport: SellerImportTransportV1 = {
+      submit: async () => { throw new Error('must not submit'); },
+      getImportInfo: async () => { throw new Error('must not poll'); },
+      getProductsByOfferIds: async () => [],
+    };
+    const reliability_store = {
+      listUncertainIntents: async () => [{ schema_version: 1, intent_id: 'damaged' }],
+    } as unknown as PublishReliabilityStore;
+    const result = await runListingSubmit({ ...input(transport), reliability_store });
+    expect(result).toMatchObject({
+      ok: false,
+      errors: [{ code: 'PUBLISH_INTENT_SCHEMA_INVALID' }],
+    });
   });
 });
 
