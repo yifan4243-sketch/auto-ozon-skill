@@ -9,6 +9,7 @@ import { SqliteJobStore, type PublishReliabilityStore, type WorkflowJobStateStor
 import { runListingPreparation } from './listing-preparation.js';
 import { runListingPublish } from './listing-submit.js';
 import { loadConfiguredImageGeneration } from './image-generation-config.js';
+import { hashWorkflowValue } from '@auto-ozon/artifact-store';
 
 export interface CreateBatchWorkflowInputV1 {
   batch_id: string;
@@ -36,6 +37,7 @@ export async function createBatchWorkflow(input: CreateBatchWorkflowInputV1): Pr
     const store = input.store ?? new FileBatchStore();
     const storeProfile = new FileStoreRegistry().get(input.store_id);
     if (!storeProfile.publishing.enabled) throw new Error('STORE_PUBLISHING_DISABLED');
+    await assertActiveBatchConsent(jobStore, storeProfile.store_id, hashWorkflowValue(storeProfile));
     if (input.requested_listing_count > storeProfile.publishing.daily_listing_limit) throw new Error('STORE_DAILY_LIMIT_EXCEEDED');
     const createdAt = new Date().toISOString();
     let keywords: string[];
@@ -103,6 +105,8 @@ export async function runBatchWorkflow(input: { batch_id: string; store?: FileBa
   try {
     const spec = await store.readSpec(input.batch_id);
     const storeProfile = new FileStoreRegistry().get(spec.store_id);
+    if (!storeProfile.publishing.enabled) throw new Error('STORE_PUBLISHING_DISABLED');
+    await assertActiveBatchConsent(jobStore, storeProfile.store_id, hashWorkflowValue(storeProfile));
     const configuredImages = spec.images?.generate ? await loadConfiguredImageGeneration() : null;
     const marketSelection = await store.readMarketSelection(input.batch_id);
     const result = await runListingBatch({
@@ -189,6 +193,14 @@ export async function runBatchWorkflow(input: { batch_id: string; store?: FileBa
       nextActions: result.status === 'paused' ? ['Inspect each paused product run, submit current-Agent decisions, then resume.'] : [] };
   } catch (error) { return failure('workflow.batch.run', error); }
   finally { if (ownsJobStore) await jobStore.close(); }
+}
+
+async function assertActiveBatchConsent(store: PublishReliabilityStore, storeId: string, profileHash: string): Promise<void> {
+  const consent = await store.getActiveConsent(storeId);
+  if (!consent) throw new Error('STORE_PUBLISHING_CONSENT_REQUIRED');
+  if (!consent.enabled || consent.revoked_at !== null) throw new Error('STORE_PUBLISHING_CONSENT_REVOKED');
+  if (consent.store_id !== storeId) throw new Error('STORE_PUBLISHING_CONSENT_STORE_MISMATCH');
+  if (consent.profile_hash !== profileHash) throw new Error('STORE_PUBLISHING_CONSENT_PROFILE_CHANGED');
 }
 
 function workflowError(code: string, recoverable: boolean): Error & { code: string; recoverable: boolean } {

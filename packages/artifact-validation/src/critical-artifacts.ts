@@ -6,7 +6,9 @@ import type {
   ContentBundleV1,
   CostPricingV1,
   ImageBundleV1,
+  PublishAuthorizationV1,
   PublishIntentV1,
+  StorePublishingConsentV1,
 } from '@auto-ozon/contracts';
 import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 
@@ -19,6 +21,8 @@ export interface CriticalArtifactTypeMap {
   content_bundle_v1: ContentBundleV1;
   image_bundle_v1: ImageBundleV1;
   publish_intent_v1: PublishIntentV1;
+  store_publishing_consent_v1: StorePublishingConsentV1;
+  publish_authorization_v1: PublishAuthorizationV1;
 }
 
 export type CriticalArtifactKind = keyof CriticalArtifactTypeMap;
@@ -87,6 +91,8 @@ const expectedVersions: Record<CriticalArtifactKind, number | null> = {
   content_bundle_v1: 1,
   image_bundle_v1: 1,
   publish_intent_v1: 1,
+  store_publishing_consent_v1: 1,
+  publish_authorization_v1: 1,
 };
 
 const codePrefixes: Record<CriticalArtifactKind, string> = {
@@ -98,6 +104,8 @@ const codePrefixes: Record<CriticalArtifactKind, string> = {
   content_bundle_v1: 'CONTENT_BUNDLE',
   image_bundle_v1: 'IMAGE_BUNDLE',
   publish_intent_v1: 'PUBLISH_INTENT',
+  store_publishing_consent_v1: 'STORE_PUBLISHING_CONSENT',
+  publish_authorization_v1: 'PUBLISH_AUTHORIZATION',
 };
 
 const nonEmptyString = { type: 'string', minLength: 1 } as const;
@@ -174,6 +182,14 @@ const schemas: Record<CriticalArtifactKind, object> = {
   publish_intent_v1: {
     type: 'object', required: ['schema_version', 'intent_id', 'run_id', 'store_id', 'offer_id', 'item_hash', 'status', 'task_id', 'product_id', 'reconciliation_checks', 'last_reconciliation_at', 'created_at', 'updated_at'],
     properties: { schema_version: { const: 1 }, intent_id: nonEmptyString, run_id: nonEmptyString, store_id: nonEmptyString, offer_id: nonEmptyString, item_hash: sha256, status: { enum: ['prepared', 'submitted', 'polling', 'succeeded', 'failed', 'unknown'] }, task_id: nullableString, product_id: { type: ['integer', 'null'], minimum: 1 }, reconciliation_checks: { type: 'integer', minimum: 0 }, last_reconciliation_at: nullableString, created_at: nonEmptyString, updated_at: nonEmptyString },
+  },
+  store_publishing_consent_v1: {
+    type: 'object', required: ['schema_version', 'consent_id', 'store_id', 'enabled', 'actor', 'source', 'created_at', 'revoked_at', 'profile_hash', 'policy_version'],
+    properties: { schema_version: { const: 1 }, consent_id: nonEmptyString, store_id: nonEmptyString, enabled: { type: 'boolean' }, actor: nonEmptyString, source: { enum: ['setup_cli', 'local_review_console'] }, created_at: nonEmptyString, revoked_at: nullableString, profile_hash: sha256, policy_version: nonEmptyString },
+  },
+  publish_authorization_v1: {
+    type: 'object', required: ['schema_version', 'authorization_id', 'consent_id', 'run_id', 'store_id', 'profile_hash', 'draft_sha256', 'created_at'],
+    properties: { schema_version: { const: 1 }, authorization_id: nonEmptyString, consent_id: nonEmptyString, run_id: nonEmptyString, store_id: nonEmptyString, profile_hash: sha256, draft_sha256: sha256, created_at: nonEmptyString },
   },
 };
 

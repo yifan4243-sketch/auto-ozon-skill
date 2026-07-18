@@ -1,4 +1,4 @@
-import type { AuthorizationRecordV1, ListingBatchResultV1, ListingJobSpecV1, OutboxRecordV1, PublishIntentV1, WorkflowRunManifestV2 } from '@auto-ozon/contracts';
+import type { ListingBatchResultV1, ListingJobSpecV1, OutboxRecordV1, PublishAuthorizationV1, PublishIntentV1, StorePublishingConsentV1, WorkflowRunManifestV2 } from '@auto-ozon/contracts';
 import type { PublishReliabilityStore } from './types.js';
 
 export interface PostgresQueryClientV1 {
@@ -7,9 +7,17 @@ export interface PostgresQueryClientV1 {
 
 export const POSTGRES_JOB_STORE_SCHEMA_V1 = `
 CREATE TABLE IF NOT EXISTS authorization_records (
-  authorization_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, store_id TEXT NOT NULL,
+  authorization_id TEXT PRIMARY KEY, consent_id TEXT, run_id TEXT NOT NULL, store_id TEXT NOT NULL,
   profile_hash TEXT NOT NULL, draft_sha256 TEXT NOT NULL, payload_json JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE authorization_records ADD COLUMN IF NOT EXISTS consent_id TEXT;
+CREATE TABLE IF NOT EXISTS store_publishing_consents (
+  consent_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, enabled BOOLEAN NOT NULL, actor TEXT NOT NULL,
+  source TEXT NOT NULL, profile_hash TEXT NOT NULL, policy_version TEXT NOT NULL,
+  payload_json JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL, revoked_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS active_store_publishing_consent
+  ON store_publishing_consents(store_id) WHERE revoked_at IS NULL AND enabled=TRUE;
 CREATE TABLE IF NOT EXISTS listing_jobs (
   job_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, status TEXT NOT NULL, spec_json JSONB NOT NULL,
   result_json JSONB, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
@@ -51,10 +59,32 @@ CREATE TABLE IF NOT EXISTS publish_outbox (
 export class PostgresJobStore implements PublishReliabilityStore {
   constructor(private readonly client: PostgresQueryClientV1) {}
   async migrate(): Promise<void> { await this.client.query(POSTGRES_JOB_STORE_SCHEMA_V1); }
-  async createAuthorization(record: AuthorizationRecordV1): Promise<void> {
-    await this.client.query(`INSERT INTO authorization_records (authorization_id, run_id, store_id, profile_hash, draft_sha256, payload_json, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (authorization_id) DO NOTHING`,
-      [record.authorization_id, record.run_id, record.store_id, record.profile_hash, record.draft_sha256, JSON.stringify(record), record.authorized_at]);
+  async createConsent(record: StorePublishingConsentV1): Promise<void> {
+    await this.client.query(`INSERT INTO store_publishing_consents
+      (consent_id,store_id,enabled,actor,source,profile_hash,policy_version,payload_json,created_at,revoked_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (consent_id) DO NOTHING`,
+      [record.consent_id,record.store_id,record.enabled,record.actor,record.source,record.profile_hash,
+        record.policy_version,JSON.stringify(record),record.created_at,record.revoked_at]);
+  }
+  async getActiveConsent(storeId: string): Promise<StorePublishingConsentV1 | null> {
+    const { rows } = await this.client.query<{ payload_json: StorePublishingConsentV1 | string }>(`SELECT payload_json
+      FROM store_publishing_consents WHERE store_id=$1 AND enabled=TRUE AND revoked_at IS NULL
+      ORDER BY created_at DESC LIMIT 1`, [storeId]);
+    const payload = rows[0]?.payload_json;
+    return typeof payload === 'string' ? JSON.parse(payload) as StorePublishingConsentV1 : payload ?? null;
+  }
+  async revokeConsent(storeId: string, actor: string, revokedAt: string): Promise<StorePublishingConsentV1 | null> {
+    const active = await this.getActiveConsent(storeId);
+    if (!active) return null;
+    const revoked: StorePublishingConsentV1 = { ...active, enabled: false, actor, revoked_at: revokedAt };
+    await this.client.query(`UPDATE store_publishing_consents SET enabled=FALSE,actor=$1,revoked_at=$2,payload_json=$3
+      WHERE consent_id=$4 AND revoked_at IS NULL`, [actor,revokedAt,JSON.stringify(revoked),active.consent_id]);
+    return revoked;
+  }
+  async createAuthorization(record: PublishAuthorizationV1): Promise<void> {
+    await this.client.query(`INSERT INTO authorization_records (authorization_id, consent_id, run_id, store_id, profile_hash, draft_sha256, payload_json, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (authorization_id) DO NOTHING`,
+      [record.authorization_id, record.consent_id, record.run_id, record.store_id, record.profile_hash, record.draft_sha256, JSON.stringify(record), record.created_at]);
   }
   async upsertJob(spec: ListingJobSpecV1, result?: ListingBatchResultV1): Promise<void> {
     await this.client.query(`INSERT INTO listing_jobs (job_id,store_id,status,spec_json,result_json,created_at,updated_at)

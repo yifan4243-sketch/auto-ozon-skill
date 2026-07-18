@@ -15,18 +15,32 @@ export interface PreflightReportV1 {
   checks: PreflightCheckV1[];
 }
 
-export interface AuthorizationRecordV1 {
+export interface StorePublishingConsentV1 {
+  schema_version: 1;
+  consent_id: string;
+  store_id: string;
+  enabled: boolean;
+  actor: string;
+  source: 'setup_cli' | 'local_review_console';
+  created_at: string;
+  revoked_at: string | null;
+  profile_hash: string;
+  policy_version: string;
+}
+
+export interface PublishAuthorizationV1 {
   schema_version: 1;
   authorization_id: string;
+  consent_id: string;
   run_id: string;
   store_id: string;
-  source: 'enabled_store_profile';
-  automation_level: 'automatic';
-  policy_version: string;
   profile_hash: string;
   draft_sha256: string;
-  authorized_at: string;
+  created_at: string;
 }
+
+/** @deprecated Read-only compatibility name. New code must use PublishAuthorizationV1. */
+export type AuthorizationRecordV1 = PublishAuthorizationV1;
 
 export type PublishIntentStatusV1 = 'prepared' | 'submitted' | 'polling' | 'succeeded' | 'failed' | 'unknown';
 

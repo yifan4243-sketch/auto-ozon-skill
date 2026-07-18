@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AuthorizationRecordV1, CommandResult, ListingDraftV2, OutboxRecordV1, OzonPublishResultV1, PreflightReportV1, PublishIntentV1, SellerImportTransportV1, StorePublishProfileV1 } from '@auto-ozon/contracts';
+import type { CommandResult, ListingDraftV2, OutboxRecordV1, OzonPublishResultV1, PreflightReportV1, PublishAuthorizationV1, PublishIntentV1, SellerImportTransportV1, StorePublishingConsentV1, StorePublishProfileV1 } from '@auto-ozon/contracts';
 import { assertWorkflowActive, type WorkflowContext } from '@auto-ozon/artifact-store';
 import type { PublishReliabilityStore } from '@auto-ozon/job-store';
 import { PersistedArtifactValidationError, assertCriticalArtifact, validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
@@ -10,7 +10,8 @@ const NEGATIVE_RECONCILIATION_GAP_MS = 60_000;
 export interface RunListingSubmitInput {
   draft: ListingDraftV2; profile: StorePublishProfileV1; transport: SellerImportTransportV1;
   previous?: OzonPublishResultV1; run_id: string; preflight: PreflightReportV1;
-  authorization: AuthorizationRecordV1;
+  consent: StorePublishingConsentV1;
+  authorization: PublishAuthorizationV1;
   reliability_store?: PublishReliabilityStore;
 }
 
@@ -39,6 +40,9 @@ export async function runListingSubmit(input: RunListingSubmitInput, context?: W
         nextActions: ['Regenerate a valid ListingDraftV2 before publishing.'],
       };
     }
+    const consent = assertCriticalArtifact('store_publishing_consent_v1', input.consent);
+    const authorization = assertCriticalArtifact('publish_authorization_v1', input.authorization);
+    input = { ...input, consent, authorization };
     const result = await submit(input);
     if (context) { const output = await context.artifact_store.write(context.run_id, 'listing-submit', 'ozon-publish-result-v1.json', result); await context.artifact_store.updateStep(context.run_id, 'listing-submit', { status: result.status === 'completed' ? 'succeeded' : result.status === 'partial_failed' || result.status === 'polling_timeout' ? 'needs_review' : 'blocked', output }); }
     return { ok: result.status === 'completed' || result.status === 'partial_failed' || result.status === 'polling_timeout', command: 'listing.submit', data: result, warnings: result.warnings.map((message) => ({ code: 'OZON_PUBLISH_WARNING', message })), errors: result.errors.map((message) => ({ code: 'OZON_PUBLISH_FAILED', message, recoverable: true })), nextActions: result.status === 'polling_timeout' ? ['Run workflow listing resume with the same run and store ID.'] : [] };
@@ -73,10 +77,14 @@ async function submit(input: RunListingSubmitInput): Promise<OzonPublishResultV1
     || input.preflight.draft_sha256 !== result.draft_sha256) {
     result.errors.push('PREFLIGHT_BINDING_INVALID'); return result;
   }
-  if (input.authorization.run_id !== input.run_id
+  if (!input.consent.enabled
+    || input.consent.revoked_at !== null
+    || input.consent.store_id !== input.profile.store_id
+    || input.authorization.consent_id !== input.consent.consent_id
+    || input.authorization.profile_hash !== input.consent.profile_hash
+    || input.authorization.run_id !== input.run_id
     || input.authorization.store_id !== input.profile.store_id
-    || input.authorization.draft_sha256 !== result.draft_sha256
-    || input.authorization.automation_level !== 'automatic') {
+    || input.authorization.draft_sha256 !== result.draft_sha256) {
     result.errors.push('AUTHORIZATION_BINDING_INVALID'); return result;
   }
   if (input.draft.status !== 'draft_complete' || input.draft.items.length === 0) { result.errors.push('DRAFT_NOT_PUBLISH_READY'); return result; }

@@ -45,6 +45,21 @@ describe('StoreRegistryV2', () => {
     expect(resolvePerformanceCredentials(configured, provider)).toEqual({ clientId: 'performance-id', clientSecret: 'performance-secret' });
     expect(() => resolvePerformanceCredentials(profile(), provider)).toThrow('PERFORMANCE_CREDENTIALS_NOT_CONFIGURED');
   });
+
+  it('updates publishing through a locked atomic replacement and never removes another writer lock', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-ozon-store-update-'));
+    temporary.push(directory);
+    const file = path.join(directory, 'stores.json');
+    fs.writeFileSync(file, JSON.stringify([{ ...profile(), publishing: { ...profile().publishing, enabled: false } }]));
+    const registry = new FileStoreRegistry(file);
+    expect(registry.updatePublishingEnabled('525', true).publishing.enabled).toBe(true);
+    expect(registry.get('525').publishing.enabled).toBe(true);
+
+    fs.writeFileSync(`${file}.lock`, 'other-writer');
+    expect(() => registry.updatePublishingEnabled('525', false)).toThrow('STORE_PROFILE_LOCKED');
+    expect(fs.readFileSync(`${file}.lock`, 'utf8')).toBe('other-writer');
+    expect(registry.get('525').publishing.enabled).toBe(true);
+  });
 });
 
 function writeAndRead(value: unknown) {

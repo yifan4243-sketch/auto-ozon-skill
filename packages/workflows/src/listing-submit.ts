@@ -1,6 +1,6 @@
-import type { AttributeMappingV2, AuthorizationRecordV1, CanonicalProductV2, CategoryAttributesGroupV1, CategoryDecisionV1, CommandResult, ContentBundleV1, CostPricingV1, ImageBundleV1, ListingDraftV2, OzonPublishResultV1, StoreProfileV2, StorePublishProfileV1 } from '@auto-ozon/contracts';
+import type { CommandResult, ListingDraftV2, OzonPublishResultV1, PublishAuthorizationV1, SellerImportTransportV1, StoreProfileV2, StorePublishProfileV1 } from '@auto-ozon/contracts';
 import { ArtifactStoreError, FileArtifactStore, createFileWorkflowLogger, hashWorkflowValue, type ArtifactStore, type WorkflowContext } from '@auto-ozon/artifact-store';
-import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@auto-ozon/config';
+import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials, type SecretProvider, type StoreRegistry } from '@auto-ozon/config';
 import { OzonSellerImportClient } from '@auto-ozon/adapters-ozon';
 import { loadOzonEnvironment } from '@auto-ozon/adapters-ozon';
 import { runListingSubmit, validatePublishPreflight, stableHash } from '@auto-ozon/step-listing-submit';
@@ -8,12 +8,21 @@ import {
   PersistedArtifactValidationError,
   assertCriticalArtifact,
   validateListingDraftArtifact,
+  validateCriticalArtifact,
   type CriticalArtifactKind,
   type CriticalArtifactTypeMap,
 } from '@auto-ozon/artifact-validation';
 import { SqliteJobStore, type PublishReliabilityStore } from '@auto-ozon/job-store';
 
-export interface ListingSubmitOptions { run_id: string; store_id: string; artifact_store?: ArtifactStore; reliability_store?: PublishReliabilityStore; }
+export interface ListingSubmitOptions {
+  run_id: string;
+  store_id: string;
+  artifact_store?: ArtifactStore;
+  reliability_store?: PublishReliabilityStore;
+  store_registry?: StoreRegistry;
+  secret_provider?: SecretProvider;
+  transport?: SellerImportTransportV1;
+}
 export async function runListingPublish(options: ListingSubmitOptions): Promise<CommandResult<OzonPublishResultV1>> {
   const store = options.artifact_store ?? new FileArtifactStore();
   try {
@@ -49,8 +58,8 @@ async function runListingPublishLocked(options: ListingSubmitOptions, store: Art
   let clientId: string;
   let apiKey: string;
   try {
-    storeProfile = new FileStoreRegistry().get(options.store_id);
-    const credentials = resolveStoreCredentials(storeProfile, new EnvSecretProvider(loadOzonEnvironment()));
+    storeProfile = (options.store_registry ?? new FileStoreRegistry()).get(options.store_id);
+    const credentials = resolveStoreCredentials(storeProfile, options.secret_provider ?? new EnvSecretProvider(loadOzonEnvironment()));
     ({ clientId, apiKey } = credentials);
     profile = {
       store_id: storeProfile.store_id,
@@ -89,6 +98,15 @@ async function runListingPublishLocked(options: ListingSubmitOptions, store: Art
   const images = await readCriticalArtifact(store, options.run_id, 'draft-generation', 'image-bundle-v1.json', 'image_bundle_v1');
   const reliabilityStore = options.reliability_store ?? new SqliteJobStore();
   try {
+    const profileHash = stableHash(storeProfile);
+    const storedConsent = await reliabilityStore.getActiveConsent(options.store_id);
+    if (!storedConsent) return blockListingSubmit(store, options.run_id, 'STORE_PUBLISHING_CONSENT_REQUIRED', 'The store has no active publishing consent. Enable publishing through setup or the local review console.');
+    const consentValidation = validateCriticalArtifact('store_publishing_consent_v1', storedConsent);
+    if (!consentValidation.ok) return blockListingSubmit(store, options.run_id, consentValidation.code, consentValidation.errors.join('; '));
+    const consent = consentValidation.value;
+    if (!consent.enabled || consent.revoked_at !== null) return blockListingSubmit(store, options.run_id, 'STORE_PUBLISHING_CONSENT_REVOKED', 'The store publishing consent has been revoked.');
+    if (consent.store_id !== options.store_id) return blockListingSubmit(store, options.run_id, 'STORE_PUBLISHING_CONSENT_STORE_MISMATCH', 'The active consent belongs to another store.');
+    if (consent.profile_hash !== profileHash) return blockListingSubmit(store, options.run_id, 'STORE_PUBLISHING_CONSENT_PROFILE_CHANGED', 'The store profile changed after consent was granted. Re-enable publishing explicitly.');
     const dailySucceededCount = await reliabilityStore.countSucceededSince(options.store_id, startOfMoscowDayIso());
     let pendingItemCount = 0;
     for (const item of draft.items) {
@@ -107,18 +125,22 @@ async function runListingPublishLocked(options: ListingSubmitOptions, store: Art
       });
       return failed('PREFLIGHT_BLOCKED', 'Publish preflight failed. Read preflight-report-v1.json for exact checks.');
     }
-    const authorization: AuthorizationRecordV1 = {
-      schema_version: 1, authorization_id: stableHash({ run_id: options.run_id, store_id: options.store_id, draft: preflight.draft_sha256, profile: storeProfile }).slice(0, 40),
-      run_id: options.run_id, store_id: options.store_id, source: 'enabled_store_profile', automation_level: 'automatic',
-      policy_version: 'automatic-publish-v1', profile_hash: stableHash(storeProfile), draft_sha256: preflight.draft_sha256,
-      authorized_at: new Date().toISOString(),
+    const authorization: PublishAuthorizationV1 = {
+      schema_version: 1,
+      authorization_id: stableHash({ consent_id: consent.consent_id, run_id: options.run_id, store_id: options.store_id, draft: preflight.draft_sha256, profile_hash: profileHash }).slice(0, 40),
+      consent_id: consent.consent_id,
+      run_id: options.run_id,
+      store_id: options.store_id,
+      profile_hash: profileHash,
+      draft_sha256: preflight.draft_sha256,
+      created_at: new Date().toISOString(),
     };
-    await store.write(options.run_id, 'listing-submit', 'authorization-record-v1.json', authorization);
+    await store.write(options.run_id, 'listing-submit', 'publish-authorization-v1.json', authorization);
     const previous = await store.read<OzonPublishResultV1>(options.run_id, 'listing-submit', 'ozon-publish-result-v1.json');
     const context: WorkflowContext = { run_id: options.run_id, artifact_store: store, logger: createFileWorkflowLogger(store.runsRoot, options.run_id), force_refresh: false };
     await reliabilityStore.createAuthorization(authorization);
-    return await runListingSubmit({ draft, profile, transport: new OzonSellerImportClient({ clientId, apiKey }), previous: previous ?? undefined,
-      run_id: options.run_id, preflight, authorization, reliability_store: reliabilityStore }, context);
+    return await runListingSubmit({ draft, profile, transport: options.transport ?? new OzonSellerImportClient({ clientId, apiKey }), previous: previous ?? undefined,
+      run_id: options.run_id, preflight, consent, authorization, reliability_store: reliabilityStore }, context);
   } finally {
     const latestManifest = await store.readManifest(options.run_id).catch(() => null);
     if (latestManifest && reliabilityStore.mirrorManifest) await reliabilityStore.mirrorManifest(latestManifest);
@@ -159,3 +181,11 @@ export async function getListingPublishStatus(runId: string, artifactStore: Arti
 }
 
 function failed(code: string, message: string): CommandResult<never> { return { ok: false, command: 'listing.publish', warnings: [], errors: [{ code, message, recoverable: true }], nextActions: [] }; }
+
+async function blockListingSubmit(store: ArtifactStore, runId: string, code: string, message: string): Promise<CommandResult<never>> {
+  await store.updateStep(runId, 'listing-submit', {
+    status: 'blocked',
+    error: { code, message, recoverable: true },
+  });
+  return failed(code, message);
+}

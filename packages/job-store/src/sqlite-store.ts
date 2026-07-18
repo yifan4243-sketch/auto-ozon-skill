@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import type { AuthorizationRecordV1, ListingBatchResultV1, ListingJobSpecV1, OutboxRecordV1, PublishIntentV1, WorkflowRunManifestV2 } from '@auto-ozon/contracts';
+import type { ListingBatchResultV1, ListingJobSpecV1, OutboxRecordV1, PublishAuthorizationV1, PublishIntentV1, StorePublishingConsentV1, WorkflowRunManifestV2 } from '@auto-ozon/contracts';
 import type { PublishReliabilityStore } from './types.js';
 
 export class SqliteJobStore implements PublishReliabilityStore {
@@ -15,11 +15,36 @@ export class SqliteJobStore implements PublishReliabilityStore {
     this.migrate();
   }
 
-  createAuthorization(record: AuthorizationRecordV1): void {
+  createConsent(record: StorePublishingConsentV1): void {
+    this.database.prepare(`INSERT OR IGNORE INTO store_publishing_consents
+      (consent_id, store_id, enabled, actor, source, profile_hash, policy_version, payload_json, created_at, revoked_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      record.consent_id, record.store_id, record.enabled ? 1 : 0, record.actor, record.source,
+      record.profile_hash, record.policy_version, JSON.stringify(record), record.created_at, record.revoked_at,
+    );
+  }
+
+  getActiveConsent(storeId: string): StorePublishingConsentV1 | null {
+    const row = this.database.prepare(`SELECT payload_json FROM store_publishing_consents
+      WHERE store_id=? AND enabled=1 AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`)
+      .get(storeId) as { payload_json: string } | undefined;
+    return row ? JSON.parse(row.payload_json) as StorePublishingConsentV1 : null;
+  }
+
+  revokeConsent(storeId: string, actor: string, revokedAt: string): StorePublishingConsentV1 | null {
+    const active = this.getActiveConsent(storeId);
+    if (!active) return null;
+    const revoked: StorePublishingConsentV1 = { ...active, enabled: false, actor, revoked_at: revokedAt };
+    this.database.prepare(`UPDATE store_publishing_consents SET enabled=0, actor=?, revoked_at=?, payload_json=?
+      WHERE consent_id=? AND revoked_at IS NULL`).run(actor, revokedAt, JSON.stringify(revoked), active.consent_id);
+    return revoked;
+  }
+
+  createAuthorization(record: PublishAuthorizationV1): void {
     this.database.prepare(`INSERT OR IGNORE INTO authorization_records
-      (authorization_id, run_id, store_id, profile_hash, draft_sha256, payload_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`).run(record.authorization_id, record.run_id, record.store_id,
-      record.profile_hash, record.draft_sha256, JSON.stringify(record), record.authorized_at);
+      (authorization_id, consent_id, run_id, store_id, profile_hash, draft_sha256, payload_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(record.authorization_id, record.consent_id, record.run_id, record.store_id,
+      record.profile_hash, record.draft_sha256, JSON.stringify(record), record.created_at);
   }
 
   upsertJob(spec: ListingJobSpecV1, result?: ListingBatchResultV1): void {
@@ -141,9 +166,16 @@ export class SqliteJobStore implements PublishReliabilityStore {
   private migrate(): void {
     this.database.exec(`
       CREATE TABLE IF NOT EXISTS authorization_records (
-        authorization_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, store_id TEXT NOT NULL,
+        authorization_id TEXT PRIMARY KEY, consent_id TEXT, run_id TEXT NOT NULL, store_id TEXT NOT NULL,
         profile_hash TEXT NOT NULL, draft_sha256 TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS store_publishing_consents (
+        consent_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, enabled INTEGER NOT NULL, actor TEXT NOT NULL,
+        source TEXT NOT NULL, profile_hash TEXT NOT NULL, policy_version TEXT NOT NULL,
+        payload_json TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS active_store_publishing_consent
+        ON store_publishing_consents(store_id) WHERE revoked_at IS NULL AND enabled=1;
       CREATE TABLE IF NOT EXISTS listing_jobs (
         job_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, status TEXT NOT NULL, spec_json TEXT NOT NULL,
         result_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -188,6 +220,10 @@ export class SqliteJobStore implements PublishReliabilityStore {
     }
     if (!intentColumns.some((column) => column.name === 'last_reconciliation_at')) {
       this.database.exec('ALTER TABLE publish_intents ADD COLUMN last_reconciliation_at TEXT');
+    }
+    const authorizationColumns = this.database.prepare('PRAGMA table_info(authorization_records)').all() as Array<{ name: string }>;
+    if (!authorizationColumns.some((column) => column.name === 'consent_id')) {
+      this.database.exec('ALTER TABLE authorization_records ADD COLUMN consent_id TEXT');
     }
   }
 }

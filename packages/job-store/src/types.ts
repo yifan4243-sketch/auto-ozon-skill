@@ -1,9 +1,10 @@
 import type {
-  AuthorizationRecordV1,
+  PublishAuthorizationV1,
   ListingBatchResultV1,
   ListingJobSpecV1,
   OutboxRecordV1,
   PublishIntentV1,
+  StorePublishingConsentV1,
   WorkflowRunManifestV2,
 } from '@auto-ozon/contracts';
 
@@ -15,7 +16,10 @@ export interface WorkflowJobStateStore {
 }
 
 export interface PublishReliabilityStore extends Partial<WorkflowJobStateStore> {
-  createAuthorization(record: AuthorizationRecordV1): void | Promise<void>;
+  createConsent(record: StorePublishingConsentV1): void | Promise<void>;
+  getActiveConsent(storeId: string): StorePublishingConsentV1 | null | Promise<StorePublishingConsentV1 | null>;
+  revokeConsent(storeId: string, actor: string, revokedAt: string): StorePublishingConsentV1 | null | Promise<StorePublishingConsentV1 | null>;
+  createAuthorization(record: PublishAuthorizationV1): void | Promise<void>;
   prepareIntents(records: Array<{ intent: PublishIntentV1; outbox: OutboxRecordV1 }>): void | Promise<void>;
   getIntent(storeId: string, offerId: string, itemHash: string): PublishIntentV1 | null | Promise<PublishIntentV1 | null>;
   listUncertainIntents(storeId: string, offerIds: string[]): PublishIntentV1[] | Promise<PublishIntentV1[]>;

@@ -7,7 +7,7 @@ import type { StoreProfileV2, WorkflowStepName } from '@auto-ozon/contracts';
 import { FileArtifactStore, resolveRepoRoot } from '@auto-ozon/artifact-store';
 import { FileBatchStore } from '@auto-ozon/batch-orchestrator';
 import { validateStoreProfileV2 } from '@auto-ozon/config';
-import { runListingPreparation } from '@auto-ozon/workflows';
+import { runListingPreparation, setStorePublishingConsent } from '@auto-ozon/workflows';
 import { getReviewBundle, submitBatchAgentDecision } from './mcp-server.js';
 
 export type ReviewRoleV1 = 'viewer' | 'operator' | 'publisher';
@@ -95,7 +95,15 @@ export async function startReviewConsole(
       if (request.method === 'POST' && storeMatch) {
         const body = await readJsonBody(request);
         if (typeof body.enabled !== 'boolean') throw httpError(400, 'ENABLED_BOOLEAN_REQUIRED');
-        sendJson(response, 200, await setStorePublishing(root, storeMatch[1]!, body.enabled));
+        const changed = await setStorePublishingConsent({
+          store_id: storeMatch[1]!,
+          enabled: body.enabled,
+          actor: 'local-review-console',
+          source: 'local_review_console',
+          repo_root: root,
+        });
+        if (!changed.ok) throw httpError(409, changed.errors[0]?.code ?? 'PUBLISHING_CONSENT_FAILED');
+        sendJson(response, 200, changed);
         return;
       }
       const decisionMatch = url.pathname.match(/^\/api\/batches\/([A-Za-z0-9][A-Za-z0-9._-]{0,63})\/decisions$/u);
@@ -188,21 +196,6 @@ function summarizeStores(stores: StoreProfileV2[]): unknown[] {
     store_id: store.store_id, store_name: store.store_name, currency_code: store.currency_code,
     publishing_enabled: store.publishing.enabled, daily_listing_limit: store.publishing.daily_listing_limit,
   }));
-}
-
-async function setStorePublishing(root: string, storeId: string, enabled: boolean): Promise<unknown> {
-  const file = path.join(root, 'data', 'config', 'ozon-stores.local.json');
-  const stores = await readStores(root);
-  const index = stores.findIndex((store) => store.store_id === storeId);
-  if (index < 0) throw httpError(404, 'STORE_PROFILE_NOT_FOUND');
-  const existing = stores[index]!;
-  const updated = validateStoreProfileV2({
-    ...existing,
-    publishing: { ...existing.publishing, enabled },
-  });
-  stores[index] = updated;
-  await atomicJson(file, stores);
-  return { schema_version: 1, store_id: storeId, publishing_enabled: enabled, updated_at: new Date().toISOString() };
 }
 
 async function readStores(root: string): Promise<StoreProfileV2[]> {
@@ -299,13 +292,6 @@ function elapsed(start: string | null, end: string | null): number | null {
   if (!start) return null;
   const value = Date.parse(end ?? new Date().toISOString()) - Date.parse(start);
   return Number.isFinite(value) && value >= 0 ? value : null;
-}
-
-async function atomicJson(file: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-  await fs.rename(temporary, file);
 }
 
 interface HttpError extends Error { status: number }

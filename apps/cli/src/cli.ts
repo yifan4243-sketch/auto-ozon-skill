@@ -24,6 +24,7 @@ import {
   runSetupDoctor,
   refreshOzonCategoryTree,
   loadConfiguredImageGeneration,
+  setStorePublishingConsent,
 } from '@auto-ozon/workflows';
 import {
   CliError,
@@ -278,13 +279,36 @@ export function buildProgram(): Command {
 
   registerOzonCommands(program, emitCommandResult, parseJsonParams, parseNumber);
 
-  program
+  const setup = program
     .command('setup')
-    .description('Validate local accounts, stores, credentials, snapshots, browser, and Ozon MCP')
-    .command('doctor')
+    .description('Configure and validate local accounts, stores, consent, snapshots, browser, and Ozon MCP');
+  setup.command('doctor')
     .description('Run the complete read-only setup readiness report')
     .action(async () => {
       emitCommandResult(await runSetupDoctor());
+    });
+  const setupPublishing = setup.command('publishing').description('Explicitly grant or revoke store-level automatic publishing consent');
+  setupPublishing.command('enable')
+    .requiredOption('--store-id <Client-Id>', 'Store to authorize')
+    .option('--actor <name>', 'Audit actor', process.env.USERNAME ?? process.env.USER ?? 'local-user')
+    .action(async (opts) => {
+      emitCommandResult(await setStorePublishingConsent({
+        store_id: opts.storeId,
+        enabled: true,
+        actor: opts.actor,
+        source: 'setup_cli',
+      }));
+    });
+  setupPublishing.command('disable')
+    .requiredOption('--store-id <Client-Id>', 'Store whose consent is revoked')
+    .option('--actor <name>', 'Audit actor', process.env.USERNAME ?? process.env.USER ?? 'local-user')
+    .action(async (opts) => {
+      emitCommandResult(await setStorePublishingConsent({
+        store_id: opts.storeId,
+        enabled: false,
+        actor: opts.actor,
+        source: 'setup_cli',
+      }));
     });
 
   const reviewConsole = program

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { runListingSubmit, stableHash } from '../../../../packages/steps/listing-submit/src/index.js';
 import type {
-  AuthorizationRecordV1,
   ListingDraftV2,
   OzonPublishResultV1,
   PreflightReportV1,
+  PublishAuthorizationV1,
   SellerImportTransportV1,
+  StorePublishingConsentV1,
   StorePublishProfileV1,
 } from '../../../../packages/contracts/src/index.js';
 import type { PublishReliabilityStore } from '../../../../packages/job-store/src/index.js';
@@ -97,6 +98,25 @@ describe('listing-submit', () => {
     expect(result).toMatchObject({ ok: false, data: { status: 'blocked', errors: ['DRAFT_NOT_PUBLISH_READY'] } });
   });
 
+  it('blocks a revoked or cross-store consent before calling the transport', async () => {
+    let submissions = 0;
+    const transport: SellerImportTransportV1 = { submit: async () => { submissions += 1; return { task_id: 'must-not-submit' }; }, getImportInfo: async () => ({ complete: true, items: [] }), getProductsByOfferIds: async () => [] };
+    const base = input(transport);
+    const revoked = await runListingSubmit({ ...base, consent: { ...base.consent, enabled: false, revoked_at: '2026-07-18T00:00:00.000Z' } });
+    const otherStore = await runListingSubmit({ ...base, consent: { ...base.consent, store_id: 'other-store' } });
+    expect(revoked.data?.errors).toContain('AUTHORIZATION_BINDING_INVALID');
+    expect(otherStore.data?.errors).toContain('AUTHORIZATION_BINDING_INVALID');
+    expect(submissions).toBe(0);
+  });
+
+  it('invalidates an execution authorization when the draft changes', async () => {
+    const transport: SellerImportTransportV1 = { submit: async () => { throw new Error('must not submit'); }, getImportInfo: async () => ({ complete: true, items: [] }), getProductsByOfferIds: async () => [] };
+    const original = input(transport);
+    const changed = { ...draft, items: draft.items.map((entry, index) => index === 0 ? { ...entry, price: '21.00' } : entry) };
+    const result = await runListingSubmit({ ...original, draft: changed });
+    expect(result.data?.errors).toContain('PREFLIGHT_BINDING_INVALID');
+  });
+
   it('resumes an unfinished task by polling it before making another submission', async () => {
     const first: SellerImportTransportV1 = { submit: async () => ({ task_id: 'task-timeout' }), getImportInfo: async () => ({ complete: false, items: [] }), getProductsByOfferIds: async () => [] };
     const timedOut = await runListingSubmit({ ...input(first), profile: { ...profile, polling: { ...profile.polling, timeout_ms: 0 } } });
@@ -139,17 +159,27 @@ function input(
     status: 'passed',
     checks: [],
   };
-  const authorization: AuthorizationRecordV1 = {
+  const consent: StorePublishingConsentV1 = {
+    schema_version: 1,
+    consent_id: 'consent-1',
+    store_id: profile.store_id,
+    enabled: true,
+    actor: 'test',
+    source: 'setup_cli',
+    created_at: '2026-07-17T00:00:00.000Z',
+    revoked_at: null,
+    profile_hash: 'a'.repeat(64),
+    policy_version: 'automatic-publish-v1',
+  };
+  const authorization: PublishAuthorizationV1 = {
     schema_version: 1,
     authorization_id: 'authorization-1',
+    consent_id: consent.consent_id,
     run_id,
     store_id: profile.store_id,
-    source: 'enabled_store_profile',
-    automation_level: 'automatic',
-    policy_version: 'automatic-publish-v1',
     profile_hash: 'a'.repeat(64),
     draft_sha256,
-    authorized_at: '2026-07-17T00:00:00.000Z',
+    created_at: '2026-07-17T00:00:00.000Z',
   };
-  return { draft: selectedDraft, profile, transport, previous, run_id, preflight, authorization };
+  return { draft: selectedDraft, profile, transport, previous, run_id, preflight, consent, authorization };
 }

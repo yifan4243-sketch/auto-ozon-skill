@@ -9,3 +9,4 @@ export * from './batch.js';
 export * from './setup-doctor.js';
 export * from './image-generation-config.js';
 export * from './category-tree-refresh.js';
+export * from './publishing-consent.js';

@@ -40,6 +40,8 @@ const validArtifacts: Record<CriticalArtifactKind, unknown> = {
   content_bundle_v1: { schema_version: 1, source_offer_id: 'offer-1', status: 'completed', sku_content: [], errors: [] },
   image_bundle_v1: { schema_version: 1, source_offer_id: 'offer-1', status: 'completed', assets: [], sku_images: [], generation: null, warnings: [], errors: [], agent_tasks: [] },
   publish_intent_v1: { schema_version: 1, intent_id: 'intent-1', run_id: 'run-1', store_id: 'store-1', offer_id: 'offer-1', item_hash: sha, status: 'prepared', task_id: null, product_id: null, reconciliation_checks: 0, last_reconciliation_at: null, created_at: now, updated_at: now },
+  store_publishing_consent_v1: { schema_version: 1, consent_id: 'consent-1', store_id: 'store-1', enabled: true, actor: 'owner', source: 'setup_cli', created_at: now, revoked_at: null, profile_hash: sha, policy_version: 'automatic-publish-v1' },
+  publish_authorization_v1: { schema_version: 1, authorization_id: 'authorization-1', consent_id: 'consent-1', run_id: 'run-1', store_id: 'store-1', profile_hash: sha, draft_sha256: sha, created_at: now },
 };
 
 describe('critical persisted artifact runtime validation', () => {

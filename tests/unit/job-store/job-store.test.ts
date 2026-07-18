@@ -4,12 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type {
-  AuthorizationRecordV1,
   ListingDraftV2,
   OutboxRecordV1,
   PreflightReportV1,
+  PublishAuthorizationV1,
   PublishIntentV1,
   SellerImportTransportV1,
+  StorePublishingConsentV1,
 } from '../../../packages/contracts/src/index.js';
 import { SqliteJobStore } from '../../../packages/job-store/src/index.js';
 import { runListingSubmit, stableHash } from '../../../packages/steps/listing-submit/src/index.js';
@@ -22,6 +23,23 @@ afterEach(async () => {
 });
 
 describe('SQLite publish reliability store', () => {
+  it('stores one active consent per store and records revocation before replacement', async () => {
+    const store = await newStore();
+    const first: StorePublishingConsentV1 = {
+      schema_version: 1, consent_id: 'consent-1', store_id: '500', enabled: true,
+      actor: 'owner', source: 'setup_cli', created_at: '2026-07-17T00:00:00.000Z',
+      revoked_at: null, profile_hash: 'a'.repeat(64), policy_version: 'automatic-publish-v1',
+    };
+    store.createConsent(first);
+    expect(store.getActiveConsent('500')).toEqual(first);
+    const revoked = store.revokeConsent('500', 'owner', '2026-07-18T00:00:00.000Z');
+    expect(revoked).toMatchObject({ enabled: false, actor: 'owner', revoked_at: '2026-07-18T00:00:00.000Z' });
+    expect(store.getActiveConsent('500')).toBeNull();
+    const second = { ...first, consent_id: 'consent-2', created_at: '2026-07-18T00:00:01.000Z', profile_hash: 'b'.repeat(64) };
+    store.createConsent(second);
+    expect(store.getActiveConsent('500')).toEqual(second);
+  });
+
   it('atomically persists a unique intent and outbox and supports reconciliation', async () => {
     const store = await newStore();
     const { intent, outbox } = records();
@@ -44,6 +62,7 @@ describe('SQLite publish reliability store', () => {
     };
     const firstInput = submitInput('run-1', transport, store);
     const secondInput = submitInput('run-2', transport, store);
+    store.createConsent(firstInput.consent);
     store.createAuthorization(firstInput.authorization);
     store.createAuthorization(secondInput.authorization);
     const first = await runListingSubmit(firstInput);
@@ -64,6 +83,7 @@ describe('SQLite publish reliability store', () => {
     let submissions = 0;
     const transport: SellerImportTransportV1 = { submit: async () => { submissions += 1; return { task_id: 'duplicate' }; }, getImportInfo: async () => ({ complete: false, items: [] }), getProductsByOfferIds: async () => [] };
     const input = submitInput('new', transport, store);
+    store.createConsent(input.consent);
     store.createAuthorization(input.authorization);
     const result = await runListingSubmit(input);
     expect(result.data?.status).toBe('polling_timeout');
@@ -108,8 +128,9 @@ const draft: ListingDraftV2 = {
 function submitInput(run_id: string, transport: SellerImportTransportV1, reliability_store: SqliteJobStore) {
   const draft_sha256 = stableHash(draft.items);
   const preflight: PreflightReportV1 = { schema_version: 1, run_id, store_id: profile.store_id, draft_sha256, checked_at: '2026-07-17T00:00:00.000Z', status: 'passed', checks: [] };
-  const authorization: AuthorizationRecordV1 = { schema_version: 1, authorization_id: `authorization-${run_id}`, run_id, store_id: profile.store_id, source: 'enabled_store_profile', automation_level: 'automatic', policy_version: 'automatic-publish-v1', profile_hash: 'a'.repeat(64), draft_sha256, authorized_at: '2026-07-17T00:00:00.000Z' };
-  return { draft, profile, transport, run_id, reliability_store, preflight, authorization };
+  const consent: StorePublishingConsentV1 = { schema_version: 1, consent_id: 'consent-500', store_id: profile.store_id, enabled: true, actor: 'test', source: 'setup_cli', created_at: '2026-07-17T00:00:00.000Z', revoked_at: null, profile_hash: 'a'.repeat(64), policy_version: 'automatic-publish-v1' };
+  const authorization: PublishAuthorizationV1 = { schema_version: 1, authorization_id: `authorization-${run_id}`, consent_id: consent.consent_id, run_id, store_id: profile.store_id, profile_hash: consent.profile_hash, draft_sha256, created_at: '2026-07-17T00:00:00.000Z' };
+  return { draft, profile, transport, run_id, reliability_store, preflight, consent, authorization };
 }
 
 function hashForDraftItem(value: unknown): string {
