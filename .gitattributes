@@ -1,0 +1,2 @@
+* text=auto
+tests/fixtures/1688/*.json text eol=lf

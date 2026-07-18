@@ -3,8 +3,8 @@
   "baseline_tag": "refactor-baseline-20260713",
   "offer_id": "979376199787",
   "artifact_sha256": {
-    "tests/fixtures/1688/offer-result.json": "A5B15036E46ACFE0292027B78D441EDF54FF09AFE4892A169B4205E56CC03AFD",
-    "tests/fixtures/1688/legacy-offer-result-deprecated-fields.json": "5A89D56084BEFECD450510C6D1C3C8135816C4D904391294F0212C9980980D6A"
+    "tests/fixtures/1688/offer-result.json": "732AC6747752318BBCF48AF84D44A7A0F7B2FACAA9078E6450E8296EEA050ADE",
+    "tests/fixtures/1688/legacy-offer-result-deprecated-fields.json": "D9E01038CC28F33BDF30758EADFE5BFC4F72ED7214975EA69FED58A93AA0A623"
   },
   "category_tree_cli_snapshot": {
     "root_count": 26,

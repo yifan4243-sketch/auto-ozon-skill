@@ -28,12 +28,12 @@ const baseline = JSON.parse(fs.readFileSync(
 };
 
 describe('refactor baseline equivalence', () => {
-  it('keeps committed collection compatibility fixtures byte-for-byte unchanged', () => {
+  it('keeps committed collection compatibility fixtures unchanged across checkout line endings', () => {
     const actual = Object.fromEntries(
       Object.keys(baseline.artifact_sha256).map((relative) => [
         relative,
         crypto.createHash('sha256')
-          .update(fs.readFileSync(path.join(root, relative)))
+          .update(fs.readFileSync(path.join(root, relative), 'utf8').replace(/\r\n/gu, '\n'))
           .digest('hex')
           .toUpperCase(),
       ]),
