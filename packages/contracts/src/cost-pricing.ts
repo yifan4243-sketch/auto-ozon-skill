@@ -2,7 +2,7 @@ import type { WeightFactsV1 } from './weight-facts.js';
 
 export type CostPricingStatusV1 = 'completed' | 'needs_agent' | 'blocked';
 export type CostPricingTransportV1 = 'air' | 'air_land' | 'land';
-export type CostPricingPackageSourceV1 = '1688' | 'agent_estimated';
+export type CostPricingPackageSourceV1 = '1688' | 'user_provided' | 'agent_estimated';
 
 export interface CostPricingProfileV1 {
   transport: CostPricingTransportV1;
@@ -59,6 +59,7 @@ export interface CostModelV2 {
   other_fixed_micros: string;
   landed_cost_micros: string;
   tariff_version: 'CEL-2026-effective';
+  tariff_snapshot_sha256: string;
   commission_snapshot_sha256: string;
   fx_response_sha256: string;
 }
@@ -124,12 +125,25 @@ export interface CostPricingV1 {
   status: CostPricingStatusV1;
   profile: CostPricingProfileV1;
   tariff_version: 'CEL-2026-effective';
+  logistics_provider_id: 'cel';
+  tariff_snapshot_sha256: string;
+  tariff_source_verification: 'needs_review';
   commission_snapshot_sha256: string;
   fx_rate: CostPricingFxRateV1 | null;
+  resolved_packages: Array<{ source_sku_id: string; package: CostPricingPackageV1 }>;
   sku_pricing: CostPricingSkuV1[];
   agent_tasks: CostPricingAgentTaskV1[];
   warnings: CostPricingIssueV1[];
   errors: CostPricingIssueV1[];
+}
+
+export interface CostPricingPackageInputV1 {
+  source_sku_id: string;
+  packaged_weight_g: number;
+  length_cm: number;
+  width_cm: number;
+  height_cm: number;
+  rationale: string;
 }
 
 export interface CostPricingAgentSkuInputV1 {

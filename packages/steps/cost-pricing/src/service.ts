@@ -6,6 +6,7 @@ import type {
   CostPricingAgentInputV1,
   CostPricingFxRateV1,
   CostPricingPackageV1,
+  CostPricingPackageInputV1,
   CostPricingProfileV1,
   CostPricingSkuV1,
   CostPricingV1,
@@ -16,7 +17,7 @@ import type { WorkflowContext } from '@auto-ozon/artifact-store';
 import { assertWorkflowActive } from '@auto-ozon/artifact-store';
 import { loadBundledCommissionSnapshot, resolveCommissionSnapshot, selectCommissionTier } from './commission.js';
 import { CbrFxRateProvider } from './fx.js';
-import { calculateCelCandidates, CEL_TARIFF_VERSION, priceFitsCelBand } from './tariffs.js';
+import { CelLogisticsTariffProvider, CEL_TARIFF_VERSION, priceFitsCelBand, type LogisticsCandidate, type LogisticsTariffProvider } from './tariffs.js';
 import { validateCostPricingSchema } from './schema-validator.js';
 import {
   addMoney,
@@ -44,10 +45,12 @@ export interface RunCostPricingInput {
   category_decision: CategoryDecisionV1;
   profile?: Partial<CostPricingProfileV1>;
   agent_input?: CostPricingAgentInputV1;
+  package_inputs?: CostPricingPackageInputV1[];
   commission_snapshot?: unknown;
   commission_snapshot_sha256?: string;
   fx_rate?: CostPricingFxRateV1;
   fx_provider?: CostPricingFxRateProvider;
+  tariff_provider?: LogisticsTariffProvider;
 }
 
 export const DEFAULT_COST_PRICING_PROFILE: CostPricingProfileV1 = {
@@ -84,7 +87,12 @@ export async function runCostPricing(
     if (!/^[a-f0-9]{64}$/u.test(commissionHash)) {
       throw new Error('Commission snapshot SHA-256 is invalid.');
     }
-    const result = emptyResult(input.product.source.offer_id, profile, commissionHash);
+    const tariffProvider = input.tariff_provider ?? new CelLogisticsTariffProvider();
+    const result = emptyResult(input.product.source.offer_id, profile, commissionHash, tariffProvider);
+    result.warnings.push(issue(
+      'CEL_TARIFF_SOURCE_NEEDS_REVIEW',
+      'CEL rates come from a legacy manual snapshot supplied by the user; independent source and validity dates remain unverified.',
+    ));
     validateUpstream(input, result);
     const packages = new Map<string, CostPricingPackageV1>();
     if (result.errors.length === 0) resolvePackages(input, result, packages);
@@ -95,7 +103,7 @@ export async function runCostPricing(
     }
     if (result.errors.length === 0) {
       result.fx_rate = await resolveFxRate(input, context, result);
-      calculateSkuPricing(input, result, commissionSnapshot, packages);
+      calculateSkuPricing(input, result, commissionSnapshot, packages, tariffProvider);
     }
     result.status = result.errors.length > 0 ? 'blocked' : 'completed';
     return finish(result, context);
@@ -149,8 +157,9 @@ function resolvePackages(
         continue;
       }
       const sourcePackage = packageFrom1688(sku.package);
-      const agentPackage = sourcePackage ? null : packageFromAgent(input.agent_input, skuId);
-      const packaged = sourcePackage ?? agentPackage;
+      const userPackage = sourcePackage ? null : packageFromUser(input.package_inputs, skuId);
+      const agentPackage = sourcePackage || userPackage ? null : packageFromAgent(input.agent_input, skuId);
+      const packaged = sourcePackage ?? userPackage ?? agentPackage;
       if (!packaged) {
         result.agent_tasks.push({
           execution_owner: 'current_agent',
@@ -169,6 +178,7 @@ function resolvePackages(
         ));
       }
       packages.set(skuId, packaged);
+      result.resolved_packages.push({ source_sku_id: skuId, package: packaged });
     }
   }
 }
@@ -202,6 +212,7 @@ function calculateSkuPricing(
   result: CostPricingV1,
   commissionSnapshot: ReturnType<typeof resolveCommissionSnapshot>,
   packages: Map<string, CostPricingPackageV1>,
+  tariffProvider: LogisticsTariffProvider,
 ): void {
   if (!result.fx_rate) return;
   for (const group of input.category_decision.category_groups) {
@@ -212,13 +223,22 @@ function calculateSkuPricing(
       const packaged = packages.get(skuId);
       if (!sku || !packaged || !sku.price_cny) continue;
       const volumeWeightKg = packaged.length_cm * packaged.width_cm * packaged.height_cm / 12000;
-      const candidates = calculateCelCandidates({
+      const candidates = tariffProvider.calculateCandidates({
         actual_weight_kg: packaged.actual_weight_g / 1000,
         volume_weight_kg: volumeWeightKg,
         length_cm: packaged.length_cm,
         width_cm: packaged.width_cm,
         height_cm: packaged.height_cm,
       }, result.profile.transport);
+      if (candidates.length === 0) {
+        result.errors.push(issue(
+          'LOGISTICS_PROVIDER_UNSUPPORTED_PACKAGE',
+          `SKU ${skuId} retains its factual package (${packaged.actual_weight_g}g, ${packaged.length_cm}x${packaged.width_cm}x${packaged.height_cm}cm), but CEL has no applicable tariff.`,
+          [skuId],
+        ));
+        result.errors.push(issue('CEL_NO_APPLICABLE_TARIFF', `No CEL ${result.profile.transport} rule accepts SKU ${skuId}.`, [skuId]));
+        continue;
+      }
       const solutions: CostPricingSkuV1[] = [];
       for (const candidate of candidates) {
         const purchaseCost = multiplyMoney(money(sku.price_cny), result.profile.sales_unit_quantity);
@@ -255,11 +275,15 @@ function calculateSkuPricing(
             semantics: LEGACY_WEIGHT_SEMANTICS_V1,
             source: packaged.source,
             confidence: packaged.confidence,
+            source_weight_g: packaged.source_weight_g,
+            packaged_weight_g: packaged.actual_weight_g,
+            platform_attribute_weight_g: packaged.actual_weight_g + 50,
             cost_base_weight_g: packaged.actual_weight_g,
             attribute_4383_weight_g: packaged.actual_weight_g,
             attribute_4497_weight_g: packaged.actual_weight_g + 50,
             draft_weight_g: packaged.actual_weight_g,
             packaging_increment_g: 50,
+            increment_reason: 'Customer-configured compatibility rule; no official Ozon basis is asserted.',
           },
           volume_weight_kg: round(volumeWeightKg, 4),
           charge_weight_g: candidate.charge_weight_g,
@@ -287,6 +311,7 @@ function calculateSkuPricing(
             other_fixed_micros: money(result.profile.other_fixed_cny).toString(),
             landed_cost_micros: landedCost.toString(),
             tariff_version: CEL_TARIFF_VERSION,
+            tariff_snapshot_sha256: result.tariff_snapshot_sha256,
             commission_snapshot_sha256: result.commission_snapshot_sha256,
             fx_response_sha256: result.fx_rate.response_sha256,
           },
@@ -328,12 +353,6 @@ function packageFrom1688(pkg: CanonicalProductV2['skus'][number]['package']): Co
   if (pkg.matched_by === 'none' || !dimensions.every(validPositive)) return null;
   if (pkg.weight_unit === 'unknown' || !validPositive(pkg.raw_weight)) return null;
   const weightG = pkg.weight_unit === 'kg' ? pkg.raw_weight! * 1000 : pkg.raw_weight!;
-  const normalizedDimensions = dimensions.map(Number);
-  if (
-    weightG > 30000
-    || Math.max(...normalizedDimensions) > 150
-    || normalizedDimensions.reduce((sum, value) => sum + value, 0) > 310
-  ) return null;
   return {
     source: '1688', confidence: 'high', actual_weight_g: weightG, source_weight_g: weightG,
     estimate_weight_buffer_percent: 0,
@@ -385,9 +404,24 @@ function validateProfile(profile: CostPricingProfileV1): CostPricingProfileV1 {
   return profile;
 }
 
+function packageFromUser(input: CostPricingPackageInputV1[] | undefined, skuId: string): CostPricingPackageV1 | null {
+  const supplied = input?.find((candidate) => candidate.source_sku_id === skuId);
+  if (!supplied) return null;
+  const values = [supplied.packaged_weight_g, supplied.length_cm, supplied.width_cm, supplied.height_cm];
+  if (!values.every(validPositive)) throw new Error(`User package input for SKU ${skuId} must contain positive numbers.`);
+  return {
+    source: 'user_provided', confidence: 'high',
+    source_weight_g: supplied.packaged_weight_g,
+    actual_weight_g: supplied.packaged_weight_g,
+    estimate_weight_buffer_percent: 0,
+    length_cm: supplied.length_cm, width_cm: supplied.width_cm, height_cm: supplied.height_cm,
+    evidence: [supplied.rationale],
+  };
+}
+
 function resolvePriceOptions(
   landedCost: MoneyMicros,
-  candidate: ReturnType<typeof calculateCelCandidates>[number],
+  candidate: LogisticsCandidate,
   categoryId: number,
   snapshot: ReturnType<typeof resolveCommissionSnapshot>,
   result: CostPricingV1,
@@ -442,11 +476,20 @@ function validateFxRate(rate: CostPricingFxRateV1): CostPricingFxRateV1 {
   return rate;
 }
 
-function emptyResult(sourceOfferId: string, profile: CostPricingProfileV1, hash: string): CostPricingV1 {
+function emptyResult(
+  sourceOfferId: string,
+  profile: CostPricingProfileV1,
+  hash: string,
+  tariffProvider: LogisticsTariffProvider,
+): CostPricingV1 {
   return {
     schema_version: 1, source_offer_id: sourceOfferId, status: 'completed', profile,
-    tariff_version: CEL_TARIFF_VERSION, commission_snapshot_sha256: hash, fx_rate: null,
-    sku_pricing: [], agent_tasks: [], warnings: [], errors: [],
+    tariff_version: CEL_TARIFF_VERSION,
+    logistics_provider_id: 'cel',
+    tariff_snapshot_sha256: tariffProvider.snapshot_sha256,
+    tariff_source_verification: 'needs_review',
+    commission_snapshot_sha256: hash, fx_rate: null,
+    resolved_packages: [], sku_pricing: [], agent_tasks: [], warnings: [], errors: [],
   };
 }
 

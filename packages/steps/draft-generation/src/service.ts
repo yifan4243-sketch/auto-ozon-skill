@@ -130,7 +130,7 @@ function buildDraft(input: RunDraftGenerationInput): ListingDraftV2 {
       result.errors.push(issue('CONTENT_BUNDLE_MISMATCH', `SKU ${sku.source_sku_id} draft content differs from ContentBundleV1.`, [sku.source_sku_id], [4180, 4191]));
       continue;
     }
-    validateAttributes(item, sku.source_sku_id, category, result);
+    validateAttributes(item, sku.source_sku_id, category, priced.weight_facts, result);
     result.sku_bindings.push({ source_sku_id: sku.source_sku_id, offer_id: item.offer_id });
     result.items.push(item);
   }
@@ -189,7 +189,13 @@ function buildImages(candidates: Array<string | null | undefined>): string[] {
   return result.slice(0, 15);
 }
 
-function validateAttributes(item: ListingDraftItemV2, skuId: string, category: CategoryAttributesGroupV1, result: ListingDraftV2): void {
+function validateAttributes(
+  item: ListingDraftItemV2,
+  skuId: string,
+  category: CategoryAttributesGroupV1,
+  weightFacts: CostPricingV1['sku_pricing'][number]['weight_facts'],
+  result: ListingDraftV2,
+): void {
   if (item.primary_image !== item.images[0] || !item.images.includes(item.primary_image)) result.errors.push(issue('PRIMARY_IMAGE_INVALID', `SKU ${skuId} primary image must be the first built image.`, [skuId]));
   const ids = item.attributes.map((attribute) => attribute.id);
   if (ids.some((id, index) => index > 0 && id < ids[index - 1]!)) result.errors.push(issue('ATTRIBUTES_NOT_SORTED', `SKU ${skuId} attributes must be sorted by ID.`, [skuId]));
@@ -206,12 +212,12 @@ function validateAttributes(item: ListingDraftItemV2, skuId: string, category: C
   }
   if (!attributeText(item.attributes, 4191)) result.errors.push(issue('DESCRIPTION_4191_MISSING', `SKU ${skuId} lacks description attribute 4191.`, [skuId], [4191]));
   const attribute4383 = numericAttribute(item.attributes, 4383);
-  if (attribute4383 !== null && attribute4383 !== item.weight) {
-    result.errors.push(issue('WEIGHT_4383_INCONSISTENT', `SKU ${skuId} attribute 4383 must equal the draft weight ${item.weight}g under legacy-cost-base-v1.`, [skuId], [4383]));
+  if (attribute4383 !== null && attribute4383 !== weightFacts.attribute_4383_weight_g) {
+    result.errors.push(issue('WEIGHT_4383_INCONSISTENT', `SKU ${skuId} attribute 4383 does not match audited weight_facts.attribute_4383_weight_g.`, [skuId], [4383]));
   }
   const attribute4497 = numericAttribute(item.attributes, 4497);
-  if (attribute4497 !== null && attribute4497 !== item.weight + 50) {
-    result.errors.push(issue('WEIGHT_4497_INCONSISTENT', `SKU ${skuId} attribute 4497 must equal draft weight + 50g under legacy-cost-base-v1.`, [skuId], [4497]));
+  if (attribute4497 !== null && attribute4497 !== weightFacts.platform_attribute_weight_g) {
+    result.errors.push(issue('WEIGHT_4497_INCONSISTENT', `SKU ${skuId} attribute 4497 does not match the explicitly audited platform_attribute_weight_g compatibility value.`, [skuId], [4497]));
   }
   if (byId.has(10096)) {
     const color = item.attributes.find((attribute) => attribute.id === 10096);

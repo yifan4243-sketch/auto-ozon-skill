@@ -46,7 +46,13 @@ function input(includeTimestamp = true) {
     }],
     cost_pricing: { source_offer_id: '1688-offer', status: 'completed', sku_pricing: [{
       source_sku_id: 'red', final_price_cny: 25, package: { actual_weight_g: 300, length_cm: 20, width_cm: 10, height_cm: 8 },
-      weight_facts: { semantics: 'legacy-cost-base-v1', draft_weight_g: 300 },
+      weight_facts: {
+        semantics: 'legacy-cost-base-v1', source: '1688', confidence: 'high',
+        source_weight_g: 300, packaged_weight_g: 300, platform_attribute_weight_g: 350,
+        cost_base_weight_g: 300, attribute_4383_weight_g: 300, attribute_4497_weight_g: 350,
+        draft_weight_g: 300, packaging_increment_g: 50,
+        increment_reason: 'Customer-configured compatibility rule.',
+      },
     }] },
     attribute_mapping: { schema_version: 2, source_offer_id: '1688-offer', status: 'completed', sku_attributes: [{
       source_sku_id: 'red', group_id: 'group-1', description_category_id: 10, type_id: 20, ozon_attributes: attributes,

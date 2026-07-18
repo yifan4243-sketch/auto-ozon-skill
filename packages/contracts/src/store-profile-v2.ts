@@ -18,6 +18,11 @@ export interface StoreProfileV2 {
     client_id: SecretRefV1;
     client_secret: SecretRefV1;
   };
+  logistics?: {
+    provider_id: 'cel';
+    service_mode: 'air' | 'air_land' | 'land';
+    tariff_snapshot: 'cel-2026.json';
+  };
   publishing: {
     enabled: boolean;
     automation_level: 'automatic';

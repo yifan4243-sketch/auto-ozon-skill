@@ -8,6 +8,7 @@ import type {
 import {
   calculateCelCandidates,
   CbrFxRateProvider,
+  loadCelTariffSnapshot,
   resolveCommissionSnapshot,
   runCostPricing,
 } from '../../../../packages/steps/cost-pricing/src/index.js';
@@ -15,6 +16,17 @@ import {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('CEL tariff V1', () => {
+  it('loads and verifies the versioned manual snapshot without inventing validity dates', () => {
+    const snapshot = loadCelTariffSnapshot();
+    expect(snapshot).toMatchObject({
+      provider_id: 'cel', snapshot_id: 'CEL-2026-effective', currency: 'CNY',
+      source: { kind: 'legacy_manual_snapshot', verification_status: 'needs_review' },
+      captured_at: null, valid_from: null, valid_to: null,
+    });
+    expect(snapshot.sha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(snapshot.rules).toHaveLength(6);
+  });
+
   it('uses the effective land rates and exact weight boundaries', () => {
     expect(candidates(500).map((item) => item.name)).toContain('Extra Small');
     expect(candidates(501).map((item) => item.name)).toContain('Budget');
@@ -102,9 +114,22 @@ describe('cost pricing service', () => {
         weight_facts: {
           semantics: 'legacy-cost-base-v1', cost_base_weight_g: 100,
           attribute_4383_weight_g: 100, attribute_4497_weight_g: 150, draft_weight_g: 100,
+          source_weight_g: 100, packaged_weight_g: 100, platform_attribute_weight_g: 150,
+          packaging_increment_g: 50,
         },
       }],
     });
+  });
+
+  it('enforces weight, side and volumetric boundaries without widening CEL support', () => {
+    expect(candidates(30_000).length).toBeGreaterThan(0);
+    expect(candidates(30_001)).toEqual([]);
+    expect(candidates(500, 60, 20, 10).some((item) => item.name === 'Extra Small')).toBe(true);
+    expect(candidates(500, 61, 19, 10).some((item) => item.name === 'Extra Small')).toBe(false);
+    const atLimit = calculateCelCandidates({ actual_weight_kg: 3, volume_weight_kg: 31, length_cm: 100, width_cm: 100, height_cm: 100 }, 'land');
+    const overLimit = calculateCelCandidates({ actual_weight_kg: 3, volume_weight_kg: 31.001, length_cm: 100, width_cm: 100, height_cm: 100 }, 'land');
+    expect(atLimit.some((item) => item.name === 'Big')).toBe(true);
+    expect(overLimit.some((item) => item.name === 'Big')).toBe(false);
   });
 
   it('solves target-margin pricing against the matching commission tier', async () => {
@@ -155,6 +180,38 @@ describe('cost pricing service', () => {
       source: 'agent_estimated', source_weight_g: 101, actual_weight_g: 122,
       estimate_weight_buffer_percent: 20,
     });
+  });
+
+  it('preserves an over-limit 1688 package and never replaces it with an Agent estimate', async () => {
+    const input = product();
+    Object.assign(input.skus[0]!.package, { raw_weight: 31, weight_unit: 'kg', length_cm: 160, width_cm: 90, height_cm: 90 });
+    const result = await runCostPricing({
+      product: input, category_decision: decision(), fx_rate: fx(), commission_snapshot: commission(),
+      agent_input: {
+        source_offer_id: 'offer-1',
+        sku_inputs: [{ source_sku_id: 'sku-1', packaged_weight_g: 100, length_cm: 10, width_cm: 10, height_cm: 10, rationale: 'must not win', evidence: [] }],
+      },
+    });
+    expect(result.data?.resolved_packages[0]).toMatchObject({
+      source_sku_id: 'sku-1',
+      package: { source: '1688', confidence: 'high', actual_weight_g: 31_000, length_cm: 160, width_cm: 90, height_cm: 90 },
+    });
+    expect(result.data?.agent_tasks).toEqual([]);
+    expect(result.errors.map((error) => error.code)).toEqual(expect.arrayContaining([
+      'LOGISTICS_PROVIDER_UNSUPPORTED_PACKAGE', 'CEL_NO_APPLICABLE_TARIFF',
+    ]));
+  });
+
+  it('uses explicit user packaging only when source facts are incomplete', async () => {
+    const input = product();
+    input.skus[0]!.package.matched_by = 'none';
+    input.skus[0]!.package.raw_weight = null;
+    const result = await runCostPricing({
+      product: input, category_decision: decision(), fx_rate: fx(), commission_snapshot: commission(),
+      package_inputs: [{ source_sku_id: 'sku-1', packaged_weight_g: 200, length_cm: 12, width_cm: 11, height_cm: 10, rationale: 'Customer measured one sales unit.' }],
+    });
+    expect(result.data?.resolved_packages[0]?.package).toMatchObject({ source: 'user_provided', confidence: 'high', actual_weight_g: 200 });
+    expect(result.data?.status).toBe('completed');
   });
 
   it('rejects internally inconsistent exchange-rate fields', async () => {

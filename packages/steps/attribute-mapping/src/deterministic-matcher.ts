@@ -47,8 +47,8 @@ export function matchDeterministicAttribute(
   if (attribute.id === ATTRIBUTE.netWeight && costWeight && costWeight > 3) {
     return costDerived(attribute.id, costEntry?.weight_facts?.attribute_4383_weight_g ?? costWeight, 'weight_facts.attribute_4383_weight_g');
   }
-  if (attribute.id === ATTRIBUTE.packagedWeight && costWeight && costWeight > 3) {
-    return costDerived(attribute.id, costEntry?.weight_facts?.attribute_4497_weight_g ?? costWeight + 50, 'weight_facts.attribute_4497_weight_g');
+  if (attribute.id === ATTRIBUTE.packagedWeight && costEntry?.weight_facts?.attribute_4497_weight_g) {
+    return costDerived(attribute.id, costEntry.weight_facts.attribute_4497_weight_g, 'weight_facts.attribute_4497_weight_g');
   }
   const weight = sourceNetWeightGrams(product, sku);
   if (attribute.id === ATTRIBUTE.netWeight && weight !== null) {

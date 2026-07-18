@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "provider_id": "cel",
+  "provider_name": "CEL",
+  "snapshot_id": "CEL-2026-effective",
+  "service_modes": ["air", "air_land", "land"],
+  "currency": "CNY",
+  "source": {
+    "kind": "legacy_manual_snapshot",
+    "reference": "User-provided CEL tariff table image; independent source verification pending.",
+    "verification_status": "needs_review"
+  },
+  "captured_at": null,
+  "valid_from": null,
+  "valid_to": null,
+  "sha256": "05cbc09a878618d58a06a7b40dfdf7843216016233f9f33224042557200f08a6",
+  "rules": [
+    {
+      "name": "Extra Small",
+      "price_min_rub": 1,
+      "price_min_inclusive": true,
+      "price_max_rub": 1500,
+      "actual_weight_min_kg": 0.001,
+      "actual_weight_min_inclusive": true,
+      "actual_weight_max_kg": 0.5,
+      "side_sum_max_cm": 90,
+      "longest_side_max_cm": 60,
+      "volume_weight_max_kg": null,
+      "sorted_side_max_cm": null,
+      "charge_weight": "actual",
+      "rates": {
+        "air": { "per_g_cny": "0.0468", "fixed_cny": "3.12" },
+        "air_land": { "per_g_cny": "0.0364", "fixed_cny": "3.12" },
+        "land": { "per_g_cny": "0.026", "fixed_cny": "3.12" }
+      }
+    },
+    {
+      "name": "Budget",
+      "price_min_rub": 1,
+      "price_min_inclusive": true,
+      "price_max_rub": 1500,
+      "actual_weight_min_kg": 0.5,
+      "actual_weight_min_inclusive": false,
+      "actual_weight_max_kg": 30,
+      "side_sum_max_cm": 150,
+      "longest_side_max_cm": 60,
+      "volume_weight_max_kg": null,
+      "sorted_side_max_cm": null,
+      "charge_weight": "actual",
+      "rates": {
+        "air": { "per_g_cny": "0.03432", "fixed_cny": "23.92" },
+        "air_land": { "per_g_cny": "0.026", "fixed_cny": "23.92" },
+        "land": { "per_g_cny": "0.01768", "fixed_cny": "23.92" }
+      }
+    },
+    {
+      "name": "Small",
+      "price_min_rub": 1500,
+      "price_min_inclusive": false,
+      "price_max_rub": 7000,
+      "actual_weight_min_kg": 0.001,
+      "actual_weight_min_inclusive": true,
+      "actual_weight_max_kg": 2,
+      "side_sum_max_cm": 150,
+      "longest_side_max_cm": 60,
+      "volume_weight_max_kg": null,
+      "sorted_side_max_cm": null,
+      "charge_weight": "actual",
+      "rates": {
+        "air": { "per_g_cny": "0.0468", "fixed_cny": "16.64" },
+        "air_land": { "per_g_cny": "0.0364", "fixed_cny": "16.64" },
+        "land": { "per_g_cny": "0.026", "fixed_cny": "16.64" }
+      }
+    },
+    {
+      "name": "Big",
+      "price_min_rub": 1500,
+      "price_min_inclusive": false,
+      "price_max_rub": 7000,
+      "actual_weight_min_kg": 2,
+      "actual_weight_min_inclusive": false,
+      "actual_weight_max_kg": 30,
+      "side_sum_max_cm": 310,
+      "longest_side_max_cm": 150,
+      "volume_weight_max_kg": 31,
+      "sorted_side_max_cm": null,
+      "charge_weight": "max_actual_volume",
+      "rates": {
+        "air_land": { "per_g_cny": "0.026", "fixed_cny": "37.44" },
+        "land": { "per_g_cny": "0.01768", "fixed_cny": "37.44" }
+      }
+    },
+    {
+      "name": "Premium Small",
+      "price_min_rub": 7000,
+      "price_min_inclusive": false,
+      "price_max_rub": 250000,
+      "actual_weight_min_kg": 0.001,
+      "actual_weight_min_inclusive": true,
+      "actual_weight_max_kg": 5,
+      "side_sum_max_cm": 250,
+      "longest_side_max_cm": 150,
+      "volume_weight_max_kg": null,
+      "sorted_side_max_cm": null,
+      "charge_weight": "actual",
+      "rates": {
+        "air": { "per_g_cny": "0.0468", "fixed_cny": "22.88" },
+        "air_land": { "per_g_cny": "0.0364", "fixed_cny": "22.88" },
+        "land": { "per_g_cny": "0.026", "fixed_cny": "22.88" }
+      }
+    },
+    {
+      "name": "Premium Big",
+      "price_min_rub": 7000,
+      "price_min_inclusive": false,
+      "price_max_rub": 250000,
+      "actual_weight_min_kg": 5,
+      "actual_weight_min_inclusive": false,
+      "actual_weight_max_kg": 30,
+      "side_sum_max_cm": 310,
+      "longest_side_max_cm": 150,
+      "volume_weight_max_kg": 80,
+      "sorted_side_max_cm": [150, 80, 80],
+      "charge_weight": "max_actual_volume",
+      "rates": {
+        "air_land": { "per_g_cny": "0.02912", "fixed_cny": "64.48" },
+        "land": { "per_g_cny": "0.02392", "fixed_cny": "64.48" }
+      }
+    }
+  ]
+}

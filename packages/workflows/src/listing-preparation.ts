@@ -9,6 +9,7 @@ import type {
   ContentBundleV1,
   CostPricingAgentInputV1,
   CostPricingFxRateV1,
+  CostPricingPackageInputV1,
   CostPricingProfileV1,
   CostPricingV1,
   DraftGenerationProfileV1,
@@ -70,6 +71,7 @@ export interface RunListingPreparationInput {
   category_attributes?: Pick<RunCategoryAttributesInput, 'force_refresh' | 'transport'>;
   cost_pricing_profile?: Partial<CostPricingProfileV1>;
   cost_pricing_agent_input?: CostPricingAgentInputV1;
+  cost_pricing_package_inputs?: CostPricingPackageInputV1[];
   cost_pricing_commission_snapshot?: unknown;
   cost_pricing_commission_snapshot_sha256?: string;
   cost_pricing_fx_rate?: CostPricingFxRateV1;
@@ -376,6 +378,7 @@ async function executeListingPreparation(
   await prepareStep(context, 'cost-pricing', {
     profile: input.cost_pricing_profile,
     agent_input: input.cost_pricing_agent_input,
+    package_inputs: input.cost_pricing_package_inputs,
     commission_snapshot_sha256: input.cost_pricing_commission_snapshot_sha256,
     fx_rate: input.cost_pricing_fx_rate,
   });
@@ -391,6 +394,7 @@ async function executeListingPreparation(
     startFrom,
     shouldForce('cost-pricing') || Boolean(
       input.cost_pricing_agent_input
+      || input.cost_pricing_package_inputs
       || input.cost_pricing_profile
       || input.cost_pricing_commission_snapshot,
     ),
@@ -402,6 +406,7 @@ async function executeListingPreparation(
         category_decision: decision,
         profile: input.cost_pricing_profile,
         agent_input: input.cost_pricing_agent_input ?? recoverPricingAgentInput(previousPricing),
+        package_inputs: input.cost_pricing_package_inputs,
         commission_snapshot: input.cost_pricing_commission_snapshot,
         commission_snapshot_sha256: input.cost_pricing_commission_snapshot_sha256,
         fx_rate: previousPricing?.fx_rate ?? input.cost_pricing_fx_rate ?? undefined,

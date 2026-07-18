@@ -127,7 +127,7 @@ export async function runBatchWorkflow(input: { batch_id: string; store?: FileBa
           source: { mode: 'offers', offerIds: [candidate.offer_id], profile: options.profile, headed: spec.collection.headed },
           category_decision_provider: category ? new AgentDecisionProvider(async () => category) : undefined,
           cost_pricing_profile: {
-            transport: 'land', sales_unit_quantity: 1,
+            transport: storeProfile.logistics?.service_mode ?? 'land', sales_unit_quantity: 1,
             pricing_mode: storeProfile.pricing.mode,
             pricing_multiplier: Number(storeProfile.pricing.multiplier ?? '2'),
             retained_target_percent: Number(storeProfile.pricing.target_margin_percent ?? '0'),

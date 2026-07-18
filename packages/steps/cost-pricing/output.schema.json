@@ -4,7 +4,7 @@
   "title": "CostPricingV1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "source_offer_id", "status", "profile", "tariff_version", "commission_snapshot_sha256", "fx_rate", "sku_pricing", "agent_tasks", "warnings", "errors"],
+  "required": ["schema_version", "source_offer_id", "status", "profile", "tariff_version", "logistics_provider_id", "tariff_snapshot_sha256", "tariff_source_verification", "commission_snapshot_sha256", "fx_rate", "resolved_packages", "sku_pricing", "agent_tasks", "warnings", "errors"],
   "properties": {
     "schema_version": { "const": 1 },
     "source_offer_id": { "type": "string", "minLength": 1 },
@@ -28,8 +28,23 @@
       }
     },
     "tariff_version": { "const": "CEL-2026-effective" },
+    "logistics_provider_id": { "const": "cel" },
+    "tariff_snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "tariff_source_verification": { "const": "needs_review" },
     "commission_snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "fx_rate": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/fx" }] },
+    "resolved_packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_sku_id", "package"],
+        "properties": {
+          "source_sku_id": { "type": "string", "minLength": 1 },
+          "package": { "$ref": "#/$defs/package" }
+        }
+      }
+    },
     "sku_pricing": { "type": "array", "items": { "$ref": "#/$defs/sku" } },
     "agent_tasks": { "type": "array", "items": { "$ref": "#/$defs/task" } },
     "warnings": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
@@ -52,7 +67,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["source", "confidence", "actual_weight_g", "source_weight_g", "estimate_weight_buffer_percent", "length_cm", "width_cm", "height_cm", "evidence"],
       "properties": {
-        "source": { "enum": ["1688", "agent_estimated"] }, "confidence": { "enum": ["high", "low"] },
+        "source": { "enum": ["1688", "user_provided", "agent_estimated"] }, "confidence": { "enum": ["high", "low"] },
         "actual_weight_g": { "$ref": "#/$defs/positive" }, "source_weight_g": { "$ref": "#/$defs/positive" },
         "estimate_weight_buffer_percent": { "type": "number", "minimum": 0 },
         "length_cm": { "$ref": "#/$defs/positive" }, "width_cm": { "$ref": "#/$defs/positive" }, "height_cm": { "$ref": "#/$defs/positive" },
@@ -69,16 +84,20 @@
     },
     "weightFacts": {
       "type": "object", "additionalProperties": false,
-      "required": ["semantics", "source", "confidence", "cost_base_weight_g", "attribute_4383_weight_g", "attribute_4497_weight_g", "draft_weight_g", "packaging_increment_g"],
+      "required": ["semantics", "source", "confidence", "source_weight_g", "packaged_weight_g", "platform_attribute_weight_g", "cost_base_weight_g", "attribute_4383_weight_g", "attribute_4497_weight_g", "draft_weight_g", "packaging_increment_g", "increment_reason"],
       "properties": {
         "semantics": { "const": "legacy-cost-base-v1" },
-        "source": { "enum": ["1688", "agent_estimated"] },
+        "source": { "enum": ["1688", "user_provided", "agent_estimated"] },
         "confidence": { "enum": ["high", "low"] },
+        "source_weight_g": { "$ref": "#/$defs/positive" },
+        "packaged_weight_g": { "$ref": "#/$defs/positive" },
+        "platform_attribute_weight_g": { "$ref": "#/$defs/positive" },
         "cost_base_weight_g": { "$ref": "#/$defs/positive" },
         "attribute_4383_weight_g": { "$ref": "#/$defs/positive" },
         "attribute_4497_weight_g": { "$ref": "#/$defs/positive" },
         "draft_weight_g": { "$ref": "#/$defs/positive" },
-        "packaging_increment_g": { "const": 50 }
+        "packaging_increment_g": { "const": 50 },
+        "increment_reason": { "type": "string", "minLength": 1 }
       }
     },
     "sku": {
@@ -105,13 +124,14 @@
     },
     "costModelV2": {
       "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "currency_code", "purchase_cost_micros", "domestic_shipping_micros", "label_fee_micros", "cel_shipping_micros", "other_fixed_micros", "landed_cost_micros", "tariff_version", "commission_snapshot_sha256", "fx_response_sha256"],
+      "required": ["schema_version", "currency_code", "purchase_cost_micros", "domestic_shipping_micros", "label_fee_micros", "cel_shipping_micros", "other_fixed_micros", "landed_cost_micros", "tariff_version", "tariff_snapshot_sha256", "commission_snapshot_sha256", "fx_response_sha256"],
       "properties": {
         "schema_version": { "const": 2 }, "currency_code": { "const": "CNY" },
         "purchase_cost_micros": { "$ref": "#/$defs/micros" }, "domestic_shipping_micros": { "$ref": "#/$defs/micros" },
         "label_fee_micros": { "$ref": "#/$defs/micros" }, "cel_shipping_micros": { "$ref": "#/$defs/micros" },
         "other_fixed_micros": { "$ref": "#/$defs/micros" }, "landed_cost_micros": { "$ref": "#/$defs/micros" },
         "tariff_version": { "const": "CEL-2026-effective" },
+        "tariff_snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "commission_snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "fx_response_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }

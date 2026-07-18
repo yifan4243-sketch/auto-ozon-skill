@@ -395,11 +395,21 @@ function costPricingFixture(): CostPricingV1 {
     status: 'completed',
     profile: {} as CostPricingV1['profile'],
     tariff_version: 'CEL-2026-effective',
+    logistics_provider_id: 'cel',
+    tariff_snapshot_sha256: 'b'.repeat(64),
+    tariff_source_verification: 'needs_review',
     commission_snapshot_sha256: 'a'.repeat(64),
     fx_rate: null,
+    resolved_packages: [],
     sku_pricing: [
-      { source_sku_id: 'red', package: { actual_weight_g: 240 } },
-      { source_sku_id: 'blue', package: { actual_weight_g: 260 } },
+      {
+        source_sku_id: 'red', package: { actual_weight_g: 240 },
+        weight_facts: { cost_base_weight_g: 240, attribute_4383_weight_g: 240, attribute_4497_weight_g: 290 },
+      },
+      {
+        source_sku_id: 'blue', package: { actual_weight_g: 260 },
+        weight_facts: { cost_base_weight_g: 260, attribute_4383_weight_g: 260, attribute_4497_weight_g: 310 },
+      },
     ] as CostPricingV1['sku_pricing'],
     agent_tasks: [],
     warnings: [],
