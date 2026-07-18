@@ -4,6 +4,7 @@ export {
   CelLogisticsTariffProvider,
   CEL_TARIFF_VERSION,
   loadCelTariffSnapshot,
+  priceFitsCelBand,
   type LogisticsCandidate,
   type LogisticsTariffProvider,
 } from './tariffs.js';

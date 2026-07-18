@@ -1,9 +1,9 @@
 export const LEGACY_WEIGHT_SEMANTICS_V1 = 'legacy-cost-base-v1' as const;
 
 /**
- * Locked compatibility semantics for the current workflow.
- * The cost-pricing package weight is the shared base. Attribute 4383 and the
- * draft request use that base; attribute 4497 uses base + 50 g.
+ * Compatibility contract that keeps source, packaged and platform attribute
+ * weights distinct. The 50 g increment is a customer policy, not an asserted
+ * Ozon or carrier fact, and its reason must remain auditable.
  */
 export interface WeightFactsV1 {
   semantics: typeof LEGACY_WEIGHT_SEMANTICS_V1;

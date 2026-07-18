@@ -9,6 +9,7 @@ import {
   calculateCelCandidates,
   CbrFxRateProvider,
   loadCelTariffSnapshot,
+  priceFitsCelBand,
   resolveCommissionSnapshot,
   runCostPricing,
 } from '../../../../packages/steps/cost-pricing/src/index.js';
@@ -54,6 +55,43 @@ describe('CEL tariff V1', () => {
   it('enforces Premium Big dimensions and volumetric ceiling', () => {
     expect(candidates(6000, 150, 80, 80).some((item) => item.name === 'Premium Big')).toBe(true);
     expect(candidates(6000, 150, 81, 79).some((item) => item.name === 'Premium Big')).toBe(false);
+    expect(candidates(6000, 150, 80, 80.01).some((item) => item.name === 'Premium Big')).toBe(false);
+  });
+
+  it('enforces the documented weight and dimension boundaries exactly', () => {
+    expect(candidates(30_000).length).toBeGreaterThan(0);
+    expect(candidates(30_001)).toEqual([]);
+
+    expect(candidates(500, 60, 20, 10).some((item) => item.name === 'Extra Small')).toBe(true);
+    expect(candidates(500, 60.01, 19.99, 10).some((item) => item.name === 'Extra Small')).toBe(false);
+
+    expect(candidates(501, 60, 50, 40).some((item) => item.name === 'Budget')).toBe(true);
+    expect(candidates(501, 60, 50, 40.01).some((item) => item.name === 'Budget')).toBe(false);
+
+    const bigAtLimit = calculateCelCandidates({
+      actual_weight_kg: 3, volume_weight_kg: 18.75,
+      length_cm: 150, width_cm: 150, height_cm: 10,
+    }, 'land');
+    const bigOverLimit = calculateCelCandidates({
+      actual_weight_kg: 3, volume_weight_kg: 18.75,
+      length_cm: 150, width_cm: 150, height_cm: 10.01,
+    }, 'land');
+    expect(bigAtLimit.some((item) => item.name === 'Big')).toBe(true);
+    expect(bigOverLimit.some((item) => item.name === 'Big')).toBe(false);
+  });
+
+  it('uses inclusive and exclusive RUB price-band edges without overlap', () => {
+    const extraSmall = candidates(100).find((item) => item.name === 'Extra Small')!;
+    const small = candidates(100).find((item) => item.name === 'Small')!;
+    const premiumSmall = candidates(100).find((item) => item.name === 'Premium Small')!;
+
+    expect(priceFitsCelBand(1, extraSmall)).toBe(true);
+    expect(priceFitsCelBand(1500, extraSmall)).toBe(true);
+    expect(priceFitsCelBand(1500, small)).toBe(false);
+    expect(priceFitsCelBand(1500.01, small)).toBe(true);
+    expect(priceFitsCelBand(7000, small)).toBe(true);
+    expect(priceFitsCelBand(7000, premiumSmall)).toBe(false);
+    expect(priceFitsCelBand(7000.01, premiumSmall)).toBe(true);
   });
 });
 
@@ -121,15 +159,16 @@ describe('cost pricing service', () => {
     });
   });
 
-  it('enforces weight, side and volumetric boundaries without widening CEL support', () => {
-    expect(candidates(30_000).length).toBeGreaterThan(0);
-    expect(candidates(30_001)).toEqual([]);
-    expect(candidates(500, 60, 20, 10).some((item) => item.name === 'Extra Small')).toBe(true);
-    expect(candidates(500, 61, 19, 10).some((item) => item.name === 'Extra Small')).toBe(false);
+  it('enforces volumetric boundaries without widening CEL support', () => {
     const atLimit = calculateCelCandidates({ actual_weight_kg: 3, volume_weight_kg: 31, length_cm: 100, width_cm: 100, height_cm: 100 }, 'land');
     const overLimit = calculateCelCandidates({ actual_weight_kg: 3, volume_weight_kg: 31.001, length_cm: 100, width_cm: 100, height_cm: 100 }, 'land');
     expect(atLimit.some((item) => item.name === 'Big')).toBe(true);
     expect(overLimit.some((item) => item.name === 'Big')).toBe(false);
+
+    const premiumAtLimit = calculateCelCandidates({ actual_weight_kg: 6, volume_weight_kg: 80, length_cm: 150, width_cm: 80, height_cm: 80 }, 'land');
+    const premiumOverLimit = calculateCelCandidates({ actual_weight_kg: 6, volume_weight_kg: 80.001, length_cm: 150, width_cm: 80, height_cm: 80 }, 'land');
+    expect(premiumAtLimit.some((item) => item.name === 'Premium Big')).toBe(true);
+    expect(premiumOverLimit.some((item) => item.name === 'Premium Big')).toBe(false);
   });
 
   it('solves target-margin pricing against the matching commission tier', async () => {

@@ -697,7 +697,7 @@ const STEP_IMPLEMENTATION_VERSIONS: Record<WorkflowStepName, string> = {
   'source-1688': '1',
   'canonicalize-product': '2',
   'category-decision': '1',
-  'cost-pricing': '1',
+  'cost-pricing': '2',
   'category-attributes': '1',
   'attribute-mapping': '2',
   'draft-generation': '2',
