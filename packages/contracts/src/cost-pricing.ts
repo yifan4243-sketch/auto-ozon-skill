@@ -14,6 +14,8 @@ export interface CostPricingProfileV1 {
   domestic_shipping_cny: number;
   other_fixed_cny: number;
   other_rate_percent: number;
+  advertising_reserve_percent: number;
+  return_loss_reserve_percent: number;
 }
 
 export interface CostPricingFxRateV1 {
@@ -47,6 +49,33 @@ export interface CostPricingCommissionTierV1 {
   rate_percent: number;
 }
 
+export interface CostModelV2 {
+  schema_version: 2;
+  currency_code: 'CNY';
+  purchase_cost_micros: string;
+  domestic_shipping_micros: string;
+  label_fee_micros: string;
+  cel_shipping_micros: string;
+  other_fixed_micros: string;
+  landed_cost_micros: string;
+  tariff_version: 'CEL-2026-effective';
+  commission_snapshot_sha256: string;
+  fx_response_sha256: string;
+}
+
+export interface PriceDecisionV2 {
+  schema_version: 2;
+  mode: 'multiplier' | 'target_margin';
+  solver: 'self_consistent_cel_commission_band';
+  final_price_cny: number;
+  final_price_micros: string;
+  final_price_rub: number;
+  configured_multiplier: number;
+  retained_target_percent: number;
+  achieved_profit_margin_percent: number;
+  commission: CostPricingCommissionTierV1;
+}
+
 export interface CostPricingSkuV1 {
   source_sku_id: string;
   group_id: string;
@@ -67,8 +96,12 @@ export interface CostPricingSkuV1 {
   commission: CostPricingCommissionTierV1;
   commission_amount_cny: number;
   other_rate_amount_cny: number;
+  advertising_reserve_amount_cny: number;
+  return_loss_reserve_amount_cny: number;
   estimated_profit_cny: number;
   estimated_profit_margin_percent: number;
+  cost_model: CostModelV2;
+  price_decision: PriceDecisionV2;
 }
 
 export interface CostPricingAgentTaskV1 {

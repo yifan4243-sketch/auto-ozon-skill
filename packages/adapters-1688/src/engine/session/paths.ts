@@ -19,7 +19,7 @@ export function defaultProfileName(profile?: string): string {
 
 export function profileRuntimeDir(profile?: string): string {
   const name = defaultProfileName(profile);
-  return name === 'default' ? root() : profilePath(name);
+  return profilePath(name);
 }
 
 export function stateFile(profile?: string): string {

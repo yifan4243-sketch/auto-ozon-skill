@@ -15,6 +15,6 @@ function resolveSchemaPath(): string {
   const root = resolveRepoRoot(moduleDirectory);
   const candidates = [path.join(root, 'packages/steps/draft-generation/output.schema.json'), path.resolve(moduleDirectory, '../output.schema.json')];
   const found = candidates.find(fs.existsSync);
-  if (!found) throw new Error(`ListingDraftV1 schema not found: ${candidates.join(', ')}`);
+  if (!found) throw new Error(`ListingDraftV2 schema not found: ${candidates.join(', ')}`);
   return found;
 }

@@ -1,18 +1,21 @@
 import type {
   AttributeMappingAgentInputV1,
-  AttributeMappingV1,
+  AttributeMappingV2,
   CanonicalProductV2,
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
+  CategoryDecisionAgentTaskV1,
   CommandResult,
+  ContentBundleV1,
   CostPricingAgentInputV1,
   CostPricingFxRateV1,
   CostPricingProfileV1,
   CostPricingV1,
   DraftGenerationProfileV1,
-  ListingDraftV1,
+  ListingDraftV2,
   ImageBundleV1,
   ImageGenerationProviderV1,
+  ImageReviewAgentInputV1,
   WorkflowRunManifestV2,
   WorkflowStepName,
   WorkflowStepStatus,
@@ -34,14 +37,17 @@ import {
 import { runCanonicalizeProduct } from '@auto-ozon/step-canonicalize-product';
 import {
   FileDecisionProvider,
+  flattenOzonCategoryTree,
+  loadOzonCategoryTree,
   runCategoryDecision,
+  searchOzonCategories,
   type CategoryDecisionProvider,
 } from '@auto-ozon/step-category-decision';
 import {
   runCategoryAttributes,
   type RunCategoryAttributesInput,
 } from '@auto-ozon/step-category-attributes';
-import { runAttributeMapping } from '@auto-ozon/step-attribute-mapping';
+import { buildContentBundle, runAttributeMapping } from '@auto-ozon/step-attribute-mapping';
 import {
   runCostPricing,
   type CostPricingFxRateProvider,
@@ -49,10 +55,15 @@ import {
 import { runDraftGeneration } from '@auto-ozon/step-draft-generation';
 import { runImagePipeline, type ImagePipelineGenerationOptionsV1 } from '@auto-ozon/image-pipeline';
 import type { CollectedSourcingRun } from '@auto-ozon/adapters-1688';
+import { loadOzonEnvironment, withOzonMcpCredentials } from '@auto-ozon/adapters-ozon';
+import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@auto-ozon/config';
 import { LISTING_PREPARATION_ORDER } from './step-registry.js';
+import { SqliteJobStore, type WorkflowJobStateStore } from '@auto-ozon/job-store';
 
 export interface RunListingPreparationInput {
   run_id?: string;
+  /** Store whose two SecretRefs are allowed into read-only Ozon MCP calls. */
+  store_id?: string;
   source?: RunSource1688Input;
   category_decision_provider?: CategoryDecisionProvider;
   category_decision_file?: string;
@@ -68,13 +79,25 @@ export interface RunListingPreparationInput {
   image_bundle?: ImageBundleV1;
   image_generation?: ImagePipelineGenerationOptionsV1;
   image_generation_provider?: ImageGenerationProviderV1;
+  image_review_agent_input?: ImageReviewAgentInputV1;
+  qualification?: {
+    max_sku_per_product: number;
+    price_min_cny: number | null;
+    price_max_cny: number | null;
+    require_image: boolean;
+  };
   start_from?: WorkflowStepName;
   stop_after?: WorkflowStepName;
   force_steps?: WorkflowStepName[];
   stop_on_review?: boolean;
   artifact_store?: ArtifactStore;
+  job_state_store?: WorkflowJobStateStore;
   logger?: WorkflowLogger;
   signal?: AbortSignal;
+  /** Internal persistent relationship for batch orchestration. */
+  job_id?: string;
+  /** Internal source offer relationship for batch orchestration. */
+  offer_id?: string;
 }
 
 export interface ListingPreparationResultV1 {
@@ -88,14 +111,18 @@ export interface ListingPreparationResultV1 {
   category_decision?: CategoryDecisionV1;
   cost_pricing?: CostPricingV1;
   category_attributes?: CategoryAttributesGroupV1[];
-  attribute_mapping?: AttributeMappingV1;
-  listing_draft?: ListingDraftV1;
+  attribute_mapping?: AttributeMappingV2;
+  content_bundle?: ContentBundleV1;
+  image_bundle?: ImageBundleV1;
+  listing_draft?: ListingDraftV2;
 }
 
 export async function runListingPreparation(
   input: RunListingPreparationInput,
 ): Promise<CommandResult<ListingPreparationResultV1>> {
   const artifactStore = input.artifact_store ?? new FileArtifactStore();
+  const jobStateStore = input.job_state_store ?? new SqliteJobStore();
+  const ownsJobStateStore = !input.job_state_store;
   const runId = input.run_id ?? createRunId();
   try {
     return await artifactStore.withRunLock(runId, () => executeListingPreparation({
@@ -125,6 +152,10 @@ export async function runListingPreparation(
       'WORKFLOW_EXECUTION_FAILED',
       error instanceof Error ? error.message : String(error),
     );
+  } finally {
+    const manifest = await artifactStore.readManifest(runId).catch(() => null);
+    if (manifest) await jobStateStore.mirrorManifest(manifest, input.job_id ?? null, input.offer_id ?? null);
+    if (ownsJobStateStore) await jobStateStore.close();
   }
 }
 
@@ -191,6 +222,21 @@ async function executeListingPreparation(
   if (Number.isFinite(earliestForce)) {
     await store.markDownstreamStale(runId, LISTING_PREPARATION_ORDER[earliestForce]!);
   }
+  const legacyDraft = await store.read<unknown>(runId, 'draft-generation', 'listing-draft-v1.json');
+  const currentDraft = await store.read<unknown>(runId, 'draft-generation', 'listing-draft-v2.json');
+  if (legacyDraft && !currentDraft) {
+    return workflowFailure(
+      {
+        run_id: runId,
+        artifact_store: store,
+        logger: input.logger ?? createFileWorkflowLogger(store.runsRoot, runId),
+        force_refresh: false,
+        signal: input.signal,
+      },
+      'LEGACY_DRAFT_CONTRACT_UNSUPPORTED',
+      'This run contains ListingDraftV1. It remains read-only and cannot be resumed; start a new run for ListingDraftV2.',
+    );
+  }
   const stopOnReview = input.stop_on_review ?? true;
   const result: Omit<ListingPreparationResultV1, 'manifest' | 'status' | 'stopped_after'> = {
     schema_version: 1,
@@ -221,7 +267,7 @@ async function executeListingPreparation(
   result.source = source;
   if (stopAfter === 'source-1688') return workflowSuccess(context, 'source-1688', result);
 
-  await prepareStep(context, 'canonicalize-product', { schema_version: 2 });
+  await prepareStep(context, 'canonicalize-product', { schema_version: 2, qualification: input.qualification ?? null });
   let product = await restore<CanonicalProductV2>(
     context,
     'canonicalize-product',
@@ -254,6 +300,14 @@ async function executeListingPreparation(
     product = items[0]!;
   }
   result.product = product;
+  const qualificationError = validateProductQualification(product, input.qualification);
+  if (qualificationError) {
+    await store.updateStep(runId, 'canonicalize-product', {
+      status: 'blocked',
+      error: { code: qualificationError.code, message: qualificationError.message, recoverable: false },
+    });
+    return workflowSuccess(context, 'canonicalize-product', result, 'blocked');
+  }
   const canonicalStatus = product.validation.status === 'blocked'
     ? 'blocked'
     : product.validation.status === 'needs_review'
@@ -283,8 +337,16 @@ async function executeListingPreparation(
         ? new FileDecisionProvider(input.category_decision_file)
         : undefined);
     if (!decisionProvider) {
+      const categoryTask = await buildCategoryAgentTask(product);
+      const output = await store.write(
+        runId,
+        'category-decision',
+        'category-agent-task-v1.json',
+        categoryTask,
+      );
       await store.updateStep(runId, 'category-decision', {
         status: 'needs_review',
+        output,
         error_code: 'CATEGORY_DECISION_PROVIDER_REQUIRED',
       });
       return workflowSuccess(context, 'category-decision', result, 'needs_review');
@@ -374,15 +436,15 @@ async function executeListingPreparation(
     shouldForce('category-attributes'),
   );
   if (!attributes) {
-    const step = await runCategoryAttributes(
-      {
+    const runAttributes = () => runCategoryAttributes({
         category_decision: decision,
         force_refresh:
           shouldForce('category-attributes') || input.category_attributes?.force_refresh,
         transport: input.category_attributes?.transport,
-      },
-      context,
-    );
+      }, context);
+    const step = input.category_attributes?.transport || !input.store_id
+      ? await runAttributes()
+      : await withSelectedStoreMcpCredentials(input.store_id, runAttributes);
     if (!step.data || !step.ok) {
       return stopFromStep(context, 'category-attributes', step, result);
     }
@@ -394,10 +456,10 @@ async function executeListingPreparation(
   }
 
   await prepareStep(context, 'attribute-mapping', input.attribute_mapping_agent_input);
-  let mapping = await restore<AttributeMappingV1>(
+  let mapping = await restore<AttributeMappingV2>(
     context,
     'attribute-mapping',
-    'attribute-mapping-v1.json',
+    'attribute-mapping-v2.json',
     startFrom,
     shouldForce('attribute-mapping') || Boolean(input.attribute_mapping_agent_input),
   );
@@ -418,7 +480,36 @@ async function executeListingPreparation(
     mapping = step.data;
   }
   result.attribute_mapping = mapping;
+  let contentBundle = await store.read<ContentBundleV1>(
+    runId,
+    'attribute-mapping',
+    'content-bundle-v1.json',
+  );
+  if (!contentBundle || contentBundle.source_offer_id !== mapping.source_offer_id) {
+    contentBundle = buildContentBundle(mapping);
+    await store.write(
+      runId,
+      'attribute-mapping',
+      'content-bundle-v1.json',
+      contentBundle,
+    );
+  }
+  result.content_bundle = contentBundle;
   const mappingStatus = mapping.status === 'completed' ? 'succeeded' : mapping.status;
+  if (contentBundle.status === 'blocked') {
+    await store.updateStep(runId, 'attribute-mapping', {
+      status: 'blocked',
+      error_code: 'CONTENT_BUNDLE_BLOCKED',
+    });
+    return workflowSuccess(context, 'attribute-mapping', result, 'blocked');
+  }
+  if (contentBundle.status === 'needs_review') {
+    await store.updateStep(runId, 'attribute-mapping', {
+      status: 'needs_review',
+      error_code: 'CONTENT_AGENT_INPUT_REQUIRED',
+    });
+    return workflowSuccess(context, 'attribute-mapping', result, 'needs_review');
+  }
   if (mappingStatus === 'blocked' || (mappingStatus === 'needs_review' && stopOnReview)) {
     return workflowSuccess(context, 'attribute-mapping', result, mappingStatus);
   }
@@ -431,28 +522,42 @@ async function executeListingPreparation(
     image_bundle: input.image_bundle,
     image_generation: input.image_generation,
     image_provider: input.image_generation_provider?.constructor.name ?? null,
+    image_review_agent_input: input.image_review_agent_input,
+    content_bundle: contentBundle,
   });
-  let draft = await restore<ListingDraftV1>(
+  let draft = await restore<ListingDraftV2>(
     context,
     'draft-generation',
-    'listing-draft-v1.json',
+    'listing-draft-v2.json',
     startFrom,
-    shouldForce('draft-generation') || Boolean(input.draft_generation_profile),
+    shouldForce('draft-generation') || Boolean(input.draft_generation_profile) || Boolean(input.image_review_agent_input),
   );
   if (!draft) {
+    await store.updateStep(runId, 'draft-generation', { status: 'running' });
     const imageBundle = input.image_bundle ?? await runImagePipeline({
       product,
       generation: input.image_generation,
       provider: input.image_generation_provider,
+      agent_review: input.image_review_agent_input,
       signal: input.signal,
     });
-    await store.write(runId, 'draft-generation', 'image-bundle-v1.json', imageBundle);
+    result.image_bundle = imageBundle;
+    const imageOutput = await store.write(runId, 'draft-generation', 'image-bundle-v1.json', imageBundle);
+    if (imageBundle.status !== 'completed') {
+      await store.updateStep(runId, 'draft-generation', {
+        status: imageBundle.status,
+        output: imageOutput,
+        error_code: imageBundle.status === 'blocked' ? 'IMAGE_BUNDLE_BLOCKED' : 'IMAGE_REVIEW_REQUIRED',
+      });
+      return workflowSuccess(context, 'draft-generation', result, imageBundle.status);
+    }
     const step = await runDraftGeneration({
       product,
       category_decision: decision,
       category_attributes: attributes,
       cost_pricing: pricing,
       attribute_mapping: mapping,
+      content_bundle: contentBundle,
       profile: input.draft_generation_profile,
       image_bundle: imageBundle,
     }, context);
@@ -503,14 +608,94 @@ async function restore<T>(
   return null;
 }
 
+async function withSelectedStoreMcpCredentials<T>(storeId: string, operation: () => Promise<T>): Promise<T> {
+  const profile = new FileStoreRegistry().get(storeId);
+  const credentials = resolveStoreCredentials(profile, new EnvSecretProvider(loadOzonEnvironment()));
+  return withOzonMcpCredentials({
+    OZON_CLIENT_ID: credentials.clientId,
+    OZON_API_KEY: credentials.apiKey,
+  }, operation);
+}
+
+function validateProductQualification(
+  product: CanonicalProductV2,
+  qualification: RunListingPreparationInput['qualification'],
+): { code: string; message: string } | null {
+  if (!qualification) return null;
+  if (!Number.isSafeInteger(qualification.max_sku_per_product) || qualification.max_sku_per_product < 1) {
+    return { code: 'QUALIFICATION_CONFIG_INVALID', message: 'max_sku_per_product must be a positive integer.' };
+  }
+  if ((qualification.price_min_cny !== null && (!Number.isFinite(qualification.price_min_cny) || qualification.price_min_cny < 0))
+    || (qualification.price_max_cny !== null && (!Number.isFinite(qualification.price_max_cny) || qualification.price_max_cny <= 0))
+    || (qualification.price_min_cny !== null && qualification.price_max_cny !== null && qualification.price_min_cny > qualification.price_max_cny)) {
+    return { code: 'QUALIFICATION_CONFIG_INVALID', message: 'Purchase-price bounds are invalid.' };
+  }
+  if (product.skus.length > qualification.max_sku_per_product) {
+    return { code: 'SKU_COUNT_EXCEEDED', message: `Product has ${product.skus.length} SKU(s); maximum is ${qualification.max_sku_per_product}.` };
+  }
+  for (const sku of product.skus) {
+    if (!Number.isFinite(sku.price_cny) || sku.price_cny! <= 0) {
+      return { code: 'PURCHASE_PRICE_INVALID', message: `SKU ${sku.source_sku_id} has no valid purchase price.` };
+    }
+    if (qualification.price_min_cny !== null && sku.price_cny! < qualification.price_min_cny) {
+      return { code: 'PURCHASE_PRICE_BELOW_MINIMUM', message: `SKU ${sku.source_sku_id} is below the configured purchase-price minimum.` };
+    }
+    if (qualification.price_max_cny !== null && sku.price_cny! > qualification.price_max_cny) {
+      return { code: 'PURCHASE_PRICE_ABOVE_MAXIMUM', message: `SKU ${sku.source_sku_id} exceeds the configured purchase-price maximum.` };
+    }
+  }
+  if (qualification.require_image && !product.product.main_image
+    && product.product.gallery_images.length === 0
+    && product.skus.every((sku) => !sku.image)) {
+    return { code: 'PRODUCT_IMAGE_MISSING', message: 'Product has no usable source image.' };
+  }
+  const riskText = `${product.product.title_zh} ${product.source.source_category_path_zh.join(' ')} ${Object.entries(product.product.attributes).map(([key, value]) => `${key} ${value}`).join(' ')}`;
+  if (/药品|医疗器械|食品|饮料|酒|烟草|电子烟|成人用品|武器|易燃|爆炸|活体|种子|农药|杀虫剂|液体香水|婴儿配方|电池|蓄电池/iu.test(riskText)) {
+    return { code: 'PROHIBITED_PRODUCT_RISK', message: 'Product facts match the conservative prohibited/high-risk sourcing policy.' };
+  }
+  return null;
+}
+
+async function buildCategoryAgentTask(product: CanonicalProductV2): Promise<CategoryDecisionAgentTaskV1> {
+  const tree = await loadOzonCategoryTree();
+  const index = flattenOzonCategoryTree(tree);
+  const queries = [...new Set([
+    product.source.discovery_context.search_term,
+    ...product.source.source_category_path_zh.slice().reverse(),
+  ].map((value) => value?.normalize('NFKC').trim()).filter((value): value is string => Boolean(value)))].slice(0, 8);
+  return {
+    schema_version: 1,
+    execution_owner: 'current_agent',
+    source_offer_id: product.source.offer_id,
+    category_snapshot: tree.snapshot,
+    evidence: {
+      search_term: product.source.discovery_context.search_term,
+      title_zh: product.product.title_zh,
+      source_category_path_zh: [...product.source.source_category_path_zh],
+      product_attributes: { ...product.product.attributes },
+      skus: product.skus.map((sku) => ({
+        source_sku_id: sku.source_sku_id,
+        raw_spec_text: sku.raw_spec_text,
+        specs: { ...sku.specs },
+        image: sku.image,
+      })),
+    },
+    initial_candidate_sets: queries.map((query) => ({
+      query,
+      candidates: searchOzonCategories(index, query, 20).map(({ disabled: _disabled, ...candidate }) => candidate),
+    })),
+    instruction: 'Classify product structure, search additional short semantic nouns when needed, select only validated current-snapshot category pairs, and assign every source SKU exactly once in CategoryDecisionV1.',
+  };
+}
+
 const STEP_IMPLEMENTATION_VERSIONS: Record<WorkflowStepName, string> = {
   'source-1688': '1',
   'canonicalize-product': '2',
   'category-decision': '1',
   'cost-pricing': '1',
   'category-attributes': '1',
-  'attribute-mapping': '1',
-  'draft-generation': '1',
+  'attribute-mapping': '2',
+  'draft-generation': '2',
   'listing-submit': '1',
 };
 
@@ -523,7 +708,12 @@ async function prepareStep(
   const index = stepIndex(step);
   const dependencyHashes = Object.fromEntries(
     LISTING_PREPARATION_ORDER.slice(0, index)
-      .map((dependency) => [dependency, manifest?.steps[dependency].artifact?.sha256] as const)
+      .map((dependency) => {
+        const artifacts = manifest?.steps[dependency].artifacts ?? [];
+        return [dependency, artifacts.length > 0
+          ? hashWorkflowValue(artifacts.map((artifact) => ({ path: artifact.path, sha256: artifact.sha256 })))
+          : undefined] as const;
+      })
       .filter((entry): entry is readonly [WorkflowStepName, string] => Boolean(entry[1])),
   );
   await context.artifact_store.prepareStep(context.run_id, step, {

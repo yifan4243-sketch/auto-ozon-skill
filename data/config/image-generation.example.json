@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "provider_id": "customer-image-provider",
+  "base_url": "https://example.com/v1",
+  "model": "replace-with-model-name",
+  "api_key_env": "OZON_IMAGE_API_KEY",
+  "use_1688_reference_images": true,
+  "image_count": 3,
+  "prompt_version": "ozon-product-scenes-v1"
+}

@@ -19,6 +19,8 @@ import {
   ozonSearchMethods,
 } from '@auto-ozon/adapters-ozon';
 import { runStandaloneCategoryAttributes } from '@auto-ozon/workflows';
+import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@auto-ozon/config';
+import { loadOzonEnvironment, setOzonMcpCommandCredentials } from '@auto-ozon/adapters-ozon';
 
 type EmitCommandResult = (result: CommandResult<unknown>) => void;
 type ParseNumber = (raw: string | undefined) => number | undefined;
@@ -37,7 +39,19 @@ export function registerOzonCommands(
 ): void {
   const ozon = program
     .command('ozon')
-    .description('Complete PCDCK/ozon-mcp bridge with local read-only execution safety');
+    .description('Complete PCDCK/ozon-mcp bridge with local read-only execution safety')
+    .option('--store-id <Client-Id>', 'Resolve only this store profile credentials for MCP execution');
+
+  ozon.hook('preAction', () => {
+    const storeId = ozon.opts().storeId as string | undefined;
+    if (!storeId) {
+      setOzonMcpCommandCredentials({});
+      return;
+    }
+    const profile = new FileStoreRegistry().get(storeId);
+    const credentials = resolveStoreCredentials(profile, new EnvSecretProvider(loadOzonEnvironment()));
+    setOzonMcpCommandCredentials({ OZON_CLIENT_ID: credentials.clientId, OZON_API_KEY: credentials.apiKey });
+  });
 
   ozon
     .command('doctor')

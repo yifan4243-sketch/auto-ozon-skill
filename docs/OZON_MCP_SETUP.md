@@ -26,22 +26,22 @@ Environment overrides:
 
 ## Credentials
 
-Discovery commands work without Ozon credentials. Execution tools require Seller API credentials and may be absent from `tools/list` until these are configured:
+Discovery commands work without Ozon credentials. Seller execution must select
+one locally registered store with `--store-id`. The registry contains only the
+two environment-variable references; it never contains their values:
 
-- `OZON_CLIENT_ID`
-- `OZON_API_KEY`
+- `credentials.client_id.key`
+- `credentials.api_key.key`
 
-Performance credentials are reported separately:
-
-- `OZON_PERFORMANCE_CLIENT_ID`
-- `OZON_PERFORMANCE_CLIENT_SECRET`
-
-`auto-ozon` only reports credential presence as booleans and must not print secret values.
+The CLI resolves those two references for the selected store and passes only
+`OZON_CLIENT_ID` and `OZON_API_KEY` to that one MCP child process. Ambient keys
+for other stores are not forwarded. `auto-ozon` only reports credential
+presence as booleans and never prints secret values.
 
 ## Commands
 
 ```bash
-auto-ozon ozon doctor --json --pretty
+auto-ozon ozon --store-id <Client-Id> doctor --json --pretty
 auto-ozon ozon methods search "product list" --json --pretty
 auto-ozon ozon methods describe ProductAPI_GetProductList --json --pretty
 auto-ozon ozon workflows list --json --pretty
@@ -51,16 +51,21 @@ auto-ozon ozon workflows get cabinet_health_check --json --pretty
 Read-only execution is available through the PCDCK execution tools when credentials are configured:
 
 ```bash
-auto-ozon ozon call ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --json --pretty
-auto-ozon ozon fetch-all ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --max-items 10000 --json --pretty
+auto-ozon ozon --store-id <Client-Id> call ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --json --pretty
+auto-ozon ozon --store-id <Client-Id> fetch-all ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --max-items 10000 --json --pretty
 ```
 
 ## Safety
 
-This integration phase is read-only. Before `call` or `fetch-all`, the bridge calls `ozon_describe_method` and checks `safety`.
+Generic MCP execution is read-only. Before `call` or `fetch-all`, the bridge calls `ozon_describe_method` and checks `safety`.
 
 - `safety: "read"`: allowed
 - `safety: "write"` or `"destructive"`: blocked locally with `OZON_WRITE_BLOCKED`
 - Missing execution tools return `OZON_EXECUTION_TOOLS_DISABLED`
 
-The CLI does not expose publish, submit, price update, stock update, archive, delete, create/update product, import product, upload media, or inventory update commands.
+Generic `ozon call` and `ozon fetch-all` never expose writes. Product import is
+available only through `workflow listing publish/resume`, which uses the
+strongly typed `listing-submit` adapter and the fixed endpoints
+`/v3/product/import`, `/v1/product/import/info`, and
+`/v3/product/info/list`. Price/stock mutation, archive, delete, arbitrary
+media upload and inventory update remain unavailable.

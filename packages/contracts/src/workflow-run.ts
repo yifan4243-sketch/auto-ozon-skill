@@ -49,12 +49,11 @@ export interface WorkflowArtifactV2 {
   schema_version: number;
 }
 
-export interface WorkflowStructuredErrorV2 {
-  code: string;
-  message: string;
-  recoverable: boolean;
-  detail?: unknown;
-}
+export interface WorkflowStructuredErrorV2 extends DomainErrorV1 {}
+
+/** Public production contract names retained independently from manifest naming. */
+export type StepAttemptV1 = WorkflowStepAttemptV2;
+export type ArtifactMetadataV1 = WorkflowArtifactV2;
 
 export interface WorkflowStepAttemptV2 {
   attempt: number;
@@ -97,3 +96,4 @@ export interface WorkflowRunManifestV2 {
   updated_at: string;
   steps: Record<WorkflowStepName, WorkflowStepRecordV2>;
 }
+import type { DomainErrorV1 } from './domain-error-v1.js';

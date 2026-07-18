@@ -35,9 +35,15 @@ importers:
       '@auto-ozon/adapters-ozon':
         specifier: workspace:*
         version: link:../../packages/adapters-ozon
+      '@auto-ozon/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@auto-ozon/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@auto-ozon/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
       '@auto-ozon/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
@@ -100,6 +106,36 @@ importers:
         version: link:../contracts
 
   packages/contracts: {}
+
+  packages/control-plane:
+    dependencies:
+      '@auto-ozon/artifact-store':
+        specifier: workspace:*
+        version: link:../artifact-store
+      '@auto-ozon/batch-orchestrator':
+        specifier: workspace:*
+        version: link:../batch-orchestrator
+      '@auto-ozon/config':
+        specifier: workspace:*
+        version: link:../config
+      '@auto-ozon/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@auto-ozon/job-store':
+        specifier: workspace:*
+        version: link:../job-store
+      '@auto-ozon/step-category-decision':
+        specifier: workspace:*
+        version: link:../steps/category-decision
+      '@auto-ozon/workflows':
+        specifier: workspace:*
+        version: link:../workflows
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.6.1
+        version: 1.29.0(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/core:
     dependencies:

@@ -17,6 +17,8 @@ import {
   saveCategoryDecisionSnapshot,
 } from '@auto-ozon/core';
 import { runSourceCommand } from './source-command.js';
+import { loadOzonEnvironment, withOzonMcpCredentials } from '@auto-ozon/adapters-ozon';
+import { EnvSecretProvider, FileStoreRegistry, resolveStoreCredentials } from '@auto-ozon/config';
 
 export interface CategoryInspectOptions {
   keyword: string;
@@ -25,6 +27,8 @@ export interface CategoryInspectOptions {
   decisionFile?: string;
   decisionProvider?: CategoryDecisionProvider;
   productsDir?: string;
+  /** Explicit local StoreProfileV2 used only for the read-only Ozon request. */
+  storeId?: string;
 }
 
 export interface CategoryInspectResult {
@@ -100,7 +104,19 @@ export async function runCategoryInspect(
     return workspaceFailure(source, decision, error);
   }
 
-  const fetched = await runCategoryAttributes({ category_decision: decision });
+  if (!options.storeId) {
+    return fail(
+      'STORE_ID_REQUIRED',
+      '--store-id is required before reading Ozon category attributes so credentials cannot fall back to an ambient store.',
+      { source, category_decision: decision },
+    );
+  }
+  const profile = new FileStoreRegistry().get(options.storeId);
+  const credentials = resolveStoreCredentials(profile, new EnvSecretProvider(loadOzonEnvironment()));
+  const fetched = await withOzonMcpCredentials({
+    OZON_CLIENT_ID: credentials.clientId,
+    OZON_API_KEY: credentials.apiKey,
+  }, () => runCategoryAttributes({ category_decision: decision }));
   const attributes = fetched.data ?? [];
   try {
     await saveCategoryAttributesSnapshot(

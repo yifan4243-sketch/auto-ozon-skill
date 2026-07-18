@@ -19,9 +19,15 @@ optional Agent package estimate.
 4. Enumerate the effective CEL groups, calculate land shipping by default, compute landed
    cost, set CNY price to rounded `landed_cost × 2`, convert to RUB, and retain only a
    self-consistent CEL price band.
-5. Resolve the Ozon commission by description-category ID and final RUB price. Commission
-   affects projected profit, not the V1 listing price.
+5. Resolve the Ozon commission by description-category ID and final RUB price.
+   In default `multiplier` mode commission affects projected profit, not price.
+   In `target_margin` mode commission and all configured rates participate in
+   the self-consistent segmented price solver.
 6. Write only `04-cost-pricing/cost-pricing-v1.json`.
+
+Every completed SKU also embeds `CostModelV2` and `PriceDecisionV2`. Monetary
+calculation uses integer micro-CNY internally; the V2 audit objects preserve
+those integer strings, snapshot hashes, solver mode and achieved margin.
 
 Use `--pricing-agent-stdin` to return Agent estimates. Do not add price, package dimensions,
 or shipping rules to attribute-mapping.

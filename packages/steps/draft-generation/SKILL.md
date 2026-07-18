@@ -1,20 +1,30 @@
 ---
 name: ozon-draft-generation
-description: Combine completed product, category, pricing, mapping, and 1688 image artifacts into a validated internal Ozon-shaped ListingDraftV1. This Skill never submits to Ozon.
+description: Combine immutable product, category, pricing, AttributeMappingV2, ContentBundleV1, and ImageBundleV1 artifacts into a validated Ozon-shaped ListingDraftV2. This Skill never submits to Ozon.
 ---
 
 # Draft Generation
 
-Create one `ListingDraftV1` at
-`data/runs/<run_id>/07-draft-generation/listing-draft-v1.json`.
+Create one `ListingDraftV2` at
+`data/runs/<run_id>/07-draft-generation/listing-draft-v2.json`.
 
-Read steps 02–06 through the run manifest. Output `items[]` in the future Ozon
+Read steps 02–06 through the run manifest. Require a completed
+`ContentBundleV1` from step 06. Output `items[]` in the future Ozon
 import shape: stable `offer_id`, name from 4180, price, category IDs, package
 dimensions, images, primary image, and the unchanged `ozon_attributes` array.
 
 Keep 4191 in `items[].attributes`; do not create a second description or
 rewrite it. Do not invent VAT, barcode, old price, stock, a non-CNY currency,
 or images.
+
+- Bind the exact SHA-256 of CanonicalProduct, category decision, pricing,
+  category attributes, AttributeMappingV2, ContentBundleV1, and ImageBundleV1.
+- Bind the current category-tree snapshot and every category-attribute
+  snapshot. Missing or expired bindings block publish preflight.
+- Preserve `source_sku_id -> offer_id` in `sku_bindings`; the `items[]` wire
+  shape itself remains directly usable by `/v3/product/import`.
+- A run containing only `listing-draft-v1.json` is legacy and read-only. Start
+  a new run; never rewrite or publish it.
 
 - Build, validate, and de-duplicate HTTP(S) `images` first; then set
   `primary_image = images[0]`.

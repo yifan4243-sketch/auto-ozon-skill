@@ -14,11 +14,12 @@ diversified 1688 sourcing plan and never publishes a listing.
 1. Find the newest `data/ozon/category-analytics/raw/ozon-category-year-*.json`.
    Do not call its original upstream endpoint, reuse its cookies, or expose its
    company ID, request logs, or errors.
-2. Read only completed level-3 rows with a category ID, Chinese category name,
-   GMV, sold items, average item value, seller count, buyout rate, leader share,
-   and growth fields.
-3. Write `data/runs/<batch_id>/00-market-selection/market-selection-v1.json`.
-   It is a batch planning artifact, not a normal product-run manifest.
+2. Read only completed level-3 rows with a category ID and Chinese category
+   identity. Use every available annual metric; mark missing metrics
+   `unavailable` and re-normalize the remaining weights. Reject only when all
+   market metrics are unavailable. Never invent a missing value.
+3. Write `data/batches/<batch_id>/market-selection-v1.json`. It is a batch
+   planning artifact, not a normal product-run manifest.
 4. Read [references/selection-policy.md](references/selection-policy.md) and
    [references/russia-seasonality.md](references/russia-seasonality.md) before
    ranking categories.
@@ -30,8 +31,8 @@ diversified 1688 sourcing plan and never publishes a listing.
 Reject Fresh food, ordinary food, pharmacy, adult goods, smoking goods,
 services, charity, books, and categories whose product normally requires local
 certification, expiry control, cold chain, batteries, liquids, oversized
-shipping, or brand authorization. Reject a category if the saved facts are
-missing or clearly incomplete. Record every rejection reason.
+shipping, or brand authorization. Record every rejection reason. Missing one
+or more optional metrics is not itself a rejection reason.
 
 Do not reject a category merely because it is not a top-GMV category. The goal
 is viable small-seller opportunity, not maximum market size.
@@ -73,7 +74,9 @@ Choose 5–10 categories, defaulting to 8. Do not select more than two categorie
 under one level-1 root. Rank by score but retain a mix of demand and long-tail
 opportunities. Respect the store's daily limit of 100 listings:
 
-- Default allocation: 8 categories × 12 target products = 96 listings.
+- Default allocation distributes the requested daily listing count as evenly
+  as possible over 8 categories (for 100 listings: four categories receive 13
+  and four receive 12).
 - For 5–7 categories: at most 15 listings per category.
 - For 9–10 categories: at most 10 listings per category.
 - The sum of `planned_listings` must be at most 100.

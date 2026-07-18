@@ -18,3 +18,5 @@ export * from './image-bundle.js';
 export * from './market-selection.js';
 export * from './listing-job.js';
 export * from './publish-reliability.js';
+export * from './setup-report.js';
+export * from './content-bundle.js';

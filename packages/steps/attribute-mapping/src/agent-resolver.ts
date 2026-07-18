@@ -25,6 +25,9 @@ export function resolveAgentAttribute(
   if (!validateAgentSemantics(attribute, selected.values, selected.evidence, forbiddenTitleBrands)) {
     return { attribute: null, error: 'invalid_agent_value' };
   }
+  if (attribute.id === 4191 && !validContentClaims(selected.values[0]!.value, selected.content_claims)) {
+    return { attribute: null, error: 'invalid_agent_value' };
+  }
   return {
     attribute: {
       attribute_id: attribute.id,
@@ -32,9 +35,23 @@ export function resolveAgentAttribute(
       provenance: 'agent_selected',
       confidence: attribute.id === 4383 ? 'low' : selected.confidence,
       evidence: selected.evidence,
+      ...(attribute.id === 4191 ? { content_claims: selected.content_claims } : {}),
     },
     error: null,
   };
+}
+
+function validContentClaims(
+  description: string,
+  claims: AttributeMappingAgentInputV1['sku_inputs'][number]['attributes'][number]['content_claims'],
+): boolean {
+  const paragraphs = description.split(/\r?\n\s*\r?\n/u).map((value) => value.trim()).filter(Boolean);
+  if (!claims || claims.length !== paragraphs.length) return false;
+  return claims.every((claim, index) =>
+    claim.claim_text.trim() === paragraphs[index]
+    && claim.evidence.length > 0
+    && claim.evidence.every((item) => item.source === 'canonical_v2' && item.field.trim() && item.value.trim()),
+  );
 }
 
 function validateAgentSemantics(

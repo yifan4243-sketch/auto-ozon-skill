@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/store-profile-v2.json",
+  "title": "StoreProfileV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "store_id", "store_name", "market", "currency_code", "credentials", "publishing", "pricing", "polling"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "store_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "store_name": { "type": "string", "minLength": 1 },
+    "market": { "const": "RU" },
+    "currency_code": { "enum": ["CNY", "RUB"] },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["client_id", "api_key"],
+      "properties": {
+        "client_id": { "$ref": "#/$defs/secretRef" },
+        "api_key": { "$ref": "#/$defs/secretRef" }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "automation_level", "allowed_description_category_ids", "max_items_per_batch", "daily_listing_limit"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "automation_level": { "const": "automatic" },
+        "allowed_description_category_ids": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "uniqueItems": true },
+        "max_items_per_batch": { "type": "integer", "minimum": 1 },
+        "daily_listing_limit": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "minimum_margin_percent", "advertising_reserve_percent", "return_loss_reserve_percent", "other_rate_percent", "label_fee_cny", "other_fixed_cny"],
+      "properties": {
+        "mode": { "enum": ["multiplier", "target_margin"] },
+        "multiplier": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "target_margin_percent": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "minimum_margin_percent": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "advertising_reserve_percent": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "return_loss_reserve_percent": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "other_rate_percent": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "label_fee_cny": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "other_fixed_cny": { "$ref": "#/$defs/nonNegativeDecimal" }
+      }
+    },
+    "polling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeout_ms", "interval_ms", "max_recoverable_retries"],
+      "properties": {
+        "timeout_ms": { "type": "integer", "minimum": 1 },
+        "interval_ms": { "type": "integer", "minimum": 0 },
+        "max_recoverable_retries": { "const": 2 }
+      }
+    }
+  },
+  "$defs": {
+    "secretRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "key"],
+      "properties": {
+        "provider": { "const": "env" },
+        "key": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,127}$" }
+      }
+    },
+    "nonNegativeDecimal": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" }
+  }
+}

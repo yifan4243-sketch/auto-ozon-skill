@@ -6,3 +6,6 @@ export * from './category-inspect.js';
 export * from './category-attributes-command.js';
 export * from './listing-submit.js';
 export * from './batch.js';
+export * from './setup-doctor.js';
+export * from './image-generation-config.js';
+export * from './category-tree-refresh.js';

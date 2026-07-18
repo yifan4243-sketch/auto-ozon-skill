@@ -2,7 +2,7 @@ import type { CostPricingTransportV1 } from '@auto-ozon/contracts';
 
 export const CEL_TARIFF_VERSION = 'CEL-2026-effective' as const;
 
-type Rate = { per_g: number; fixed: number };
+type Rate = { per_g: string; fixed: string };
 
 interface TariffRule {
   name: string;
@@ -33,23 +33,23 @@ export interface CelCandidate {
 
 const RULES: TariffRule[] = [
   rule('Extra Small', 1, 1500, {
-    air: [0.0468, 3.12], air_land: [0.0364, 3.12], land: [0.026, 3.12],
+    air: ['0.0468', '3.12'], air_land: ['0.0364', '3.12'], land: ['0.026', '3.12'],
   }, (m) => withinWeight(m, 0.001, 0.5) && sideSum(m) <= 90 && longest(m) <= 60),
   rule('Budget', 1, 1500, {
-    air: [0.03432, 23.92], air_land: [0.026, 23.92], land: [0.01768, 23.92],
+    air: ['0.03432', '23.92'], air_land: ['0.026', '23.92'], land: ['0.01768', '23.92'],
   }, (m) => m.actual_weight_kg > 0.5 && m.actual_weight_kg <= 30 && sideSum(m) <= 150 && longest(m) <= 60),
   rule('Small', 1500, 7000, {
-    air: [0.0468, 16.64], air_land: [0.0364, 16.64], land: [0.026, 16.64],
+    air: ['0.0468', '16.64'], air_land: ['0.0364', '16.64'], land: ['0.026', '16.64'],
   }, (m) => withinWeight(m, 0.001, 2) && sideSum(m) <= 150 && longest(m) <= 60),
   rule('Big', 1500, 7000, {
-    air_land: [0.026, 37.44], land: [0.01768, 37.44],
+    air_land: ['0.026', '37.44'], land: ['0.01768', '37.44'],
   }, (m) => m.actual_weight_kg > 2 && m.actual_weight_kg <= 30 && sideSum(m) <= 310 && longest(m) <= 150 && m.volume_weight_kg <= 31,
   (m) => Math.max(m.actual_weight_kg, m.volume_weight_kg)),
   rule('Premium Small', 7000, 250000, {
-    air: [0.0468, 22.88], air_land: [0.0364, 22.88], land: [0.026, 22.88],
+    air: ['0.0468', '22.88'], air_land: ['0.0364', '22.88'], land: ['0.026', '22.88'],
   }, (m) => withinWeight(m, 0.001, 5) && sideSum(m) <= 250 && longest(m) <= 150),
   rule('Premium Big', 7000, 250000, {
-    air_land: [0.02912, 64.48], land: [0.02392, 64.48],
+    air_land: ['0.02912', '64.48'], land: ['0.02392', '64.48'],
   }, (m) => {
     const sides = sortedSides(m);
     return m.actual_weight_kg > 5 && m.actual_weight_kg <= 30 && sideSum(m) <= 310
@@ -72,9 +72,9 @@ export function calculateCelCandidates(
       price_min_rub: tariff.price_min_rub,
       price_max_rub: tariff.price_max_rub,
       charge_weight_g: round(chargeWeightG, 3),
-      rate_per_g_cny: rate.per_g,
-      fixed_fee_cny: rate.fixed,
-      shipping_cny: round(chargeWeightG * rate.per_g + rate.fixed, 2),
+      rate_per_g_cny: Number(rate.per_g),
+      fixed_fee_cny: Number(rate.fixed),
+      shipping_cny: tariffMoney(chargeWeightG, rate),
     }];
   });
 }
@@ -90,7 +90,7 @@ function rule(
   name: string,
   priceMinRub: number,
   priceMaxRub: number,
-  rates: Record<string, [number, number]>,
+  rates: Record<string, [string, string]>,
   accepts: (metrics: PackageMetrics) => boolean,
   chargeWeightKg: (metrics: PackageMetrics) => number = (metrics) => metrics.actual_weight_kg,
 ): TariffRule {
@@ -102,6 +102,23 @@ function rule(
     accepts,
     chargeWeightKg,
   };
+}
+
+/** Calculate freight entirely in integer CNY micros. Charge weight is first
+ * fixed to milligrams, preventing repeated binary floating-point additions. */
+function tariffMoney(chargeWeightG: number, rate: Rate): number {
+  const weightMilligrams = BigInt(Math.round(chargeWeightG * 1000));
+  const perGramMicros = decimalMicros(rate.per_g);
+  const fixedMicros = decimalMicros(rate.fixed);
+  const variableMicros = (weightMilligrams * perGramMicros + 500n) / 1000n;
+  const totalMicros = variableMicros + fixedMicros;
+  return Number((totalMicros + 5_000n) / 10_000n) / 100;
+}
+
+function decimalMicros(value: string): bigint {
+  const match = value.match(/^(\d+)(?:\.(\d{1,6}))?$/u);
+  if (!match) throw new Error('CEL_TARIFF_DECIMAL_INVALID');
+  return BigInt(match[1]!) * 1_000_000n + BigInt((match[2] ?? '').padEnd(6, '0'));
 }
 
 function withinWeight(metrics: PackageMetrics, min: number, max: number): boolean {

@@ -5,7 +5,7 @@ import type {
 } from '@auto-ozon/contracts';
 import type { WorkflowContext } from '@auto-ozon/artifact-store';
 import { assertWorkflowActive } from '@auto-ozon/artifact-store';
-import { loadOzonCategoryIndex } from './category-tree.js';
+import { flattenOzonCategoryTree, loadOzonCategoryTree } from './category-tree.js';
 import { validateCategoryDecisionSchema } from './schema-validator.js';
 import { validateCategoryDecision } from './validator.js';
 import type { CategoryDecisionProvider } from './providers/provider.js';
@@ -40,13 +40,14 @@ export async function runCategoryDecision(
       );
     }
 
-    const index = await loadOzonCategoryIndex(input.treePath);
-    const validation = validateCategoryDecision(decision, input.product, index);
+    const tree = await loadOzonCategoryTree(input.treePath);
+    const finalDecision: CategoryDecisionV1 = { ...decision, category_snapshot: tree.snapshot };
+    const validation = validateCategoryDecision(finalDecision, input.product, flattenOzonCategoryTree(tree));
     if (!validation.valid) {
       return fail(
         'CATEGORY_DECISION_VALIDATION_FAILED',
         'Category decision failed category-pair or SKU-coverage validation.',
-        decision,
+        finalDecision,
         context,
         validation.violations,
       );
@@ -57,31 +58,31 @@ export async function runCategoryDecision(
         context.run_id,
         'category-decision',
         'category-decision-v1.json',
-        decision,
+        finalDecision,
       );
       await context.artifact_store.updateStep(context.run_id, 'category-decision', {
-        status: decision.status === 'decided' ? 'succeeded' : decision.status,
+        status: finalDecision.status === 'decided' ? 'succeeded' : finalDecision.status,
         output,
       });
     }
 
     return {
-      ok: decision.status !== 'blocked',
+      ok: finalDecision.status !== 'blocked',
       command: 'category.decision',
-      data: decision,
-      warnings: decision.warnings.map((warning) => ({
+      data: finalDecision,
+      warnings: finalDecision.warnings.map((warning) => ({
         code: warning.code,
         message: warning.message,
         detail: { sku_ids: warning.sku_ids },
       })),
-      errors: decision.errors.map((error) => ({
+      errors: finalDecision.errors.map((error) => ({
         code: error.code,
         message: error.message,
         detail: { sku_ids: error.sku_ids },
         recoverable: true,
       })),
       nextActions:
-        decision.status === 'needs_review'
+        finalDecision.status === 'needs_review'
           ? ['Review category alternatives before retrieving attributes.']
           : [],
     };

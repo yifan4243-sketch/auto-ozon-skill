@@ -53,6 +53,35 @@ describe('batch orchestrator', () => {
     expect(result.product_runs[0]).toMatchObject({ status: 'paused', attempts: 1 });
     expect(calls).toBe(1);
   });
+
+  it('resumes an Agent-paused product without consuming another candidate slot', async () => {
+    const store = await temporaryStore();
+    const spec = jobSpec('skip_product');
+    await createListingBatch(spec, store);
+    const candidateProvider = { candidates: async () => [{ offer_id: '100004', keyword: '杯子' }] };
+    const paused = await runListingBatch({ batch_id: spec.batch_id, store, candidate_provider: candidateProvider,
+      product_executor: { execute: async (_candidate, options) => ({ run_id: options.run_id, listing_count: 0, status: 'paused' }) } });
+    expect(paused).toMatchObject({ status: 'paused', candidate_count: 1, succeeded_count: 0, product_runs: [{ status: 'paused' }] });
+    const resumed = await runListingBatch({ batch_id: spec.batch_id, store, candidate_provider: candidateProvider,
+      product_executor: { execute: async (_candidate, options) => ({ run_id: options.run_id, listing_count: 2, status: 'succeeded' }) } });
+    expect(resumed).toMatchObject({ status: 'completed', candidate_count: 1, succeeded_count: 2, product_runs: [{ status: 'succeeded' }] });
+  });
+
+  it('does not retry permanent business failures and continues the queue', async () => {
+    const store = await temporaryStore();
+    const spec = jobSpec('skip_product');
+    await createListingBatch(spec, store);
+    let permanentCalls = 0;
+    const result = await runListingBatch({ batch_id: spec.batch_id, store,
+      candidate_provider: { candidates: async () => [{ offer_id: '100005', keyword: '杯子' }, { offer_id: '100006', keyword: '杯子' }] },
+      product_executor: { execute: async (candidate, options) => {
+        if (candidate.offer_id === '100005') { permanentCalls += 1; throw Object.assign(new Error('CATEGORY_BLOCKED'), { code: 'CATEGORY_BLOCKED', recoverable: false }); }
+        return { run_id: options.run_id, listing_count: 2, status: 'succeeded' };
+      } },
+    });
+    expect(permanentCalls).toBe(1);
+    expect(result).toMatchObject({ status: 'completed', failed_count: 1, succeeded_count: 2 });
+  });
 });
 
 describe('category closure', () => {
@@ -75,9 +104,10 @@ async function temporaryStore(): Promise<FileBatchStore> {
 function jobSpec(captcha: 'pause' | 'skip_product'): ListingJobSpecV1 {
   return {
     schema_version: 1, batch_id: 'batch-test', store_id: '500000', route: 'keyword', requested_listing_count: 2,
-    keywords: ['杯子'], created_at: '2026-07-17T00:00:00.000Z',
+    keywords: ['杯子'], keyword_listing_targets: { '杯子': 2 }, created_at: '2026-07-17T00:00:00.000Z',
     collection: { profiles: ['account-1', 'account-2'], attempts_per_account: 3, headed: false,
       captcha_policy: captcha, max_sku_per_product: 3, price_min_cny: 20, price_max_cny: 50, candidate_limit: 4 },
+    images: { generate: false },
   };
 }
 

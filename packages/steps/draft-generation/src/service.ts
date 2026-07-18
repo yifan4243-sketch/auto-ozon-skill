@@ -1,15 +1,16 @@
 import { createHash } from 'node:crypto';
 import type {
-  AttributeMappingV1,
+  AttributeMappingV2,
   CanonicalProductV2,
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
   CommandResult,
+  ContentBundleV1,
   CostPricingV1,
   DraftGenerationProfileV1,
   ListingDraftIssueV1,
-  ListingDraftItemV1,
-  ListingDraftV1,
+  ListingDraftItemV2,
+  ListingDraftV2,
   ImageBundleV1,
   OzonReadyAttributeV1,
 } from '@auto-ozon/contracts';
@@ -22,7 +23,8 @@ export interface RunDraftGenerationInput {
   category_decision: CategoryDecisionV1;
   category_attributes: CategoryAttributesGroupV1[];
   cost_pricing: CostPricingV1;
-  attribute_mapping: AttributeMappingV1;
+  attribute_mapping: AttributeMappingV2;
+  content_bundle: ContentBundleV1;
   profile?: DraftGenerationProfileV1;
   image_bundle?: ImageBundleV1;
 }
@@ -30,7 +32,7 @@ export interface RunDraftGenerationInput {
 export async function runDraftGeneration(
   input: RunDraftGenerationInput,
   context?: WorkflowContext,
-): Promise<CommandResult<ListingDraftV1>> {
+): Promise<CommandResult<ListingDraftV2>> {
   try {
     if (context) {
       assertWorkflowActive(context);
@@ -44,7 +46,7 @@ export async function runDraftGeneration(
     if (draft.errors.length > 0) draft.status = 'blocked';
     if (context) {
       const output = await context.artifact_store.write(
-        context.run_id, 'draft-generation', 'listing-draft-v1.json', draft,
+        context.run_id, 'draft-generation', 'listing-draft-v2.json', draft,
       );
       await context.artifact_store.updateStep(context.run_id, 'draft-generation', {
         status: draft.status === 'draft_complete' ? 'succeeded' : draft.status,
@@ -63,12 +65,39 @@ export async function runDraftGeneration(
   }
 }
 
-function buildDraft(input: RunDraftGenerationInput): ListingDraftV1 {
-  const result: ListingDraftV1 = {
-    schema_version: 1, source_offer_id: input.product.source.offer_id, status: 'draft_complete', weight_semantics: LEGACY_WEIGHT_SEMANTICS_V1,
-    image_bundle_sha256: input.image_bundle ? createHash('sha256').update(JSON.stringify(input.image_bundle)).digest('hex') : null,
+function buildDraft(input: RunDraftGenerationInput): ListingDraftV2 {
+  const result: ListingDraftV2 = {
+    schema_version: 2, source_offer_id: input.product.source.offer_id, status: 'draft_complete', generated_at: new Date().toISOString(), weight_semantics: LEGACY_WEIGHT_SEMANTICS_V1,
+    artifact_hashes: {
+      canonical_product_sha256: stableHash(input.product),
+      category_decision_sha256: stableHash(input.category_decision),
+      cost_pricing_sha256: stableHash(input.cost_pricing),
+      category_attributes_sha256: stableHash(input.category_attributes),
+      attribute_mapping_sha256: stableHash(input.attribute_mapping),
+      content_bundle_sha256: stableHash(input.content_bundle),
+      image_bundle_sha256: stableHash(input.image_bundle ?? null),
+    },
+    category_tree_snapshot: input.category_decision.category_snapshot ?? null,
+    attribute_snapshot_refs: input.category_attributes.map((group) => ({
+      group_ids: [...group.group_ids],
+      description_category_id: group.category.description_category_id,
+      type_id: group.category.type_id,
+      captured_at: group.attributes_schema.snapshot.captured_at,
+      valid_from: group.attributes_schema.snapshot.valid_from,
+      valid_to: group.attributes_schema.snapshot.valid_to,
+      sha256: group.attributes_schema.snapshot.sha256,
+    })),
+    sku_bindings: [],
     items: [], warnings: [], errors: [],
   };
+  if (!result.category_tree_snapshot) {
+    result.errors.push(issue('CATEGORY_TREE_SNAPSHOT_MISSING', 'CategoryDecisionV1 must bind the current Ozon category-tree snapshot.'));
+    return result;
+  }
+  if (input.content_bundle.source_offer_id !== input.product.source.offer_id || input.content_bundle.status !== 'completed') {
+    result.errors.push(issue('CONTENT_BUNDLE_INVALID', 'ContentBundle must be completed and belong to the current source offer.'));
+    return result;
+  }
   if (input.image_bundle && (input.image_bundle.source_offer_id !== input.product.source.offer_id || input.image_bundle.status !== 'completed')) {
     result.errors.push(issue('IMAGE_BUNDLE_INVALID', 'ImageBundle must be completed and belong to the current source offer.'));
     return result;
@@ -84,8 +113,9 @@ function buildDraft(input: RunDraftGenerationInput): ListingDraftV1 {
   for (const sku of input.product.skus) {
     const mapped = input.attribute_mapping.sku_attributes.find((value) => value.source_sku_id === sku.source_sku_id);
     const priced = input.cost_pricing.sku_pricing.find((value) => value.source_sku_id === sku.source_sku_id);
-    if (!mapped || !priced) {
-      result.errors.push(issue('SKU_UPSTREAM_MISSING', `SKU ${sku.source_sku_id} is missing mapping or pricing.`, [sku.source_sku_id]));
+    const content = input.content_bundle.sku_content.find((value) => value.source_sku_id === sku.source_sku_id);
+    if (!mapped || !priced || !content) {
+      result.errors.push(issue('SKU_UPSTREAM_MISSING', `SKU ${sku.source_sku_id} is missing mapping, pricing, or validated content.`, [sku.source_sku_id]));
       continue;
     }
     const category = input.category_attributes.find((value) => value.group_ids.includes(mapped.group_id));
@@ -96,7 +126,12 @@ function buildDraft(input: RunDraftGenerationInput): ListingDraftV1 {
     const bundledImages = input.image_bundle?.sku_images.find((value) => value.source_sku_id === sku.source_sku_id);
     const item = buildItem(sku.source_sku_id, sku.image, input.product, mapped.ozon_attributes, mapped.description_category_id, mapped.type_id, priced, input.profile, result, bundledImages);
     if (!item) continue;
+    if (item.name !== content.title_ru || attributeText(item.attributes, 4191) !== content.description_ru) {
+      result.errors.push(issue('CONTENT_BUNDLE_MISMATCH', `SKU ${sku.source_sku_id} draft content differs from ContentBundleV1.`, [sku.source_sku_id], [4180, 4191]));
+      continue;
+    }
     validateAttributes(item, sku.source_sku_id, category, result);
+    result.sku_bindings.push({ source_sku_id: sku.source_sku_id, offer_id: item.offer_id });
     result.items.push(item);
   }
   if (result.items.length !== input.product.skus.length) result.errors.push(issue('SKU_COVERAGE_INCOMPLETE', 'Draft does not contain every canonical SKU.'));
@@ -110,9 +145,9 @@ function buildDraft(input: RunDraftGenerationInput): ListingDraftV1 {
 
 function buildItem(
   sourceSkuId: string, skuImage: string | null | undefined, product: CanonicalProductV2, attributes: OzonReadyAttributeV1[], categoryId: number, typeId: number,
-  priced: CostPricingV1['sku_pricing'][number], profile: DraftGenerationProfileV1 | undefined, result: ListingDraftV1,
+  priced: CostPricingV1['sku_pricing'][number], profile: DraftGenerationProfileV1 | undefined, result: ListingDraftV2,
   bundledImages?: ImageBundleV1['sku_images'][number],
-): ListingDraftItemV1 | null {
+): ListingDraftItemV2 | null {
   const title = attributeText(attributes, 4180);
   if (!title) { result.errors.push(issue('TITLE_4180_MISSING', `SKU ${sourceSkuId} lacks attribute 4180.`, [sourceSkuId], [4180])); return null; }
   const images = bundledImages
@@ -154,7 +189,7 @@ function buildImages(candidates: Array<string | null | undefined>): string[] {
   return result.slice(0, 15);
 }
 
-function validateAttributes(item: ListingDraftItemV1, skuId: string, category: CategoryAttributesGroupV1, result: ListingDraftV1): void {
+function validateAttributes(item: ListingDraftItemV2, skuId: string, category: CategoryAttributesGroupV1, result: ListingDraftV2): void {
   if (item.primary_image !== item.images[0] || !item.images.includes(item.primary_image)) result.errors.push(issue('PRIMARY_IMAGE_INVALID', `SKU ${skuId} primary image must be the first built image.`, [skuId]));
   const ids = item.attributes.map((attribute) => attribute.id);
   if (ids.some((id, index) => index > 0 && id < ids[index - 1]!)) result.errors.push(issue('ATTRIBUTES_NOT_SORTED', `SKU ${skuId} attributes must be sorted by ID.`, [skuId]));
@@ -188,7 +223,7 @@ function validateAttributes(item: ListingDraftItemV1, skuId: string, category: C
   }
 }
 
-function validate9048(groups: CategoryAttributesGroupV1[], mapping: AttributeMappingV1, result: ListingDraftV1): void {
+function validate9048(groups: CategoryAttributesGroupV1[], mapping: AttributeMappingV2, result: ListingDraftV2): void {
   const values = new Set<string>();
   for (const mapped of mapping.sku_attributes) {
     const category = groups.find((group) => group.group_ids.includes(mapped.group_id));
@@ -218,4 +253,15 @@ function stableOfferId(offerId: string, skuId: string): string {
 
 function issue(code: string, message: string, sku_ids: string[] = [], attribute_ids: number[] = []): ListingDraftIssueV1 {
   return { code, message, sku_ids, attribute_ids };
+}
+
+function stableHash(value: unknown): string {
+  return createHash('sha256').update(stable(value)).digest('hex');
+}
+
+function stable(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stable(object[key])}`).join(',')}}`;
 }

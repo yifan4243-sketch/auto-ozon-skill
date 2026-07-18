@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://auto-ozon.local/schemas/attribute-mapping-v1.json",
-  "title": "AttributeMappingV1",
+  "$id": "https://auto-ozon.local/schemas/attribute-mapping-v2.json",
+  "title": "AttributeMappingV2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,6 +9,7 @@
     "source_offer_id",
     "status",
     "weight_semantics",
+    "category_snapshot_refs",
     "common_attributes",
     "variant_attributes",
     "sku_attributes",
@@ -19,10 +20,27 @@
     "errors"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "source_offer_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
     "status": { "enum": ["completed", "needs_review", "blocked"] },
     "weight_semantics": { "const": "legacy-cost-base-v1" },
+    "category_snapshot_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["group_id", "description_category_id", "type_id", "captured_at", "valid_to", "sha256"],
+        "properties": {
+          "group_id": { "type": "string", "minLength": 1 },
+          "description_category_id": { "type": "integer", "minimum": 1 },
+          "type_id": { "type": "integer", "minimum": 1 },
+          "captured_at": { "type": "string", "minLength": 20 },
+          "valid_to": { "type": "string", "minLength": 20 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
     "common_attributes": {
       "type": "array",
       "items": {
@@ -119,13 +137,36 @@
     "mappedAttribute": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["attribute_id", "values", "provenance", "confidence", "evidence"],
+      "required": ["attribute_id", "values", "provenance", "confidence", "evidence", "audit"],
       "properties": {
         "attribute_id": { "type": "integer", "minimum": 1 },
         "values": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/value" } },
         "provenance": { "enum": ["source", "converted", "derived", "agent_selected", "default"] },
         "confidence": { "enum": ["high", "medium", "low"] },
-        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } }
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+        "content_claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["claim_text", "evidence"],
+            "properties": {
+              "claim_text": { "type": "string", "minLength": 1 },
+              "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } }
+            }
+          }
+        },
+        "audit": {
+          "type": "object", "additionalProperties": false,
+          "required": ["source_path", "raw_value", "normalized_values", "mapping_method", "snapshot_sha256"],
+          "properties": {
+            "source_path": { "type": "string", "pattern": "^/" },
+            "raw_value": { "type": "string" },
+            "normalized_values": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "mapping_method": { "enum": ["source", "converted", "derived", "agent_selected", "default"] },
+            "snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        }
       }
     },
     "ozonAttribute": {

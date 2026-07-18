@@ -10,12 +10,12 @@ interface AnalyticsRow {
   category_id: number;
   category_name: string;
   category_path: string;
-  metric_gmv: number | string;
-  metric_gmv_growth: number | string;
-  metric_items: number | string;
-  metric_sellers: number | string;
-  metric_buyout: number | string;
-  metric_leader_share: number | string;
+  metric_gmv?: number | string | null;
+  metric_gmv_growth?: number | string | null;
+  metric_items?: number | string | null;
+  metric_sellers?: number | string | null;
+  metric_buyout?: number | string | null;
+  metric_leader_share?: number | string | null;
 }
 
 interface AnalyticsSnapshot {
@@ -48,8 +48,10 @@ export async function runMarketSelection(input: RunMarketSelectionInputV1): Prom
   const rejected: MarketSelectionV1['rejected_categories'] = [];
   const viable: AnalyticsRow[] = [];
   for (const row of snapshot.level3) {
-    const incomplete = !completeMetric(row);
-    const reason = incomplete ? '关键年度指标不完整'
+    const identityInvalid = !validCategoryIdentity(row);
+    const noMetrics = availableMetricCount(row) === 0;
+    const reason = identityInvalid ? '类目身份字段不完整'
+      : noMetrics ? '年度市场指标全部不可用'
       : EXCLUDED_ROOTS.test(row.root_label) ? `一级类目不适合当前跨境小卖家策略：${row.root_label}`
       : EXCLUDED_CATEGORY.test(`${row.category_name} ${row.category_path}`) ? '商品通常涉及食品、液体、电池、认证、时效或超大件风险'
       : null;
@@ -58,10 +60,10 @@ export async function runMarketSelection(input: RunMarketSelectionInputV1): Prom
   }
   if (viable.length === 0) throw new Error('NO_VIABLE_MARKET_CATEGORIES');
   const distributions = {
-    gmv: percentileLookup(viable.map((item) => Number(item.metric_gmv))),
-    items: percentileLookup(viable.map((item) => Number(item.metric_items))),
-    growth: percentileLookup(viable.map((item) => Math.max(0, Number(item.metric_gmv_growth)))),
-    sellers: percentileLookup(viable.map((item) => Number(item.metric_sellers))),
+    gmv: percentileLookup(viable.map((item) => nonNegativeMetric(item.metric_gmv)).filter(isNumber)),
+    items: percentileLookup(viable.map((item) => nonNegativeMetric(item.metric_items)).filter(isNumber)),
+    growth: percentileLookup(viable.map((item) => metric(item.metric_gmv_growth)).filter(isNumber).map((value) => Math.max(0, value))),
+    sellers: percentileLookup(viable.map((item) => nonNegativeMetric(item.metric_sellers)).filter(isNumber)),
   };
   const scored = viable.map((row) => scoreRow(row, distributions, selectionDate)).sort((a, b) => b.score - a.score || a.analytics_category_id - b.analytics_category_id);
   const count = input.category_count ?? 8;
@@ -94,25 +96,53 @@ export async function runMarketSelection(input: RunMarketSelectionInputV1): Prom
 }
 
 function scoreRow(row: AnalyticsRow, distributions: ScoringDistributions, selectionDate: string) {
-  const gmv = Number(row.metric_gmv); const items = Number(row.metric_items); const growth = Number(row.metric_gmv_growth);
-  const sellers = Number(row.metric_sellers); const buyout = Number(row.metric_buyout); const leader = Number(row.metric_leader_share);
-  const demandGmv = distributions.gmv(gmv);
-  const demandItems = distributions.items(items);
-  const positiveGrowth = distributions.growth(Math.max(0, growth));
-  const sellerPercentile = distributions.sellers(sellers);
-  const moderateCompetition = Math.max(0, 1 - Math.abs(sellerPercentile - 0.5) * 2);
-  const longTail = demandGmv >= 0.2 && demandGmv < 0.8 && growth > 0 && items > 0 ? 1 : 0;
+  const gmv = nonNegativeMetric(row.metric_gmv); const items = nonNegativeMetric(row.metric_items); const growth = metric(row.metric_gmv_growth);
+  const sellers = nonNegativeMetric(row.metric_sellers); const buyout = nonNegativeMetric(row.metric_buyout); const leader = nonNegativeMetric(row.metric_leader_share);
+  const demandGmv = gmv === null ? null : distributions.gmv(gmv);
+  const demandItems = items === null ? null : distributions.items(items);
+  const positiveGrowth = growth === null ? null : distributions.growth(Math.max(0, growth));
+  const sellerPercentile = sellers === null ? null : distributions.sellers(sellers);
+  const moderateCompetition = sellerPercentile === null ? null : Math.max(0, 1 - Math.abs(sellerPercentile - 0.5) * 2);
+  const smallSellerOpportunity = leader === null ? null : 1 - clamp(leader / 100, 0, 1);
+  const buyoutScore = buyout === null ? null : clamp(buyout / 100, 0, 1);
+  const longTail = demandGmv === null || growth === null || items === null
+    ? null
+    : demandGmv >= 0.2 && demandGmv < 0.8 && growth > 0 && items > 0 ? 1 : 0;
   const seasonal = seasonalAdjustment(row, selectionDate);
-  const rawScore = 25 * demandGmv + 15 * demandItems + 15 * positiveGrowth
-    + 20 * (1 - clamp(leader / 100, 0, 1)) + 10 * clamp(buyout / 100, 0, 1)
-    + 10 * moderateCompetition + 5 * longTail + seasonal.adjustment;
-  const score = round(clamp(rawScore, 0, 100));
+  const weighted = [
+    component('demand_gmv', demandGmv, 25), component('demand_items', demandItems, 15),
+    component('growth', positiveGrowth, 15), component('small_seller_opportunity', smallSellerOpportunity, 20),
+    component('buyout', buyoutScore, 10), component('competition_balance', moderateCompetition, 10),
+    component('long_tail', longTail, 5),
+  ].filter((value): value is { name: string; score: number; weight: number } => value !== null);
+  const availableWeight = weighted.reduce((sum, value) => sum + value.weight, 0);
+  const normalized = availableWeight > 0
+    ? weighted.reduce((sum, value) => sum + value.score * value.weight, 0) / availableWeight * 100
+    : 0;
+  const score = round(clamp(normalized + seasonal.adjustment, 0, 100));
+  const unavailable = [
+    ...(demandGmv === null ? ['demand_gmv'] : []), ...(demandItems === null ? ['demand_items'] : []),
+    ...(positiveGrowth === null ? ['growth'] : []), ...(smallSellerOpportunity === null ? ['small_seller_opportunity'] : []),
+    ...(moderateCompetition === null ? ['competition_balance'] : []), ...(buyoutScore === null ? ['buyout'] : []),
+    ...(longTail === null ? ['long_tail'] : []), 'profit', 'logistics', 'risk',
+  ];
   return {
     analytics_category_id: Number(row.category_id), root_category_id: Number(row.root_id), root_category_name_zh: row.root_label,
     category_path_zh: row.category_path, search_keyword_1688_zh: row.category_name, score,
     metrics: { gmv, items, growth_percent: growth, seller_count: sellers, buyout_percent: buyout, leader_share_percent: leader },
+    score_components: {
+      demand_gmv: demandGmv === null ? null : round(demandGmv * 100),
+      demand_items: demandItems === null ? null : round(demandItems * 100),
+      growth: positiveGrowth === null ? null : round(positiveGrowth * 100),
+      small_seller_opportunity: smallSellerOpportunity === null ? null : round(smallSellerOpportunity * 100),
+      competition_balance: moderateCompetition === null ? null : round(moderateCompetition * 100),
+      buyout: buyoutScore === null ? null : round(buyoutScore * 100),
+      long_tail: longTail === null ? null : round(longTail * 100),
+      seasonality: seasonal.adjustment, profit: null, logistics: null, risk: null,
+    },
+    unavailable_components: unavailable,
     seasonal_adjustment: seasonal.adjustment, seasonal_reason_zh: seasonal.reason,
-    rationale_zh: `年度需求分位与增长、头部卖家份额${round(leader)}%、卖家竞争度和买断率共同评分；${seasonal.reason}`,
+    rationale_zh: `只使用可用年度指标并按实际可用权重重新归一；${leader === null ? '头部卖家份额不可用' : `头部卖家份额${round(leader)}%`}；${seasonal.reason}。利润、物流与商品风险等待1688商品事实后再评估。`,
   };
 }
 
@@ -130,13 +160,34 @@ function seasonalAdjustment(row: AnalyticsRow, selectionDate: string): { adjustm
   return matched ? { adjustment: matched.value, reason: matched.reason } : { adjustment: 0, reason: '没有使用未经数据支持的季节加分' };
 }
 
-function completeMetric(row: AnalyticsRow): boolean {
-  const nonNegative = [row.metric_gmv, row.metric_items, row.metric_sellers, row.metric_buyout, row.metric_leader_share];
+function validCategoryIdentity(row: AnalyticsRow): boolean {
   return row.level === 3 && Number.isSafeInteger(Number(row.category_id)) && Number(row.category_id) > 0
-    && Boolean(row.category_name?.trim()) && Boolean(row.category_path?.trim())
-    && nonNegative
-      .every((value) => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0)
-    && row.metric_gmv_growth !== '' && Number.isFinite(Number(row.metric_gmv_growth));
+    && Boolean(row.category_name?.trim()) && Boolean(row.category_path?.trim());
+}
+
+function availableMetricCount(row: AnalyticsRow): number {
+  return [
+    nonNegativeMetric(row.metric_gmv), nonNegativeMetric(row.metric_items),
+    nonNegativeMetric(row.metric_sellers), nonNegativeMetric(row.metric_buyout),
+    nonNegativeMetric(row.metric_leader_share), metric(row.metric_gmv_growth),
+  ].filter(isNumber).length;
+}
+
+function metric(value: unknown): number | null {
+  if (value === '' || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function nonNegativeMetric(value: unknown): number | null {
+  const number = metric(value);
+  return number !== null && number >= 0 ? number : null;
+}
+
+function isNumber(value: number | null): value is number { return value !== null; }
+
+function component(name: string, score: number | null, weight: number): { name: string; score: number; weight: number } | null {
+  return score === null ? null : { name, score, weight };
 }
 
 interface ScoringDistributions {
@@ -146,6 +197,7 @@ interface ScoringDistributions {
 
 function percentileLookup(values: number[]): (value: number) => number {
   const sorted = [...values].sort((left, right) => left - right);
+  if (sorted.length === 0) return () => 0;
   if (sorted.length <= 1) return () => 1;
   return (value: number) => {
     const below = lowerBound(sorted, value);
@@ -171,7 +223,7 @@ function validateInput(input: RunMarketSelectionInputV1): void {
   const count = input.category_count ?? 8;
   if (!Number.isSafeInteger(count) || count < 5 || count > 10) throw new Error('CATEGORY_COUNT_MUST_BE_5_TO_10');
   const limit = input.daily_listing_limit ?? 100;
-  if (!Number.isSafeInteger(limit) || limit < count || limit > 100) throw new Error('DAILY_LISTING_LIMIT_INVALID');
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('DAILY_LISTING_LIMIT_INVALID');
   const maxSku = input.max_sku_per_product ?? 3;
   if (!Number.isSafeInteger(maxSku) || maxSku < 1) throw new Error('MAX_SKU_INVALID');
 }

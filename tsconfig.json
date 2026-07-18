@@ -23,6 +23,9 @@
       "path": "packages/contracts"
     },
     {
+      "path": "packages/control-plane"
+    },
+    {
       "path": "packages/core"
     },
     {

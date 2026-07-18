@@ -24,6 +24,8 @@
     "tsx": "^4.23.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "output.schema.json",
+    "agent-task.schema.json"
   ]
 }

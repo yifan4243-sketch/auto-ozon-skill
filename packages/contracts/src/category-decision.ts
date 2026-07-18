@@ -45,6 +45,14 @@ export interface CategoryGroupDecisionV1 {
 
 export interface CategoryDecisionV1 {
   schema_version: 1;
+  category_snapshot?: {
+    schema_version: 1;
+    source: 'ozon-seller-api';
+    captured_at: string;
+    valid_from: string;
+    valid_to: string;
+    sha256: string;
+  };
   source_offer_id: string;
   product_understanding: {
     summary_zh: string;
@@ -58,4 +66,28 @@ export interface CategoryDecisionV1 {
   status: CategoryDecisionStatusV1;
   warnings: CategoryDecisionIssueV1[];
   errors: CategoryDecisionIssueV1[];
+}
+
+export interface CategoryDecisionAgentTaskV1 {
+  schema_version: 1;
+  execution_owner: 'current_agent';
+  source_offer_id: string;
+  category_snapshot: NonNullable<CategoryDecisionV1['category_snapshot']>;
+  evidence: {
+    search_term: string | null;
+    title_zh: string;
+    source_category_path_zh: string[];
+    product_attributes: Record<string, string>;
+    skus: Array<{
+      source_sku_id: string;
+      raw_spec_text: string;
+      specs: Record<string, string>;
+      image: string | null;
+    }>;
+  };
+  initial_candidate_sets: Array<{
+    query: string;
+    candidates: Array<OzonCategorySelectionV1 & { score: number }>;
+  }>;
+  instruction: string;
 }

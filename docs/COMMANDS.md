@@ -18,7 +18,7 @@ auto-ozon source image ./product.jpg --max 10 --json
 auto-ozon source offers 123456789 987654321 --json
 auto-ozon source similar 123456789 --max 10 --json
 
-auto-ozon ozon doctor --json --pretty
+auto-ozon ozon --store-id <Client-Id> doctor --json --pretty
 
 auto-ozon ozon sections list --json --pretty
 auto-ozon ozon sections get ProductAPI --json --pretty
@@ -38,15 +38,28 @@ auto-ozon ozon reference swagger-meta --json --pretty
 auto-ozon ozon subscription status --refresh --json --pretty
 auto-ozon ozon subscription methods PREMIUM_PLUS --json --pretty
 
-auto-ozon ozon call ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --json --pretty
-auto-ozon ozon fetch-all ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --max-items 10000 --json --pretty
+auto-ozon ozon --store-id <Client-Id> call ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --json --pretty
+auto-ozon ozon --store-id <Client-Id> fetch-all ProductAPI_GetProductList --params '{"filter":{"visibility":"ALL"}}' --max-items 10000 --json --pretty
 
 auto-ozon ozon workflows list --category catalog --json --pretty
 auto-ozon ozon workflows get cabinet_health_check --json --pretty
 
-auto-ozon workflow category inspect "收纳盒" --decision-file decision.json --json --pretty
+auto-ozon workflow category inspect "收纳盒" --store-id <Client-Id> --decision-file decision.json --json --pretty
 auto-ozon workflow listing prepare "收纳盒" --stop-after draft-generation --json --pretty
+auto-ozon setup doctor --json --pretty
+auto-ozon workflow batch create --batch-id batch-001 --store-id 123456 --count 20 --profiles account-1,account-2
+auto-ozon workflow batch run --batch-id batch-001
+auto-ozon workflow batch resume --batch-id batch-001
+auto-ozon workflow batch status --batch-id batch-001
+auto-ozon workflow batch agent-tasks --batch-id batch-001
+auto-ozon workflow batch agent-input --batch-id batch-001 --offer-id <offer_id> --kind category --stdin
+auto-ozon review-console start
 ```
+
+`agent-input` accepts a complete `AgentDecisionEnvelopeV1`, not an unbound raw
+value. Obtain the current `task_id`, run/input hash and evidence hashes from
+`agent-tasks`; place the actual category/pricing/attribute/image decision in
+the envelope's `output` field. Stale or cross-run envelopes are rejected.
 
 Global output flags are available on subcommands: `--json`, `--json-v2`, `--pretty`, `--get`, `--pick`.
 
@@ -119,6 +132,14 @@ auto-ozon workflow listing prepare "收纳盒" \
   --run-id listing-cup-001 \
   --decision-file category-decision.json \
   --stop-after draft-generation \
+  --json --pretty
+
+# Complete image text/watermark review from the current Agent.
+auto-ozon workflow listing prepare "收纳盒" \
+  --run-id listing-cup-001 \
+  --store-id <Client-Id> \
+  --start-from draft-generation \
+  --image-review-stdin \
   --json --pretty
 
 # Complete missing package estimates from the current Agent.

@@ -18,6 +18,18 @@ import { loadBundledCommissionSnapshot, resolveCommissionSnapshot, selectCommiss
 import { CbrFxRateProvider } from './fx.js';
 import { calculateCelCandidates, CEL_TARIFF_VERSION, priceFitsCelBand } from './tariffs.js';
 import { validateCostPricingSchema } from './schema-validator.js';
+import {
+  addMoney,
+  ceilMoneyToWhole,
+  divideByRemainingPercent,
+  money,
+  moneyNumber,
+  multiplyMoney,
+  percentageMoney,
+  roundMoneyToWhole,
+  subtractMoney,
+  type MoneyMicros,
+} from './money.js';
 
 const FX_CACHE_NAMESPACE = 'cost-pricing-fx';
 const FX_CACHE_KEY = 'cbr-cny-rub-latest';
@@ -48,6 +60,8 @@ export const DEFAULT_COST_PRICING_PROFILE: CostPricingProfileV1 = {
   domestic_shipping_cny: 0,
   other_fixed_cny: 0,
   other_rate_percent: 10,
+  advertising_reserve_percent: 0,
+  return_loss_reserve_percent: 0,
 };
 
 export async function runCostPricing(
@@ -207,9 +221,14 @@ function calculateSkuPricing(
       }, result.profile.transport);
       const solutions: CostPricingSkuV1[] = [];
       for (const candidate of candidates) {
-        const purchaseCost = sku.price_cny * result.profile.sales_unit_quantity;
-        const landedCost = purchaseCost + result.profile.domestic_shipping_cny
-          + result.profile.label_fee_cny + candidate.shipping_cny + result.profile.other_fixed_cny;
+        const purchaseCost = multiplyMoney(money(sku.price_cny), result.profile.sales_unit_quantity);
+        const landedCost = addMoney(
+          purchaseCost,
+          money(result.profile.domestic_shipping_cny),
+          money(result.profile.label_fee_cny),
+          money(candidate.shipping_cny),
+          money(result.profile.other_fixed_cny),
+        );
         const priceOptions = resolvePriceOptions(
           landedCost,
           candidate,
@@ -218,15 +237,19 @@ function calculateSkuPricing(
           result,
         );
         for (const { finalPriceCny, finalPriceRub, commission } of priceOptions) {
-        const commissionAmount = finalPriceCny * commission.rate_percent / 100;
-        const otherRateAmount = finalPriceCny * result.profile.other_rate_percent / 100;
-        const profit = finalPriceCny - landedCost - commissionAmount - otherRateAmount;
+        const finalPrice = money(finalPriceCny);
+        const commissionAmount = percentageMoney(finalPrice, commission.rate_percent);
+        const otherRateAmount = percentageMoney(finalPrice, result.profile.other_rate_percent);
+        const advertisingReserveAmount = percentageMoney(finalPrice, result.profile.advertising_reserve_percent);
+        const returnLossReserveAmount = percentageMoney(finalPrice, result.profile.return_loss_reserve_percent);
+        const profit = subtractMoney(finalPrice, landedCost, commissionAmount, otherRateAmount, advertisingReserveAmount, returnLossReserveAmount);
+        const achievedMargin = round(moneyNumber(profit, 6) / finalPriceCny * 100);
         solutions.push({
           source_sku_id: skuId,
           group_id: group.group_id,
           description_category_id: category.description_category_id,
           purchase_price_cny: round(sku.price_cny),
-          purchase_cost_cny: round(purchaseCost),
+          purchase_cost_cny: moneyNumber(purchaseCost),
           package: packaged,
           weight_facts: {
             semantics: LEGACY_WEIGHT_SEMANTICS_V1,
@@ -244,14 +267,41 @@ function calculateSkuPricing(
           cel_rate_per_g_cny: candidate.rate_per_g_cny,
           cel_fixed_fee_cny: candidate.fixed_fee_cny,
           cel_shipping_cny: candidate.shipping_cny,
-          landed_cost_cny: round(landedCost),
+          landed_cost_cny: moneyNumber(landedCost),
           final_price_cny: finalPriceCny,
           final_price_rub: round(finalPriceRub),
           commission,
-          commission_amount_cny: round(commissionAmount),
-          other_rate_amount_cny: round(otherRateAmount),
-          estimated_profit_cny: round(profit),
-          estimated_profit_margin_percent: round(profit / finalPriceCny * 100),
+          commission_amount_cny: moneyNumber(commissionAmount),
+          other_rate_amount_cny: moneyNumber(otherRateAmount),
+          advertising_reserve_amount_cny: moneyNumber(advertisingReserveAmount),
+          return_loss_reserve_amount_cny: moneyNumber(returnLossReserveAmount),
+          estimated_profit_cny: moneyNumber(profit),
+          estimated_profit_margin_percent: achievedMargin,
+          cost_model: {
+            schema_version: 2,
+            currency_code: 'CNY',
+            purchase_cost_micros: purchaseCost.toString(),
+            domestic_shipping_micros: money(result.profile.domestic_shipping_cny).toString(),
+            label_fee_micros: money(result.profile.label_fee_cny).toString(),
+            cel_shipping_micros: money(candidate.shipping_cny).toString(),
+            other_fixed_micros: money(result.profile.other_fixed_cny).toString(),
+            landed_cost_micros: landedCost.toString(),
+            tariff_version: CEL_TARIFF_VERSION,
+            commission_snapshot_sha256: result.commission_snapshot_sha256,
+            fx_response_sha256: result.fx_rate.response_sha256,
+          },
+          price_decision: {
+            schema_version: 2,
+            mode: result.profile.pricing_mode,
+            solver: 'self_consistent_cel_commission_band',
+            final_price_cny: finalPriceCny,
+            final_price_micros: finalPrice.toString(),
+            final_price_rub: round(finalPriceRub),
+            configured_multiplier: result.profile.pricing_multiplier,
+            retained_target_percent: result.profile.retained_target_percent,
+            achieved_profit_margin_percent: achievedMargin,
+            commission,
+          },
         });
         }
       }
@@ -326,15 +376,17 @@ function validateProfile(profile: CostPricingProfileV1): CostPricingProfileV1 {
     throw new Error('sales_unit_quantity must be a positive integer.');
   }
   if (!validPositive(profile.pricing_multiplier)) throw new Error('pricing_multiplier must be greater than zero.');
-  for (const field of ['retained_target_percent', 'label_fee_cny', 'domestic_shipping_cny', 'other_fixed_cny', 'other_rate_percent'] as const) {
+  for (const field of ['retained_target_percent', 'label_fee_cny', 'domestic_shipping_cny', 'other_fixed_cny', 'other_rate_percent', 'advertising_reserve_percent', 'return_loss_reserve_percent'] as const) {
     if (!Number.isFinite(profile[field]) || profile[field] < 0) throw new Error(`${field} cannot be negative.`);
   }
-  if (profile.other_rate_percent >= 100) throw new Error('other_rate_percent must be below 100.');
+  if (profile.other_rate_percent + profile.advertising_reserve_percent + profile.return_loss_reserve_percent >= 100) {
+    throw new Error('Combined variable reserves must be below 100 percent.');
+  }
   return profile;
 }
 
 function resolvePriceOptions(
-  landedCost: number,
+  landedCost: MoneyMicros,
   candidate: ReturnType<typeof calculateCelCandidates>[number],
   categoryId: number,
   snapshot: ReturnType<typeof resolveCommissionSnapshot>,
@@ -342,16 +394,14 @@ function resolvePriceOptions(
 ): Array<{ finalPriceCny: number; finalPriceRub: number; commission: CostPricingCommissionTierV1 }> {
   const prices: number[] = [];
   if (result.profile.pricing_mode === 'multiplier') {
-    prices.push(Math.round(landedCost * result.profile.pricing_multiplier));
+    prices.push(roundMoneyToWhole(multiplyMoney(landedCost, result.profile.pricing_multiplier)));
   } else {
     const category = snapshot.categories.find((entry) => entry.category_id === categoryId);
     for (const tier of category?.tiers ?? []) {
-      const denominator = 1 - (
-        tier.rate_percent
-        + result.profile.other_rate_percent
-        + result.profile.retained_target_percent
-      ) / 100;
-      if (denominator > 0) prices.push(Math.round(landedCost / denominator));
+      const deducted = tier.rate_percent + result.profile.other_rate_percent
+        + result.profile.advertising_reserve_percent + result.profile.return_loss_reserve_percent
+        + result.profile.retained_target_percent;
+      if (deducted < 100) prices.push(ceilMoneyToWhole(divideByRemainingPercent(landedCost, deducted)));
     }
   }
   const seen = new Set<number>();
@@ -364,10 +414,11 @@ function resolvePriceOptions(
     const commission = selectCommissionTier(snapshot, categoryId, finalPriceRub);
     if (!commission) continue;
     if (result.profile.pricing_mode === 'target_margin') {
-      const achieved = (finalPriceCny - landedCost
-        - finalPriceCny * commission.rate_percent / 100
-        - finalPriceCny * result.profile.other_rate_percent / 100) / finalPriceCny * 100;
-      if (achieved + 0.01 < result.profile.retained_target_percent) continue;
+      const price = money(finalPriceCny);
+      const achievedProfit = subtractMoney(price, landedCost,
+        percentageMoney(price, commission.rate_percent), percentageMoney(price, result.profile.other_rate_percent),
+        percentageMoney(price, result.profile.advertising_reserve_percent), percentageMoney(price, result.profile.return_loss_reserve_percent));
+      if (achievedProfit < percentageMoney(price, result.profile.retained_target_percent)) continue;
     }
     options.push({ finalPriceCny, finalPriceRub, commission });
   }

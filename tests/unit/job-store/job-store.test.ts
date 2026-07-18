@@ -20,6 +20,7 @@ describe('SQLite publish reliability store', () => {
     expect(store.getIntent('500', 'offer-a', 'hash-a')).toMatchObject({ status: 'submitted', task_id: 'task-1' });
     store.markReconciled(intent.intent_id, 'succeeded', 42);
     expect(store.getIntent('500', 'offer-a', 'hash-a')).toMatchObject({ status: 'succeeded', product_id: 42 });
+    expect(store.countSucceededSince('500', '2026-01-01T00:00:00.000Z')).toBe(1);
     store.close();
   });
 

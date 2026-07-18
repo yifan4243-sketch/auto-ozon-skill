@@ -44,7 +44,7 @@ CanonicalProduct（供定价、类目与上架步骤使用）
 **推荐一键安装：**
 
 ```powershell
-pnpm dlx ozon-master init --agent all
+pnpm dlx ozon-master@1.0.0-rc.1 init --agent all
 ```
 
 该命令会下载仓库、安装依赖、初始化 Ozon MCP、检查 Chrome，并在没有 Chrome 时下载 Playwright Chromium；同时为 Codex、Claude Code 和 Hermes 安装不含密钥的本地 Skill 指针。Node.js 20+ 与 pnpm 是此命令的前提。
@@ -118,7 +118,22 @@ pnpm exec tsx apps/cli/src/cli.ts source similar 123456789 --max 10
 准备草稿不会写入 Ozon：
 
 ```powershell
-pnpm exec tsx apps/cli/src/cli.ts workflow listing prepare "一次性杯子" --sku-max 3 --json --pretty
+pnpm exec tsx apps/cli/src/cli.ts workflow listing prepare "一次性杯子" --store-id <Client-Id> --sku-max 3 --json --pretty
+```
+
+如果客户已配置可选生图模型并希望默认生成 3 张商品图，可增加
+`--generate-images`；不增加该参数时只校验并使用合格的 1688 原图：
+
+```powershell
+pnpm exec tsx apps/cli/src/cli.ts workflow listing prepare "一次性杯子" --store-id <Client-Id> --sku-max 3 --generate-images --json --pretty
+```
+
+批量上架使用持久化批次台账。明确关键词时直接采集；未指定商品时先运行俄罗斯市场选品：
+
+```powershell
+pnpm exec tsx apps/cli/src/cli.ts workflow batch create --batch-id batch-001 --store-id <Client-Id> --count 20 --profiles account-1,account-2 --keyword "杯子"
+pnpm exec tsx apps/cli/src/cli.ts workflow batch run --batch-id batch-001
+pnpm exec tsx apps/cli/src/cli.ts workflow batch status --batch-id batch-001
 ```
 
 每个商品 run 的完整证据和产物位于：
@@ -132,7 +147,8 @@ data/runs/<run_id>/
 ├── 04-cost-pricing/
 ├── 05-category-attributes/
 ├── 06-attribute-mapping/
-├── 07-draft-generation/listing-draft-v1.json
+├── 07-draft-generation/image-bundle-v1.json
+├── 07-draft-generation/listing-draft-v2.json
 └── 08-listing-submit/ozon-publish-result-v1.json
 ```
 
@@ -170,7 +186,7 @@ pnpm exec tsx apps/cli/src/cli.ts workflow listing status --run-id <run_id>
 项目内置 Ozon MCP TypeScript 桥接。它包含约 466 个 Seller / Performance API 方法，以及 13 个已整理的分析工作流，例如订单同步、商品目录同步、财务交易、日销售分析、广告、库存、退货、内容审计与价格分析。
 
 ```powershell
-pnpm exec tsx apps/cli/src/cli.ts ozon doctor
+pnpm exec tsx apps/cli/src/cli.ts ozon --store-id <Client-Id> doctor
 pnpm exec tsx apps/cli/src/cli.ts ozon workflows list
 pnpm exec tsx apps/cli/src/cli.ts ozon workflows get pricing_analysis
 pnpm exec tsx apps/cli/src/cli.ts ozon methods search "product" --api seller --safety read

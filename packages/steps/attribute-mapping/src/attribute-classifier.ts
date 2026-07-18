@@ -1,20 +1,18 @@
-import type {
-  CommonAttributeMappingV1,
-  SkuAttributeMappingV1,
-  VariantAttributeMappingV1,
-} from '@auto-ozon/contracts';
+import type { MappedOzonAttributeV2, SkuAttributeMappingV1, VariantAttributeMappingV1 } from '@auto-ozon/contracts';
+
+type SkuAttributeMappingV2 = Omit<SkuAttributeMappingV1, 'attributes'> & { attributes: MappedOzonAttributeV2[] };
 
 export function classifyGroupAttributes(
   groupId: string,
-  skuMappings: SkuAttributeMappingV1[],
+  skuMappings: SkuAttributeMappingV2[],
 ): {
-  common: CommonAttributeMappingV1[];
+  common: Array<{ group_id: string; attribute: MappedOzonAttributeV2 }>;
   variant: VariantAttributeMappingV1[];
 } {
   const attributeIds = new Set(
     skuMappings.flatMap((sku) => sku.attributes.map((attribute) => attribute.attribute_id)),
   );
-  const common: CommonAttributeMappingV1[] = [];
+  const common: Array<{ group_id: string; attribute: MappedOzonAttributeV2 }> = [];
   const variant: VariantAttributeMappingV1[] = [];
 
   for (const attributeId of attributeIds) {

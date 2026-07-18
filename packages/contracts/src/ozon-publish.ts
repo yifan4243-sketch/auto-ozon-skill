@@ -1,4 +1,4 @@
-import type { ListingDraftItemV1 } from './listing-draft.js';
+import type { ListingDraftItemV2 } from './listing-draft.js';
 
 export interface StorePublishProfileV1 {
   store_id: string;
@@ -41,7 +41,7 @@ export interface SellerImportInfoV1 {
 }
 
 export interface SellerImportTransportV1 {
-  submit(items: ListingDraftItemV1[]): Promise<{ task_id: string }>;
+  submit(items: ListingDraftItemV2[]): Promise<{ task_id: string }>;
   getImportInfo(taskId: string): Promise<SellerImportInfoV1>;
   getProductsByOfferIds(offerIds: string[]): Promise<Array<{ offer_id: string; product_id: number }>>;
 }

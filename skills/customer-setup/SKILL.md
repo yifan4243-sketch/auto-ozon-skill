@@ -31,8 +31,8 @@ does not decide whether a later request needs market selection or a supplied
    ```text
    1688 login --profile account-1
    1688 login --profile account-2
-   1688 profile status --profile account-1
-   1688 profile status --profile account-2
+   1688 profile status account-1
+   1688 profile status account-2
    ```
 
    Do not collect products until two profiles are usable. Do not expose their
@@ -88,25 +88,23 @@ and update the following JSON paths instead.
 | Customer answer | File and JSON path to update |
 | --- | --- |
 | 备注 | `data/config/ozon-stores.local.json` → matching store entry → `store_name` |
-| ID | same store entry → `store_id`; `.env` → `OZON_CLIENT_ID_<store_id>`; same entry → `credentials.client_id_env` |
-| API KEY | `.env` → `OZON_API_KEY_<store_id>`; same store entry → `credentials.api_key_env`; never put the key in JSON |
+| ID | same store entry → `store_id`; `.env` → `OZON_CLIENT_ID_<store_id>`; same entry → `credentials.client_id.key` with `provider=env` |
+| API KEY | `.env` → `OZON_API_KEY_<store_id>`; same store entry → `credentials.api_key.key` with `provider=env`; never put the key in JSON |
 | 最大 SKU 数量 | `data/config/customer-settings.local.json` → `collection.max_sku_per_product` |
 | 最低/最高采购价 | same file → `collection.purchase_price_cny.min` and `.max`; use `null` for “不限制” |
-| 售价和成本公式 | same file → `pricing.formula_text` and `pricing.cost_pricing_profile` |
+| 售价和成本公式 | customer settings → `pricing.formula_text`; matching StoreProfileV2 → executable `pricing` fields |
 | 生图 Base URL 和模型名称 | `data/config/image-generation.local.json` → `base_url` and `model` |
 | 生图 API KEY | `.env` → `IMAGE_GENERATION_API_KEY`; image config → `api_key_env` only |
 | 是否使用 1688 原图 | image config → `use_1688_reference_images`; omitted answer means `true` |
 | 自动发布确认 | `data/config/ozon-stores.local.json` → matching store entry → `publishing.enabled` |
 
-Convert a formula to `pricing.cost_pricing_profile` only when it can be
-expressed by the existing `CostPricingProfileV1` fields: `transport`,
-`sales_unit_quantity`, `pricing_multiplier`, `retained_target_percent`,
-`label_fee_cny`, `domestic_shipping_cny`, `other_fixed_cny`, and
-`other_rate_percent`. For “到俄固定成本 × 2”, write `pricing_multiplier: 2`
-and preserve the remaining current/default profile fields. If the formula
-cannot be represented by those fields, keep it as `formula_text`, explain that
-it is not executable yet, and ask the customer for an equivalent supported
-formula rather than changing pricing code.
+Convert a formula to the matching `StoreProfileV2.pricing` only when it can be
+expressed as `mode=multiplier` plus `multiplier`, or `mode=target_margin` plus
+`target_margin_percent`, together with the existing margin/reserve/fixed-fee
+fields. For “到俄固定成本 × 2”, write `mode: multiplier` and `multiplier: "2"`
+while preserving the remaining store fields. If the formula cannot be
+represented, keep it as `formula_text`, explain that it is not executable yet,
+and ask for an equivalent supported formula rather than changing pricing code.
 
 ## Apply configuration
 
@@ -115,7 +113,7 @@ the output. Then state the effective command parameters without running a
 write operation:
 
 ```text
-workflow listing prepare <keyword> --sku-max <max_sku>
+workflow listing prepare <keyword> --store-id <Client-Id> --sku-max <max_sku>
 workflow listing publish --run-id <run_id> --store-id <Client-Id>
 ```
 
@@ -126,8 +124,9 @@ when the local store profile says it is disabled.
 
 For image generation, default `image_count` to `3`. Store only configuration;
 do not call a model during setup. Use the versioned prompt in
-[references/image-prompt.md](references/image-prompt.md) when the later
-image-generation workflow is implemented.
+[references/image-prompt.md](references/image-prompt.md). A later collection
+uses `--generate-images`; without that flag the workflow validates and keeps
+1688 originals.
 
 ## Later changes
 

@@ -1,0 +1,36 @@
+{
+  "name": "@auto-ozon/control-plane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "auto-ozon-mcp": "./dist/mcp-cli.js",
+    "auto-ozon-review-console": "./dist/review-console-cli.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@auto-ozon/artifact-store": "workspace:*",
+    "@auto-ozon/batch-orchestrator": "workspace:*",
+    "@auto-ozon/config": "workspace:*",
+    "@auto-ozon/contracts": "workspace:*",
+    "@auto-ozon/job-store": "workspace:*",
+    "@auto-ozon/step-category-decision": "workspace:*",
+    "@auto-ozon/workflows": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "zod": "^4.4.3"
+  },
+  "files": [
+    "dist"
+  ]
+}

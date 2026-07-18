@@ -12,7 +12,7 @@
     "profile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["transport", "sales_unit_quantity", "pricing_mode", "pricing_multiplier", "retained_target_percent", "label_fee_cny", "domestic_shipping_cny", "other_fixed_cny", "other_rate_percent"],
+      "required": ["transport", "sales_unit_quantity", "pricing_mode", "pricing_multiplier", "retained_target_percent", "label_fee_cny", "domestic_shipping_cny", "other_fixed_cny", "other_rate_percent", "advertising_reserve_percent", "return_loss_reserve_percent"],
       "properties": {
         "transport": { "enum": ["air", "air_land", "land"] },
         "sales_unit_quantity": { "type": "integer", "minimum": 1 },
@@ -22,7 +22,9 @@
         "label_fee_cny": { "type": "number", "minimum": 0 },
         "domestic_shipping_cny": { "type": "number", "minimum": 0 },
         "other_fixed_cny": { "type": "number", "minimum": 0 },
-        "other_rate_percent": { "type": "number", "minimum": 0, "exclusiveMaximum": 100 }
+        "other_rate_percent": { "type": "number", "minimum": 0, "exclusiveMaximum": 100 },
+        "advertising_reserve_percent": { "type": "number", "minimum": 0, "exclusiveMaximum": 100 },
+        "return_loss_reserve_percent": { "type": "number", "minimum": 0, "exclusiveMaximum": 100 }
       }
     },
     "tariff_version": { "const": "CEL-2026-effective" },
@@ -81,7 +83,7 @@
     },
     "sku": {
       "type": "object", "additionalProperties": false,
-      "required": ["source_sku_id", "group_id", "description_category_id", "purchase_price_cny", "purchase_cost_cny", "package", "weight_facts", "volume_weight_kg", "charge_weight_g", "cel_group", "cel_rate_per_g_cny", "cel_fixed_fee_cny", "cel_shipping_cny", "landed_cost_cny", "final_price_cny", "final_price_rub", "commission", "commission_amount_cny", "other_rate_amount_cny", "estimated_profit_cny", "estimated_profit_margin_percent"],
+      "required": ["source_sku_id", "group_id", "description_category_id", "purchase_price_cny", "purchase_cost_cny", "package", "weight_facts", "volume_weight_kg", "charge_weight_g", "cel_group", "cel_rate_per_g_cny", "cel_fixed_fee_cny", "cel_shipping_cny", "landed_cost_cny", "final_price_cny", "final_price_rub", "commission", "commission_amount_cny", "other_rate_amount_cny", "advertising_reserve_amount_cny", "return_loss_reserve_amount_cny", "estimated_profit_cny", "estimated_profit_margin_percent", "cost_model", "price_decision"],
       "properties": {
         "source_sku_id": { "type": "string", "minLength": 1 }, "group_id": { "type": "string", "minLength": 1 },
         "description_category_id": { "type": "integer", "minimum": 1 },
@@ -92,10 +94,41 @@
         "cel_shipping_cny": { "$ref": "#/$defs/positive" }, "landed_cost_cny": { "$ref": "#/$defs/positive" },
         "final_price_cny": { "type": "integer", "minimum": 1 }, "final_price_rub": { "$ref": "#/$defs/positive" },
         "commission": { "$ref": "#/$defs/commission" }, "commission_amount_cny": { "type": "number", "minimum": 0 },
-        "other_rate_amount_cny": { "type": "number", "minimum": 0 }, "estimated_profit_cny": { "type": "number" },
-        "estimated_profit_margin_percent": { "type": "number" }
+        "other_rate_amount_cny": { "type": "number", "minimum": 0 },
+        "advertising_reserve_amount_cny": { "type": "number", "minimum": 0 },
+        "return_loss_reserve_amount_cny": { "type": "number", "minimum": 0 },
+        "estimated_profit_cny": { "type": "number" },
+        "estimated_profit_margin_percent": { "type": "number" },
+        "cost_model": { "$ref": "#/$defs/costModelV2" },
+        "price_decision": { "$ref": "#/$defs/priceDecisionV2" }
       }
     },
+    "costModelV2": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "currency_code", "purchase_cost_micros", "domestic_shipping_micros", "label_fee_micros", "cel_shipping_micros", "other_fixed_micros", "landed_cost_micros", "tariff_version", "commission_snapshot_sha256", "fx_response_sha256"],
+      "properties": {
+        "schema_version": { "const": 2 }, "currency_code": { "const": "CNY" },
+        "purchase_cost_micros": { "$ref": "#/$defs/micros" }, "domestic_shipping_micros": { "$ref": "#/$defs/micros" },
+        "label_fee_micros": { "$ref": "#/$defs/micros" }, "cel_shipping_micros": { "$ref": "#/$defs/micros" },
+        "other_fixed_micros": { "$ref": "#/$defs/micros" }, "landed_cost_micros": { "$ref": "#/$defs/micros" },
+        "tariff_version": { "const": "CEL-2026-effective" },
+        "commission_snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "fx_response_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "priceDecisionV2": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "mode", "solver", "final_price_cny", "final_price_micros", "final_price_rub", "configured_multiplier", "retained_target_percent", "achieved_profit_margin_percent", "commission"],
+      "properties": {
+        "schema_version": { "const": 2 }, "mode": { "enum": ["multiplier", "target_margin"] },
+        "solver": { "const": "self_consistent_cel_commission_band" },
+        "final_price_cny": { "type": "integer", "minimum": 1 }, "final_price_micros": { "$ref": "#/$defs/micros" },
+        "final_price_rub": { "$ref": "#/$defs/positive" }, "configured_multiplier": { "$ref": "#/$defs/positive" },
+        "retained_target_percent": { "type": "number", "minimum": 0 }, "achieved_profit_margin_percent": { "type": "number" },
+        "commission": { "$ref": "#/$defs/commission" }
+      }
+    },
+    "micros": { "type": "string", "pattern": "^[0-9]+$" },
     "task": {
       "type": "object", "additionalProperties": false,
       "required": ["execution_owner", "source_sku_id", "group_id", "instruction", "source_facts"],

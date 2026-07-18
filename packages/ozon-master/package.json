@@ -1,6 +1,6 @@
 {
   "name": "ozon-master",
-  "version": "0.1.1",
+  "version": "1.0.0-rc.1",
   "description": "One-command installer and Agent skill bootstrapper for Auto Ozon Skill.",
   "type": "module",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "files": [
     "bin",
+    "release-manifest.json",
     "README.md",
     "LICENSE"
   ],
@@ -18,6 +19,8 @@
     "access": "public"
   },
   "scripts": {
+    "prepack": "node scripts/prepare-release.mjs",
+    "postpack": "node scripts/reset-release-manifest.mjs",
     "test": "node --test test/*.check.mjs",
     "pack:check": "npm pack --dry-run"
   },

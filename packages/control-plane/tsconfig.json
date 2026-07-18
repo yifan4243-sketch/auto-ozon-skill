@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../artifact-store" },
+    { "path": "../batch-orchestrator" },
+    { "path": "../config" },
+    { "path": "../contracts" },
+    { "path": "../steps/category-decision" },
+    { "path": "../workflows" }
+  ]
+}

@@ -35,6 +35,9 @@ export async function collectWithAccountFailover<T>(
         if (options.stop_on_error_codes?.includes(finalErrorCode)) {
           return { status: 'stopped', value: null, attempts, final_error_code: finalErrorCode };
         }
+        if (typeof error === 'object' && error !== null && 'recoverable' in error && error.recoverable === false) {
+          return { status: 'failed', value: null, attempts, final_error_code: finalErrorCode };
+        }
       }
     }
   }

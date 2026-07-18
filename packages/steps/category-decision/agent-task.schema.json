@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/category-decision-agent-task-v1.json",
+  "title": "CategoryDecisionAgentTaskV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "execution_owner", "source_offer_id", "category_snapshot", "evidence", "initial_candidate_sets", "instruction"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "execution_owner": { "const": "current_agent" },
+    "source_offer_id": { "type": "string", "pattern": "^[0-9]{5,32}$" },
+    "category_snapshot": {
+      "type": "object",
+      "required": ["schema_version", "source", "captured_at", "valid_from", "valid_to", "sha256"],
+      "properties": {
+        "schema_version": { "const": 1 }, "source": { "const": "ozon-seller-api" },
+        "captured_at": { "type": "string" }, "valid_from": { "type": "string" }, "valid_to": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["search_term", "title_zh", "source_category_path_zh", "product_attributes", "skus"],
+      "properties": {
+        "search_term": { "type": ["string", "null"] }, "title_zh": { "type": "string", "minLength": 1 },
+        "source_category_path_zh": { "type": "array", "items": { "type": "string" } },
+        "product_attributes": { "type": "object", "additionalProperties": { "type": "string" } },
+        "skus": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    "initial_candidate_sets": { "type": "array", "items": { "type": "object" } },
+    "instruction": { "type": "string", "minLength": 1 }
+  }
+}

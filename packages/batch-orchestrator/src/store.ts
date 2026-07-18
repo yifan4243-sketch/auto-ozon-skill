@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { ListingBatchResultV1, ListingJobSpecV1, MarketSelectionV1 } from '@auto-ozon/contracts';
+import type { CategoryClosureV1, ListingBatchResultV1, ListingJobSpecV1, MarketSelectionV1 } from '@auto-ozon/contracts';
 
 export class FileBatchStore {
   constructor(readonly root = path.resolve('data/batches')) {}
@@ -19,7 +19,7 @@ export class FileBatchStore {
     const result: ListingBatchResultV1 = {
       schema_version: 1, batch_id: spec.batch_id, status: 'created',
       requested_listing_count: spec.requested_listing_count, candidate_count: 0,
-      succeeded_count: 0, failed_count: 0, skipped_count: 0, product_runs: [],
+      succeeded_count: 0, failed_count: 0, skipped_count: 0, partial_failed_count: 0, product_runs: [],
       created_at: spec.created_at, updated_at: spec.created_at,
     };
     await atomicJson(path.join(directory, 'batch-result-v1.json'), result);
@@ -47,6 +47,26 @@ export class FileBatchStore {
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
   }
 
+  async writeAgentInput(batchId: string, offerId: string, kind: AgentInputKindV1, value: unknown): Promise<void> {
+    validateOfferId(offerId);
+    const directory = path.join(this.directory(batchId), 'agent-input');
+    await fs.mkdir(directory, { recursive: true });
+    await atomicJson(path.join(directory, `${offerId}.${kind}.json`), value);
+  }
+
+  async readAgentInput<T>(batchId: string, offerId: string, kind: AgentInputKindV1): Promise<T | null> {
+    validateOfferId(offerId);
+    try { return await readJson<T>(path.join(this.directory(batchId), 'agent-input', `${offerId}.${kind}.json`)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+  }
+
+  async writeCategoryClosure(batchId: string, offerId: string, value: CategoryClosureV1[]): Promise<void> {
+    validateOfferId(offerId);
+    const directory = path.join(this.directory(batchId), 'category-closure');
+    await fs.mkdir(directory, { recursive: true });
+    await atomicJson(path.join(directory, `${offerId}.json`), value);
+  }
+
   private directory(batchId: string): string {
     validateBatchId(batchId);
     const directory = path.resolve(this.root, batchId);
@@ -55,6 +75,8 @@ export class FileBatchStore {
     return directory;
   }
 }
+
+export type AgentInputKindV1 = 'category' | 'pricing' | 'attributes' | 'images';
 
 async function atomicJson(file: string, value: unknown): Promise<void> {
   const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
@@ -69,3 +91,4 @@ async function readJson<T>(file: string): Promise<T> {
 function validateBatchId(value: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(value)) throw new Error('BATCH_ID_INVALID');
 }
+function validateOfferId(value: string): void { if (!/^[0-9]{5,32}$/u.test(value)) throw new Error('OFFER_ID_INVALID'); }

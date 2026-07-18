@@ -1,14 +1,13 @@
 import type {
   AttributeMappingAgentInputV1,
-  AttributeMappingV1,
+  AttributeMappingV2,
   CanonicalProductV2,
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
   CommandResult,
   CostPricingV1,
-  MappedOzonAttributeV1,
+  MappedOzonAttributeV2,
   OzonReadyAttributeV1,
-  SkuAttributeMappingV1,
 } from '@auto-ozon/contracts';
 import { LEGACY_WEIGHT_SEMANTICS_V1 } from '@auto-ozon/contracts';
 import type { WorkflowContext } from '@auto-ozon/artifact-store';
@@ -19,6 +18,8 @@ import { formatRunTimestamp, matchDeterministicAttribute } from './deterministic
 import { validateAttributeMapping } from './validator.js';
 import { resolveGroupAttributeSnapshot } from './variant-mapper.js';
 import { validateAttributeMappingSchema } from './schema-validator.js';
+import { buildContentBundle } from './content-bundle.js';
+import { validateContentBundleSchema } from './content-schema-validator.js';
 import {
   buildAgentTask,
   isBusinessRequired,
@@ -38,7 +39,7 @@ export interface RunAttributeMappingInput {
 export async function runAttributeMapping(
   input: RunAttributeMappingInput,
   context?: WorkflowContext,
-): Promise<CommandResult<AttributeMappingV1>> {
+): Promise<CommandResult<AttributeMappingV2>> {
   try {
     if (context) {
       assertWorkflowActive(context);
@@ -72,17 +73,40 @@ export async function runAttributeMapping(
     if (!schema.valid) {
       mapping.errors.push(issue(
         'ATTRIBUTE_MAPPING_SCHEMA_INVALID',
-        `AttributeMappingV1 schema validation failed: ${schema.errors.join('; ')}`,
+        `AttributeMappingV2 schema validation failed: ${schema.errors.join('; ')}`,
       ));
       mapping.status = 'blocked';
     }
 
     if (context) {
+      const contentBundle = buildContentBundle(mapping);
+      const contentSchema = validateContentBundleSchema(contentBundle);
+      if (!contentSchema.valid) {
+        contentBundle.status = 'blocked';
+        contentBundle.errors.push({
+          code: 'CONTENT_BUNDLE_SCHEMA_INVALID',
+          source_sku_id: '',
+          message: contentSchema.errors.map((error) => `${error.instancePath || '/'} ${error.message ?? 'is invalid'}`).join('; '),
+        });
+      }
+      if (contentBundle.status === 'blocked') {
+        mapping.status = 'blocked';
+        mapping.errors.push(issue(
+          'CONTENT_BUNDLE_BLOCKED',
+          'Validated Russian content could not be derived for every SKU. Read content-bundle-v1.json for details.',
+        ));
+      }
       const output = await context.artifact_store.write(
         context.run_id,
         'attribute-mapping',
-        'attribute-mapping-v1.json',
+        'attribute-mapping-v2.json',
         mapping,
+      );
+      await context.artifact_store.write(
+        context.run_id,
+        'attribute-mapping',
+        'content-bundle-v1.json',
+        contentBundle,
       );
       await context.artifact_store.updateStep(context.run_id, 'attribute-mapping', {
         status: mapping.status === 'completed' ? 'succeeded' : mapping.status,
@@ -132,12 +156,22 @@ export async function runAttributeMapping(
   }
 }
 
-function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): AttributeMappingV1 {
-  const result: AttributeMappingV1 = {
-    schema_version: 1,
+function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): AttributeMappingV2 {
+  const result: AttributeMappingV2 = {
+    schema_version: 2,
     source_offer_id: input.product.source.offer_id,
     status: 'completed',
     weight_semantics: LEGACY_WEIGHT_SEMANTICS_V1,
+    category_snapshot_refs: input.category_attributes.flatMap((snapshot) =>
+      snapshot.group_ids.map((groupId) => ({
+        group_id: groupId,
+        description_category_id: snapshot.category.description_category_id,
+        type_id: snapshot.category.type_id,
+        captured_at: snapshot.attributes_schema.snapshot.captured_at,
+        valid_to: snapshot.attributes_schema.snapshot.valid_to,
+        sha256: snapshot.attributes_schema.snapshot.sha256,
+      })),
+    ),
     common_attributes: [],
     variant_attributes: [],
     sku_attributes: [],
@@ -160,7 +194,7 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
   const sourceBrands = sourceBrandValues(input.product);
   if (sourceBrands.length > 0) {
     result.warnings.push(issue(
-      'SOURCE_BRAND_OVERRIDDEN_NO_BRAND',
+      'SOURCE_BRAND_OVERRIDDEN_BY_POLICY',
       `Source brand facts (${sourceBrands.join(', ')}) were retained for audit but attribute 85 is forced to dictionary ID 126745801 by store policy.`,
       input.product.skus.map((sku) => sku.source_sku_id),
       [85],
@@ -177,14 +211,14 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
       ));
       continue;
     }
-    const groupMappings: SkuAttributeMappingV1[] = [];
+    const groupMappings: AttributeMappingV2['sku_attributes'] = [];
     for (const sourceSkuId of group.source_sku_ids) {
       const sku = input.product.skus.find((candidate) => candidate.source_sku_id === sourceSkuId);
       if (!sku) {
         result.errors.push(issue('UNKNOWN_SKU', `Unknown source SKU ${sourceSkuId}.`, [sourceSkuId]));
         continue;
       }
-      const attributes: MappedOzonAttributeV1[] = [];
+      const attributes: MappedOzonAttributeV2[] = [];
       for (const schema of snapshot.attributes_schema.attributes) {
         if (!shouldProcessAttribute(schema)) continue;
         const deterministic = matchDeterministicAttribute(
@@ -204,7 +238,45 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
             );
         const mapped = deterministic ?? agent.attribute;
         if (mapped) {
-          attributes.push(mapped);
+          const firstEvidence = mapped.evidence[0]!;
+          attributes.push({
+            ...mapped,
+            audit: {
+              source_path: evidencePointer(firstEvidence.source, firstEvidence.field),
+              raw_value: firstEvidence.value,
+              normalized_values: mapped.values.map((value) => value.value),
+              mapping_method: mapped.provenance,
+              snapshot_sha256: snapshot.attributes_schema.snapshot.sha256,
+            },
+          });
+          if (schema.id === 4191 && mapped.content_claims?.some((claim) => !contentEvidenceValid(
+            input.product,
+            sku,
+            group.group_id,
+            schema,
+            claim.evidence,
+          ))) {
+            result.errors.push(issue(
+              'CONTENT_CLAIM_EVIDENCE_INVALID',
+              'A Russian description paragraph cites a CanonicalProduct fact that does not exist.',
+              [sourceSkuId],
+              [schema.id],
+            ));
+          }
+          if ([4180, 4191, 23171].includes(schema.id) && !contentEvidenceValid(
+            input.product,
+            sku,
+            group.group_id,
+            schema,
+            mapped.evidence,
+          )) {
+            result.errors.push(issue(
+              'CONTENT_EVIDENCE_INVALID',
+              `Attribute ${schema.id} cites a CanonicalProduct fact that does not exist.`,
+              [sourceSkuId],
+              [schema.id],
+            ));
+          }
           if (mapped.confidence === 'low' && ![4383, 4497].includes(schema.id)) {
             result.warnings.push(issue(
               'LOW_CONFIDENCE_ATTRIBUTE',
@@ -254,20 +326,42 @@ function buildMapping(input: RunAttributeMappingInput, runTimestamp: string): At
     result.variant_attributes.push(...classified.variant);
   }
   if (result.missing_required_attributes.length > 0) {
-    result.errors.push(issue(
-      'MISSING_REQUIRED_ATTRIBUTES',
-      'One or more required Ozon attributes could not be mapped.',
+    const missingIssue = issue(
+      input.agent_input ? 'MISSING_REQUIRED_ATTRIBUTES' : 'AGENT_INPUT_REQUIRED',
+      input.agent_input
+        ? 'One or more required Ozon attributes remain invalid after applying Agent input.'
+        : 'Current-Agent input is required for one or more Ozon attributes.',
       [...new Set(result.missing_required_attributes.flatMap((missing) => missing.source_sku_ids))],
       [...new Set(result.missing_required_attributes.map((missing) => missing.attribute_id))],
-    ));
+    );
+    if (input.agent_input) result.errors.push(missingIssue);
+    else result.warnings.push(missingIssue);
   }
-  const reviewWarnings = result.warnings.filter((warning) => warning.code !== 'SOURCE_BRAND_OVERRIDDEN_NO_BRAND');
+  const reviewWarnings = result.warnings.filter((warning) => warning.code !== 'SOURCE_BRAND_OVERRIDDEN_BY_POLICY');
   result.status = result.errors.length > 0
     ? 'blocked'
     : reviewWarnings.length > 0 || result.unresolved_attributes.length > 0
       ? 'needs_review'
       : 'completed';
   return result;
+}
+
+function evidencePointer(source: string, field: string): string {
+  const safeField = field.split('.').map((part) => part.replace(/~/gu, '~0').replace(/\//gu, '~1')).join('/');
+  return `/${source}/${safeField}`;
+}
+
+function contentEvidenceValid(
+  product: CanonicalProductV2,
+  sku: CanonicalProductV2['skus'][number],
+  groupId: string,
+  schema: Parameters<typeof buildAgentTask>[3],
+  evidence: MappedOzonAttributeV2['evidence'],
+): boolean {
+  const allowed = buildAgentTask(product, sku, groupId, schema).source_facts;
+  const canonical = evidence.filter((item) => item.source === 'canonical_v2');
+  return canonical.length > 0 && canonical.every((item) =>
+    allowed.some((candidate) => candidate.source === item.source && candidate.field === item.field && candidate.value === item.value));
 }
 
 function resolveComplexId(raw: unknown, attributeId: number): number {

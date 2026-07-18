@@ -10,6 +10,12 @@
   ],
   "references": [
     {
+      "path": "../../packages/control-plane"
+    },
+    {
+      "path": "../../packages/config"
+    },
+    {
       "path": "../../packages/adapters-1688"
     },
     {

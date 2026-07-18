@@ -1,6 +1,7 @@
 import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolveRepoRoot } from '@auto-ozon/artifact-store';
 import type { OzonCategorySelectionV1 } from '@auto-ozon/contracts';
@@ -16,6 +17,16 @@ interface OzonCategoryNode {
 
 export interface OzonCategoryTreeDocument {
   result: OzonCategoryNode[];
+  snapshot: OzonCategoryTreeSnapshotV1;
+}
+
+export interface OzonCategoryTreeSnapshotV1 {
+  schema_version: 1;
+  source: 'ozon-seller-api';
+  captured_at: string;
+  valid_from: string;
+  valid_to: string;
+  sha256: string;
 }
 
 export interface OzonCategoryRecord extends OzonCategorySelectionV1 {
@@ -49,7 +60,24 @@ export async function loadOzonCategoryTree(
   if (!Array.isArray(parsed.result)) {
     throw new Error(`Invalid Ozon category tree: result[] missing in ${filePath}`);
   }
-  return { result: parsed.result };
+  const snapshot = await loadCategoryTreeSnapshot(filePath, raw);
+  return { result: parsed.result, snapshot };
+}
+
+async function loadCategoryTreeSnapshot(filePath: string, raw: string): Promise<OzonCategoryTreeSnapshotV1> {
+  const metadataPath = filePath.replace(/\.json$/u, '.meta.json');
+  let value: unknown;
+  try { value = JSON.parse(await fs.readFile(metadataPath, 'utf8')); }
+  catch { throw new Error(`CATEGORY_TREE_METADATA_MISSING: ${metadataPath}`); }
+  if (!value || typeof value !== 'object') throw new Error('CATEGORY_TREE_METADATA_INVALID');
+  const snapshot = value as Partial<OzonCategoryTreeSnapshotV1>;
+  if (snapshot.schema_version !== 1 || snapshot.source !== 'ozon-seller-api'
+    || !snapshot.captured_at || !snapshot.valid_from || !snapshot.valid_to
+    || !/^[a-f0-9]{64}$/iu.test(snapshot.sha256 ?? '')) throw new Error('CATEGORY_TREE_METADATA_INVALID');
+  const actual = createHash('sha256').update(raw).digest('hex');
+  if (actual !== snapshot.sha256!.toLowerCase()) throw new Error('CATEGORY_TREE_HASH_MISMATCH');
+  if (Date.parse(snapshot.valid_to) <= Date.now()) throw new Error('CATEGORY_TREE_SNAPSHOT_EXPIRED');
+  return snapshot as OzonCategoryTreeSnapshotV1;
 }
 
 export async function loadOzonCategoryIndex(
@@ -218,6 +246,7 @@ export function resolveDefaultCategoryTreePath(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolveRepoRoot(moduleDir);
   const candidates = [
+    path.join(repoRoot, 'data/cache/ozon/category-tree/current.json'),
     path.join(repoRoot, 'data/reference/ozon/categories/ozon-category-tree.json'),
     path.resolve(moduleDir, '../../../../data/reference/ozon/categories/ozon-category-tree.json'),
   ];

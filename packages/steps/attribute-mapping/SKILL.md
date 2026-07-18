@@ -1,12 +1,13 @@
 ---
 name: ozon-attribute-mapping
-description: Map CanonicalProductV2 facts, a validated CategoryDecisionV1, and current Ozon CategoryAttributesV1 snapshots into auditable common attributes, variant attributes, and complete per-SKU attribute assignments. Use when filling Ozon category attributes, selecting dictionary values, separating shared values from SKU differences, identifying missing required attributes, or producing the final AttributeMappingV1 artifact.
+description: Map CanonicalProductV2 facts, a validated CategoryDecisionV1, pricing weight facts, and current Ozon CategoryAttributesV1 snapshots into auditable AttributeMappingV2 and ContentBundleV1 artifacts. Use when filling category attributes, selecting real dictionary values, separating variants, or producing evidence-bound Russian content.
 ---
 
 # Attribute Mapping
 
-Produce one `AttributeMappingV1` that merges deterministic values and the
-current Agent's semantic selections. Do not call an external model runtime.
+Produce one `AttributeMappingV2` plus its derived `ContentBundleV1`. Merge
+deterministic values and the current Agent's semantic selections. Do not call
+an external text-model runtime.
 
 ## Workflow
 
@@ -15,7 +16,7 @@ current Agent's semantic selections. Do not call an external model runtime.
    lacks exactly one snapshot matching its description-category/type pair.
 3. Read [references/mapping-policy.md](references/mapping-policy.md).
 4. Run `runAttributeMapping` without Agent input first when necessary. Read its
-   `agent_tasks` from the single output artifact.
+   `agent_tasks` from the mapping artifact.
 5. As the current Agent, answer every task from retained 1688 facts. Select
    dictionary IDs only from `dictionary_candidates`; do not call any model API.
 6. Rerun through `workflow listing prepare --attribute-agent-stdin` and pipe the
@@ -23,12 +24,17 @@ current Agent's semantic selections. Do not call an external model runtime.
    small inputs.
    Do not hand-author common, variant, or Ozon-ready arrays.
 7. Save output matching `output.schema.json` as
-   `06-attribute-mapping/attribute-mapping-v1.json`.
+   `06-attribute-mapping/attribute-mapping-v2.json`, then derive and save
+   `06-attribute-mapping/content-bundle-v1.json`.
 
 ## Boundaries
 
 - Never change CanonicalProductV2 facts.
 - Never invent a dictionary ID or silently repair an Agent value.
+- Every mapped value records its JSON Pointer, raw value, normalized values,
+  mapping method, confidence, and category-attribute snapshot SHA-256.
+- Attributes 4180, 4191, and 23171 must cite retained CanonicalProductV2
+  evidence. Content without valid evidence is blocked, not guessed.
 - Reuse the completed cost-pricing SKU weight for 4383 and derive 4497 as
   `4383 + 50g`. A fallback Agent-estimated net weight must exceed 3g and remains
   low-confidence.

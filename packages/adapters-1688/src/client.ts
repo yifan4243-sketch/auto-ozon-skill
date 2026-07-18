@@ -148,6 +148,19 @@ export async function collectKeywordSource(
   };
 }
 
+/** Candidate-only search for the batch orchestrator. Public source keyword
+ * still deep-collects by default; this function never creates product facts. */
+export async function searchKeywordCandidateIds(input: SearchKeywordInput): Promise<string[]> {
+  const keyword = input.keyword.trim();
+  if (!keyword) throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
+  const max = clampPositive(input.max ?? 20, 1, 600);
+  const filters = normalizeFilters({ priceMin: input.filters?.priceMin ?? null, priceMax: input.filters?.priceMax ?? null });
+  const search = await dispatch<SearchArgs, SearchResult>('search', {
+    keyword, max, sort: normalizeSearchSort(input.sort), filters, headed: input.headed,
+  }, { headed: input.headed, profile: input.profile });
+  return normalizeOfferIds(search.offers.map((offer) => String(offer.offerId ?? '').trim()).filter((offerId) => /^\d+$/u.test(offerId) && offerId !== '0')).slice(0, max);
+}
+
 export async function collectImageSource(input: SearchImageInput): Promise<CollectedSourcingRun> {
   if (!input.imagePath) throw new CliError(2, 'BAD_INPUT', 'Image path is required.');
   const max = clampPositive(input.max ?? 20, 1, 200);

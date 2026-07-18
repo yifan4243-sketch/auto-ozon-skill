@@ -26,6 +26,28 @@ export interface MappedOzonAttributeV1 {
   provenance: AttributeMappingProvenanceV1;
   confidence: AttributeMappingConfidenceV1;
   evidence: AttributeMappingEvidenceV1[];
+  content_claims?: ContentFactClaimV1[];
+}
+
+export interface AttributeMappingAuditV2 {
+  source_path: string;
+  raw_value: string;
+  normalized_values: string[];
+  mapping_method: AttributeMappingProvenanceV1;
+  snapshot_sha256: string;
+}
+
+export interface MappedOzonAttributeV2 extends MappedOzonAttributeV1 {
+  audit: AttributeMappingAuditV2;
+  /** Required for factual Russian descriptions (attribute 4191). Each entry
+   * binds one complete paragraph to the retained CanonicalProduct facts that
+   * support it. */
+  content_claims?: ContentFactClaimV1[];
+}
+
+export interface ContentFactClaimV1 {
+  claim_text: string;
+  evidence: AttributeMappingEvidenceV1[];
 }
 
 export interface OzonReadyAttributeV1 {
@@ -108,11 +130,29 @@ export interface AttributeMappingV1 {
   errors: AttributeMappingIssueV1[];
 }
 
+export interface AttributeMappingSnapshotRefV2 {
+  group_id: string;
+  description_category_id: number;
+  type_id: number;
+  captured_at: string;
+  valid_to: string;
+  sha256: string;
+}
+
+export interface AttributeMappingV2 extends Omit<AttributeMappingV1, 'schema_version' | 'common_attributes' | 'sku_attributes'> {
+  schema_version: 2;
+  category_snapshot_refs: AttributeMappingSnapshotRefV2[];
+  common_attributes: Array<{ group_id: string; attribute: MappedOzonAttributeV2 }>;
+  sku_attributes: Array<Omit<SkuAttributeMappingV1, 'attributes'> & { attributes: MappedOzonAttributeV2[] }>;
+}
+
 export interface AttributeMappingAgentAttributeV1 {
   attribute_id: number;
   values: AttributeMappingValueV1[];
   confidence: AttributeMappingConfidenceV1;
   evidence: AttributeMappingEvidenceV1[];
+  /** Attribute 4191 only: one entry for every description paragraph. */
+  content_claims?: ContentFactClaimV1[];
 }
 
 export interface AttributeMappingAgentSkuInputV1 {

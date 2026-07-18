@@ -3,9 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
-const REPOSITORY_URL = 'https://github.com/yifan4243-sketch/auto-ozon-skill.git';
 const MIN_NODE_MAJOR = 20;
+const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const RELEASE = JSON.parse(fs.readFileSync(path.join(PACKAGE_DIRECTORY, 'release-manifest.json'), 'utf8'));
 
 const [command = 'help', ...rawArgs] = process.argv.slice(2);
 const options = parseOptions(rawArgs);
@@ -50,14 +53,16 @@ function requireValue(args, index, name) {
 function init(options) {
   assertNode();
   assertCommand('git', 'Install Git, then rerun this command.');
+  ensurePnpm();
+  assertPinnedReleaseManifest();
   const directory = resolveDirectory(options.dir);
 
   if (fs.existsSync(directory)) {
     assertProjectDirectory(directory);
-    console.log(`Using existing repository: ${directory}`);
+    verifyPinnedRepository(directory);
+    console.log(`Using verified pinned repository: ${directory}`);
   } else {
-    console.log(`Cloning Auto Ozon Skill into: ${directory}`);
-    run('git', ['clone', '--recurse-submodules', REPOSITORY_URL, directory]);
+    installPinnedRepository(directory);
   }
 
   run('pnpm', ['install', '--frozen-lockfile'], directory);
@@ -70,6 +75,46 @@ function init(options) {
   console.log('\nInstalled. Ask your Agent to read this file before working:');
   console.log(path.join(directory, 'SKILL.md'));
   console.log('Store API keys and 1688 login are configured locally after installation; they were not copied by ozon-master.');
+}
+
+function ensurePnpm() {
+  if (commandExists('pnpm')) return;
+  if (!commandExists('corepack')) {
+    throw new Error('pnpm is required. Install pnpm or enable Corepack, then rerun this command.');
+  }
+  run('corepack', ['enable']);
+  if (!commandExists('pnpm')) throw new Error('Corepack did not expose pnpm. Install pnpm and rerun this command.');
+}
+
+function installPinnedRepository(directory) {
+  console.log(`Installing Auto Ozon Skill ${RELEASE.git_ref} (${RELEASE.commit.slice(0, 12)}) into: ${directory}`);
+  fs.mkdirSync(directory, { recursive: true });
+  run('git', ['init'], directory);
+  run('git', ['remote', 'add', 'origin', RELEASE.repository_url], directory);
+  run('git', ['fetch', '--depth', '1', 'origin', RELEASE.git_ref], directory);
+  run('git', ['checkout', '--detach', 'FETCH_HEAD'], directory);
+  verifyPinnedRepository(directory);
+  run('git', ['submodule', 'update', '--init', '--recursive'], directory);
+}
+
+function assertPinnedReleaseManifest() {
+  if (!RELEASE.commit || !RELEASE.tree || !RELEASE.tree_sha256 || RELEASE.git_ref === 'unreleased'
+    || !/^[a-f0-9]{40}$/i.test(RELEASE.commit) || !/^[a-f0-9]{40}$/i.test(RELEASE.tree)
+    || !/^[a-f0-9]{64}$/i.test(RELEASE.tree_sha256)) {
+    throw new Error('This ozon-master package was not built from a pinned release. Install an official published version.');
+  }
+}
+
+function verifyPinnedRepository(directory) {
+  const commit = gitOutput(['rev-parse', 'HEAD'], directory);
+  const tree = gitOutput(['rev-parse', 'HEAD^{tree}'], directory);
+  const treeSha256 = gitArchiveSha256(directory);
+  if (commit !== RELEASE.commit || tree !== RELEASE.tree || treeSha256 !== RELEASE.tree_sha256) {
+    throw new Error('Pinned repository verification failed; the checkout was not trusted.');
+  }
+  if (gitOutput(['status', '--porcelain', '--untracked-files=no'], directory)) {
+    throw new Error('Pinned repository has tracked local modifications; use a clean target directory.');
+  }
 }
 
 function doctor(directory) {
@@ -178,6 +223,20 @@ function run(command, args, cwd) {
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}.`);
 }
 
+function gitOutput(args, cwd) {
+  const result = spawnSync(resolveExecutable('git'), args, { cwd, encoding: 'utf8' });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed with exit code ${result.status}.`);
+  return String(result.stdout || '').trim();
+}
+
+function gitArchiveSha256(cwd) {
+  const result = spawnSync(resolveExecutable('git'), ['archive', '--format=tar', 'HEAD'], { cwd, encoding: null, maxBuffer: 512 * 1024 * 1024 });
+  if (result.error) throw result.error;
+  if (result.status !== 0 || !Buffer.isBuffer(result.stdout)) throw new Error('git archive failed while verifying release content.');
+  return crypto.createHash('sha256').update(result.stdout).digest('hex');
+}
+
 function findBrowser() {
   const candidates = process.platform === 'win32'
     ? [
@@ -192,8 +251,22 @@ function findBrowser() {
 }
 
 function playwrightChromiumInstalled() {
-  const browserPath = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(os.homedir(), '.cache', 'ms-playwright');
-  return fs.existsSync(browserPath) && fs.readdirSync(browserPath).some((entry) => entry.startsWith('chromium-'));
+  const browserPath = process.env.PLAYWRIGHT_BROWSERS_PATH || (process.platform === 'win32'
+    ? path.join(process.env.LOCALAPPDATA || os.homedir(), 'ms-playwright')
+    : process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright')
+      : path.join(os.homedir(), '.cache', 'ms-playwright'));
+  if (!fs.existsSync(browserPath)) return false;
+  return fs.readdirSync(browserPath, { withFileTypes: true }).some((entry) => {
+    if (!entry.isDirectory() || !entry.name.startsWith('chromium-')) return false;
+    const root = path.join(browserPath, entry.name);
+    const candidates = process.platform === 'win32'
+      ? [path.join(root, 'chrome-win', 'chrome.exe'), path.join(root, 'chrome-win64', 'chrome.exe')]
+      : process.platform === 'darwin'
+        ? [path.join(root, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'), path.join(root, 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium')]
+        : [path.join(root, 'chrome-linux', 'chrome'), path.join(root, 'chrome-linux64', 'chrome')];
+    return candidates.some(fs.existsSync);
+  });
 }
 
 function printHelp() {

@@ -25,6 +25,6 @@ function resolveSchemaPath(): string {
     path.resolve(moduleDirectory, '../output.schema.json'),
   ];
   const found = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!found) throw new Error(`AttributeMappingV1 schema not found: ${candidates.join(', ')}`);
+  if (!found) throw new Error(`AttributeMappingV2 schema not found: ${candidates.join(', ')}`);
   return found;
 }

@@ -40,6 +40,8 @@ export interface PublishIntentV1 {
   status: PublishIntentStatusV1;
   task_id: string | null;
   product_id: number | null;
+  reconciliation_checks: number;
+  last_reconciliation_at: string | null;
   created_at: string;
   updated_at: string;
 }

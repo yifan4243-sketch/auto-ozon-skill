@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/content-bundle-v1.json",
+  "title": "ContentBundleV1",
+  "type": "object",
+  "required": ["schema_version", "source_offer_id", "status", "sku_content", "errors"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "source_offer_id": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["completed", "needs_review", "blocked"] },
+    "sku_content": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_sku_id", "title_ru", "description_ru", "hashtags_ru", "confidence", "evidence_refs", "claims"],
+        "properties": {
+          "source_sku_id": { "type": "string", "minLength": 1 },
+          "title_ru": { "type": "string", "minLength": 1 },
+          "description_ru": { "type": "string", "minLength": 500 },
+          "hashtags_ru": { "type": "array", "minItems": 20, "maxItems": 20, "uniqueItems": true, "items": { "type": "string", "pattern": "^#[А-Яа-яЁёA-Za-z0-9_]+$" } },
+          "confidence": { "enum": ["high", "medium", "low"] },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["json_pointer", "value"],
+              "properties": {
+                "json_pointer": { "type": "string", "pattern": "^/canonical_v2/" },
+                "value": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "claims": {
+            "type": "array",
+            "minItems": 4,
+            "items": {
+              "type": "object",
+              "required": ["claim_text", "evidence_refs"],
+              "properties": {
+                "claim_text": { "type": "string", "minLength": 1 },
+                "evidence_refs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["json_pointer", "value"],
+                    "properties": {
+                      "json_pointer": { "type": "string", "pattern": "^/canonical_v2/" },
+                      "value": { "type": "string", "minLength": 1 }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "source_sku_id", "message"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "source_sku_id": { "type": "string" },
+          "message": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

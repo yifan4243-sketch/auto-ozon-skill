@@ -1,6 +1,6 @@
 # ADR 0001: Vertical workflow-step architecture
 
-- Status: accepted
+- Status: superseded by [ADR 0002](0002-production-eight-step-workflow.md)
 - Date: 2026-07-13
 - Baseline tag: `refactor-baseline-20260713`
 
@@ -33,9 +33,8 @@ Run artifacts use numbered directories under `data/runs/<run_id>` because the
 numbers describe execution order rather than stable package identity. Cache
 entries live under `data/cache` and are never treated as run evidence.
 
-The active workflow contains exactly five steps and ends at factual attribute
-mapping. Future content, publishing, analytics, and UI packages are not retained
-as placeholders.
+This five-step boundary describes only the historical refactor baseline. The
+active production workflow and its eight-step boundary are defined by ADR 0002.
 
 ## Baseline and equivalence gate
 

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/image-bundle-v1.json",
+  "title": "ImageBundleV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_offer_id", "status", "assets", "sku_images", "generation", "warnings", "errors", "agent_tasks"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "source_offer_id": { "type": "string", "pattern": "^[0-9]{5,32}$" },
+    "status": { "enum": ["completed", "needs_review", "blocked"] },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "url_sha256", "content_sha256", "byte_size", "media_type", "width_px", "height_px", "aspect_ratio", "source", "role", "source_sku_ids", "generation_call_id", "text_review"],
+        "properties": {
+          "url": { "type": "string", "format": "uri", "pattern": "^https?://" },
+          "url_sha256": { "$ref": "#/$defs/sha256" },
+          "content_sha256": { "$ref": "#/$defs/sha256" },
+          "byte_size": { "type": "integer", "minimum": 1, "maximum": 20971520 },
+          "media_type": { "enum": ["image/jpeg", "image/png", "image/webp"] },
+          "width_px": { "type": "integer", "minimum": 1, "maximum": 100000 },
+          "height_px": { "type": "integer", "minimum": 1, "maximum": 100000 },
+          "aspect_ratio": { "type": "number", "exclusiveMinimum": 0 },
+          "source": { "enum": ["1688", "generated"] },
+          "role": { "enum": ["primary_candidate", "gallery"] },
+          "source_sku_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+          "generation_call_id": { "type": ["string", "null"] },
+          "text_review": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "contains_chinese_text", "contains_watermark", "notes"],
+            "properties": {
+              "status": { "enum": ["agent_confirmed", "needs_review"] },
+              "contains_chinese_text": { "type": ["boolean", "null"] },
+              "contains_watermark": { "type": ["boolean", "null"] },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "sku_images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_sku_id", "primary_image", "images"],
+        "properties": {
+          "source_sku_id": { "type": "string", "minLength": 1 },
+          "primary_image": { "type": "string", "format": "uri" },
+          "images": { "type": "array", "minItems": 1, "maxItems": 15, "uniqueItems": true, "items": { "type": "string", "format": "uri" } }
+        }
+      }
+    },
+    "generation": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "provider_id", "model_id", "prompt_version", "call_id", "requested_count", "generated_count", "used_reference_images"],
+          "properties": {
+            "enabled": { "const": true },
+            "provider_id": { "type": "string", "minLength": 1 },
+            "model_id": { "type": "string", "minLength": 1 },
+            "prompt_version": { "type": "string", "minLength": 1 },
+            "call_id": { "type": "string", "minLength": 1 },
+            "requested_count": { "type": "integer", "minimum": 1, "maximum": 15 },
+            "generated_count": { "type": "integer", "minimum": 0, "maximum": 15 },
+            "used_reference_images": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "warnings": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+    "errors": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+    "agent_tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["execution_owner", "content_sha256", "url", "instruction"],
+        "properties": {
+          "execution_owner": { "const": "current_agent" },
+          "content_sha256": { "$ref": "#/$defs/sha256" },
+          "url": { "type": "string", "format": "uri" },
+          "instruction": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "source_sku_ids"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+        "message": { "type": "string", "minLength": 1 },
+        "source_sku_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

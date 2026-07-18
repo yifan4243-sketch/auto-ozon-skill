@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-ozon.local/schemas/image-generation-local-config-v1.json",
+  "title": "ImageGenerationLocalConfigV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider_id",
+    "base_url",
+    "model",
+    "api_key_env",
+    "use_1688_reference_images",
+    "image_count",
+    "prompt_version"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "provider_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "base_url": { "type": "string", "format": "uri" },
+    "model": { "type": "string", "minLength": 1 },
+    "api_key_env": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$" },
+    "use_1688_reference_images": { "type": "boolean" },
+    "image_count": { "type": "integer", "minimum": 1, "maximum": 15, "default": 3 },
+    "prompt_version": { "const": "ozon-product-scenes-v1" }
+  }
+}

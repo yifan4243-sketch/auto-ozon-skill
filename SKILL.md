@@ -8,7 +8,7 @@ description: Operate this repository from a customer's natural-language Ozon lis
 Treat this as the repository's single customer-facing entry point. Keep product
 artifacts under `data/runs/<run_id>/`; read that run's `manifest.json` before
 resolving any step output. Keep batch planning artifacts separately under
-`data/runs/<batch_id>/00-market-selection/`.
+`data/batches/<batch_id>/`.
 
 ## Route the customer's request
 
@@ -27,11 +27,17 @@ keyword. Ask for a product name only when the customer did not state either a
 quantity or a product/selection intent.
 
 For a requested number `N`, count only SKUs confirmed `imported` by step 8.
-Respect the saved SKU maximum and purchase-price range. A single CLI run handles
-one selected 1688 product; the agent must keep a batch ledger and launch the
-next eligible offer until `N` is met, a terminal failure occurs, or the source
-candidate queue is exhausted. “上满” means the configured daily listing quota,
+Respect the saved SKU maximum and purchase-price range. Use `workflow batch`
+as the durable ledger; it owns one independent run per selected offer and
+continues sourcing until `N` is met, a terminal failure occurs, or the candidate
+limit is exhausted. “上满” means the configured daily listing quota,
 defaulting to 100 only if the customer has not provided a lower store limit.
+
+When a product pauses for Agent reasoning, read `workflow batch agent-tasks`,
+construct the required `AgentDecisionEnvelopeV1` with the returned task, input
+and evidence hashes, then submit it through `workflow batch agent-input` or the
+high-level MCP decision tool. Never write an unbound raw Agent value directly
+into a batch handoff file.
 
 ## Ask collection settings for every task
 
@@ -54,7 +60,7 @@ Translate the confirmed answers as follows:
 | 可视化浏览器 = 否 / omitted | Run headless; this is the default. |
 | 最大 SKU = N | Add `--sku-max N`; exclude products that exceed it. |
 | 价格区间 = min/max | Add `--price-min min --price-max max`. |
-| 验证码跳过 = 是 | Record `RISK_CONTROL` in the batch ledger, do not retry or bypass it, and continue with the next candidate. |
+| 验证码跳过 = 是 | Retry the same authorized profile up to three times, then profile 2 up to three times. If risk control still remains, record `RISK_CONTROL` and continue with the next candidate. Never bypass it. |
 | 验证码跳过 = 否 | Stop the current task, reopen only with `--headed`, and wait for manual verification. |
 
 Never use a captcha-solving service, cookies from another person, or an
@@ -77,8 +83,9 @@ it only when the customer explicitly requests generated product images or asks
 to configure image generation. It is not required for normal collection,
 Russian copy, attribute mapping, draft generation, or listing submission.
 
-Ask for Ozon store credentials only when no enabled local store profile exists
-and the task has reached a real publish action. Never ask for them merely to
+On first use, follow `ozon-customer-setup` and bind a local Ozon store after the
+two 1688 profiles are ready. On later runs, ask again only when no matching
+local store profile exists. Never require publishing to be enabled merely to
 prepare, collect, categorize, price, or draft products.
 
 ## Our listing workflow
@@ -91,7 +98,8 @@ Run the following eight steps in order for every selected 1688 offer:
 4. `cost-pricing` — calculate CEL cost, exchange rate, commission, and price.
 5. `category-attributes` — fetch Ozon category attribute and dictionary snapshots.
 6. `attribute-mapping` — apply script rules, then validated Agent values.
-7. `draft-generation` — combine price, images, and attributes into import `items[]`.
+7. `draft-generation` — download/hash images, pause for current-Agent text and
+   watermark review, then combine price, images and attributes into import `items[]`.
 8. `listing-submit` — submit the unchanged `items[]`, poll, and store per-SKU results.
 
 Read the owning procedure before performing a specialized step:
@@ -107,7 +115,7 @@ Use the CLI from the repository root:
 
 ```powershell
 # Prepare through the internal import draft; this is read-only toward Ozon.
-pnpm exec tsx apps/cli/src/cli.ts workflow listing prepare "杯子" --sku-max 3
+pnpm exec tsx apps/cli/src/cli.ts workflow listing prepare "杯子" --store-id <Client-Id> --sku-max 3
 
 # Publish only a draft_complete run and only to an enabled local store.
 pnpm exec tsx apps/cli/src/cli.ts workflow listing publish --run-id <run_id> --store-id <Client-Id>
@@ -131,6 +139,9 @@ Read [references/ozon-mcp-bridge.md](references/ozon-mcp-bridge.md) for the
 commands, 13 workflow names, and safety boundary.
 
 The generic `ozon call` and `ozon fetch-all` commands must stay read-only.
+Credentialed MCP commands must select the intended local profile with
+`ozon --store-id <Client-Id> ...`; never expose another store's environment
+references to the MCP child.
 Only `workflow listing publish` may write, through its fixed typed adapter to
 the import endpoints. It requires a locally enabled store profile and never
 accepts arbitrary operation IDs or URLs.

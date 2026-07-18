@@ -1,4 +1,4 @@
-import type { ListingDraftItemV1, SellerImportInfoV1, SellerImportTransportV1 } from '@auto-ozon/contracts';
+import type { ListingDraftItemV2, SellerImportInfoV1, SellerImportTransportV1 } from '@auto-ozon/contracts';
 
 export interface OzonSellerApiErrorDetail {
   code: string;
@@ -22,18 +22,18 @@ export class OzonSellerImportClient implements SellerImportTransportV1 {
   constructor(
     private readonly credentials: { clientId: string; apiKey: string },
     private readonly baseUrl = 'https://api-seller.ozon.ru',
-    private readonly options: { timeoutMs?: number; fetch?: typeof fetch } = {},
+    private readonly options: { timeoutMs?: number; fetch?: typeof fetch; signal?: AbortSignal; maxReadRetries?: number } = {},
   ) {}
 
-  async submit(items: ListingDraftItemV1[]): Promise<{ task_id: string }> {
-    const body = await this.post('/v3/product/import', { items });
+  async submit(items: ListingDraftItemV2[]): Promise<{ task_id: string }> {
+    const body = await this.post('/v3/product/import', { items }, true);
     const taskId = stringAt(body, ['task_id', 'result.task_id']);
     if (!taskId) throw new Error('Ozon import response did not contain task_id.');
     return { task_id: taskId };
   }
 
   async getImportInfo(taskId: string): Promise<SellerImportInfoV1> {
-    const body = await this.post('/v1/product/import/info', { task_id: taskId });
+    const body = await this.post('/v1/product/import/info', { task_id: taskId }, false);
     const items = arrayAt(body, ['result.items', 'items']).map((item) => {
       const value = item as Record<string, unknown>;
       const errors = Array.isArray(value.errors) ? value.errors.map(formatImportError) : [];
@@ -50,15 +50,34 @@ export class OzonSellerImportClient implements SellerImportTransportV1 {
   }
 
   async getProductsByOfferIds(offerIds: string[]): Promise<Array<{ offer_id: string; product_id: number }>> {
-    const body = await this.post('/v3/product/info/list', { offer_id: offerIds });
+    const body = await this.post('/v3/product/info/list', { offer_id: offerIds }, false);
     return arrayAt(body, ['items', 'result.items']).flatMap((item) => {
       const value = item as Record<string, unknown>; const productId = Number(value.id ?? value.product_id); const offerId = String(value.offer_id ?? '');
       return offerId && Number.isFinite(productId) ? [{ offer_id: offerId, product_id: productId }] : [];
     });
   }
 
-  private async post(path: string, body: unknown): Promise<unknown> {
+  private async post(path: string, body: unknown, write: boolean): Promise<unknown> {
+    const maxAttempts = Math.max(1, (this.options.maxReadRetries ?? 2) + 1);
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await this.postOnce(path, body);
+      } catch (error) {
+        lastError = error;
+        const safelyRetryableWrite = write && error instanceof OzonSellerApiError && error.detail.category === 'rate_limit';
+        if (!(error instanceof OzonSellerApiError) || !error.detail.recoverable || (write && !safelyRetryableWrite) || attempt >= maxAttempts) throw error;
+        await abortableDelay(error.detail.retry_after_ms ?? Math.min(2_000, 200 * 2 ** (attempt - 1)), this.options.signal);
+      }
+    }
+    throw lastError;
+  }
+
+  private async postOnce(path: string, body: unknown): Promise<unknown> {
     const controller = new AbortController();
+    const externalAbort = () => controller.abort(this.options.signal?.reason);
+    if (this.options.signal?.aborted) externalAbort();
+    else this.options.signal?.addEventListener('abort', externalAbort, { once: true });
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 30_000);
     try {
       const execute = this.options.fetch ?? fetch;
@@ -97,8 +116,26 @@ export class OzonSellerImportClient implements SellerImportTransportV1 {
       });
     } finally {
       clearTimeout(timeout);
+      this.options.signal?.removeEventListener('abort', externalAbort);
     }
   }
+}
+
+function abortableDelay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new Error('ABORTED'));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, Math.max(0, milliseconds));
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(signal?.reason ?? new Error('ABORTED'));
+    };
+    function done(): void {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function formatImportError(value: unknown): string {

@@ -3,10 +3,22 @@ export type ImageAssetSourceV1 = '1688' | 'generated';
 export interface ImageAssetV1 {
   url: string;
   url_sha256: string;
+  content_sha256: string;
+  byte_size: number;
+  media_type: 'image/jpeg' | 'image/png' | 'image/webp';
+  width_px: number;
+  height_px: number;
+  aspect_ratio: number;
   source: ImageAssetSourceV1;
   role: 'primary_candidate' | 'gallery';
   source_sku_ids: string[];
   generation_call_id: string | null;
+  text_review: {
+    status: 'agent_confirmed' | 'needs_review';
+    contains_chinese_text: boolean | null;
+    contains_watermark: boolean | null;
+    notes: string;
+  };
 }
 
 export interface SkuImageBundleV1 {
@@ -35,12 +47,28 @@ export interface ImageBundleIssueV1 {
 export interface ImageBundleV1 {
   schema_version: 1;
   source_offer_id: string;
-  status: 'completed' | 'blocked';
+  status: 'completed' | 'needs_review' | 'blocked';
   assets: ImageAssetV1[];
   sku_images: SkuImageBundleV1[];
   generation: ImageGenerationAuditV1 | null;
   warnings: ImageBundleIssueV1[];
   errors: ImageBundleIssueV1[];
+  agent_tasks: Array<{
+    execution_owner: 'current_agent';
+    content_sha256: string;
+    url: string;
+    instruction: string;
+  }>;
+}
+
+export interface ImageReviewAgentInputV1 {
+  source_offer_id: string;
+  assets: Array<{
+    content_sha256: string;
+    contains_chinese_text: boolean;
+    contains_watermark: boolean;
+    notes: string;
+  }>;
 }
 
 export interface ImageGenerationRequestV1 {
@@ -59,4 +87,15 @@ export interface ImageGenerationResponseV1 {
 
 export interface ImageGenerationProviderV1 {
   generate(request: ImageGenerationRequestV1, signal?: AbortSignal): Promise<ImageGenerationResponseV1>;
+}
+
+export interface ImageGenerationLocalConfigV1 {
+  schema_version: 1;
+  provider_id: string;
+  base_url: string;
+  model: string;
+  api_key_env: string;
+  use_1688_reference_images: boolean;
+  image_count: number;
+  prompt_version: string;
 }

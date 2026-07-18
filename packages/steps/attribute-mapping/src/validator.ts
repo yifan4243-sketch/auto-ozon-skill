@@ -1,5 +1,5 @@
 import type {
-  AttributeMappingV1,
+  AttributeMappingV2,
   CanonicalProductV2,
   CategoryAttributesGroupV1,
   CategoryDecisionV1,
@@ -8,7 +8,7 @@ import { validateDictionaryValues } from './dictionary-resolver.js';
 import { resolveGroupAttributeSnapshot } from './variant-mapper.js';
 
 export function validateAttributeMapping(
-  mapping: AttributeMappingV1,
+  mapping: AttributeMappingV2,
   product: CanonicalProductV2,
   decision: CategoryDecisionV1,
   snapshots: CategoryAttributesGroupV1[],

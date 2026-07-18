@@ -8,6 +8,8 @@ export interface ListingJobSpecV1 {
   route: ListingJobRouteV1;
   requested_listing_count: number;
   keywords: string[];
+  /** Exact successful-SKU allocation per keyword; values sum to the request. */
+  keyword_listing_targets: Record<string, number>;
   collection: {
     profiles: [string, string, ...string[]];
     attempts_per_account: 3;
@@ -18,10 +20,13 @@ export interface ListingJobSpecV1 {
     price_max_cny: number | null;
     candidate_limit: number;
   };
+  images: {
+    generate: boolean;
+  };
   created_at: string;
 }
 
-export type BatchProductStatusV1 = 'succeeded' | 'failed' | 'skipped' | 'paused';
+export type BatchProductStatusV1 = 'succeeded' | 'partial_failed' | 'failed' | 'skipped' | 'paused';
 
 export interface BatchProductRunV1 {
   offer_id: string;
@@ -30,6 +35,8 @@ export interface BatchProductRunV1 {
   status: BatchProductStatusV1;
   profile: string | null;
   attempts: number;
+  /** Number of SKU listings already confirmed by Ozon for this product run. */
+  listing_count: number;
   error_code: string | null;
 }
 
@@ -42,6 +49,7 @@ export interface ListingBatchResultV1 {
   succeeded_count: number;
   failed_count: number;
   skipped_count: number;
+  partial_failed_count?: number;
   product_runs: BatchProductRunV1[];
   created_at: string;
   updated_at: string;
@@ -60,11 +68,16 @@ export interface CategoryClosureV1 {
 
 export interface AgentDecisionEnvelopeV1<T> {
   schema_version: 1;
-  decision_type: 'category' | 'attribute' | 'content' | 'weight_estimate';
-  decision_version: string;
-  input_hash: string;
-  candidate_snapshot_hash: string | null;
-  decided_at: string;
-  decided_by: 'current_agent';
-  decision: T;
+  task_id: string;
+  run_id: string;
+  source_offer_id: string;
+  decision_type: 'category' | 'attribute' | 'content' | 'image_review' | 'package_estimate' | 'market_score';
+  input_artifact_sha256: string;
+  model: string;
+  prompt_version: string;
+  created_at: string;
+  confidence: 'high' | 'medium' | 'low';
+  evidence_refs: Array<{ artifact_id: string; json_pointer: string }>;
+  assumptions: string[];
+  output: T;
 }

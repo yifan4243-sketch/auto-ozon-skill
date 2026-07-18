@@ -42,10 +42,14 @@ export interface WorkflowStepUpdateV2 {
   implementation_version?: string;
   started_at?: string | null;
   completed_at?: string | null;
-  error?: WorkflowStructuredErrorV2 | null;
+  error?: WorkflowErrorInputV2 | null;
   /** @deprecated Compatibility input. Prefer error. */
   error_code?: string | null;
 }
+
+export type WorkflowErrorInputV2 = Pick<WorkflowStructuredErrorV2, 'code' | 'message' | 'recoverable'>
+  & Partial<Omit<WorkflowStructuredErrorV2, 'code' | 'message' | 'recoverable'>>
+  & { detail?: unknown };
 
 export interface ReuseCheckV2 {
   input_hash?: string | null;
@@ -132,9 +136,12 @@ export class FileArtifactStore implements ArtifactStore {
     const implementationVersion = update.implementation_version ?? existing.implementation_version;
     const startedAt = startsNewAttempt ? (update.started_at ?? now) : (update.started_at ?? existing.started_at);
     const completedAt = update.completed_at ?? (isTerminal(update.status) ? now : null);
-    const structuredError = update.error ?? (update.error_code
-      ? { code: update.error_code, message: update.error_code, recoverable: true }
+    const structuredError = update.error ? normalizeWorkflowError(update.error) : (update.error_code
+      ? normalizeWorkflowError({ code: update.error_code, message: update.error_code, recoverable: true })
       : update.error_code === null ? null : existing.error);
+    const selectedArtifact = update.output
+      ? existing.artifacts.find((artifact) => artifact.path === normalizeRelative(update.output!)) ?? existing.artifact
+      : existing.artifact;
 
     let attempts = existing.attempts;
     if (startsNewAttempt) {
@@ -160,6 +167,7 @@ export class FileArtifactStore implements ArtifactStore {
           implementation_version: implementationVersion,
           completed_at: completedAt,
           error: structuredError,
+          artifact: selectedArtifact,
         }
       : attempt);
 
@@ -171,6 +179,7 @@ export class FileArtifactStore implements ArtifactStore {
       input_hash: inputHash,
       dependency_hashes: dependencyHashes,
       implementation_version: implementationVersion,
+      artifact: selectedArtifact,
       started_at: startedAt,
       completed_at: completedAt,
       error: structuredError,
@@ -219,6 +228,12 @@ export class FileArtifactStore implements ArtifactStore {
       name,
     ));
     const file = this.resolveRunRelative(runId, relative);
+    if (await readBytesIfExists(file)) {
+      throw new ArtifactStoreError(
+        'ARTIFACT_IMMUTABLE',
+        `Artifact already exists for attempt ${attempt}: ${relative}`,
+      );
+    }
     const text = `${JSON.stringify(value, null, 2)}\n`;
     await writeTextAtomic(file, text);
     const bytes = Buffer.from(text, 'utf8');
@@ -341,7 +356,7 @@ export class FileArtifactStore implements ArtifactStore {
     const now = new Date().toISOString();
     const steps = Object.fromEntries(Object.entries(manifest.steps).map(([name, record]) => {
       if (record.status !== 'running') return [name, record];
-      const error = { code: 'STEP_INTERRUPTED', message: 'The previous process ended while this step was running.', recoverable: true };
+      const error = normalizeWorkflowError({ code: 'STEP_INTERRUPTED', message: 'The previous process ended while this step was running.', recoverable: true });
       return [name, {
         ...record,
         status: 'interrupted',
@@ -419,6 +434,62 @@ function assertManifestV2(value: unknown, runId: string): WorkflowRunManifestV2 
     throw new ArtifactStoreError('MANIFEST_INVALID', `Run ${runId} has an invalid Manifest V2.`);
   }
   return value as unknown as WorkflowRunManifestV2;
+}
+
+function normalizeWorkflowError(error: WorkflowErrorInputV2): WorkflowStructuredErrorV2 {
+  const detail = isRecord(error.detail) ? error.detail : null;
+  return {
+    code: error.code,
+    category: error.category ?? inferErrorCategory(error.code),
+    message: redactSecrets(error.message),
+    recoverable: error.recoverable,
+    retry_after_ms: error.retry_after_ms ?? numericOrNull(detail?.retry_after_ms),
+    affected_ids: error.affected_ids ?? stringArray(detail?.affected_ids),
+    upstream_request_id: error.upstream_request_id
+      ?? stringOrNull(detail?.upstream_request_id)
+      ?? stringOrNull(detail?.request_id),
+    sanitized_detail: error.sanitized_detail ?? sanitizeUnknown(error.detail),
+  };
+}
+
+function inferErrorCategory(code: string): WorkflowStructuredErrorV2['category'] {
+  if (/(?:AUTH|CREDENTIAL|LOGIN|401|403)/iu.test(code)) return 'auth';
+  if (/(?:RATE|429)/iu.test(code)) return 'rate_limit';
+  if (/(?:CAPTCHA|RISK_CONTROL|SLIDER)/iu.test(code)) return 'risk_control';
+  if (/(?:NETWORK|TIMEOUT|UNAVAILABLE|5\d\d)/iu.test(code)) return 'network';
+  if (/(?:INVALID|MISSING|REQUIRED|SCHEMA|VALIDATION)/iu.test(code)) return 'upstream_validation';
+  if (/(?:CONFLICT|LOCK|DUPLICATE)/iu.test(code)) return 'conflict';
+  if (/(?:POLICY|BLOCKED|FORBIDDEN|UNSUPPORTED)/iu.test(code)) return 'policy';
+  if (/(?:INPUT|BAD_)/iu.test(code)) return 'input';
+  return 'internal';
+}
+
+function sanitizeUnknown(value: unknown): unknown {
+  if (typeof value === 'string') return redactSecrets(value);
+  if (Array.isArray(value)) return value.map(sanitizeUnknown);
+  if (!isRecord(value)) return value ?? null;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
+    key,
+    /(?:api.?key|authorization|cookie|secret|token|password)/iu.test(key) ? '[REDACTED]' : sanitizeUnknown(entry),
+  ]));
+}
+
+function redactSecrets(value: string): string {
+  return value
+    .replace(/npm_[A-Za-z0-9_-]+/gu, '[REDACTED]')
+    .replace(/(?:Api-Key|Authorization|Cookie)\s*[:=]\s*[^\s,;}]+/giu, '[REDACTED]');
+}
+
+function numericOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 async function acquireDirectoryLock(lock: string, runId: string): Promise<void> {

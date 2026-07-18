@@ -1,6 +1,6 @@
 import type { ErrorObject, WarningObject } from '@auto-ozon/contracts';
 import type { OzonCredentialsStatus, OzonToolAvailability } from './types.js';
-import { loadOzonEnvironment } from './local-env.js';
+import { getActiveOzonMcpCredentials, loadOzonEnvironment } from './local-env.js';
 
 export const OZON_MCP_TOOLS = {
   callMethod: 'ozon_call_method',
@@ -83,7 +83,7 @@ export const WRITE_BLOCKED_NEXT_ACTIONS = [
   'Keep write operations behind a separate preview and explicit confirmation flow.',
 ];
 
-export function credentialStatus(env: NodeJS.ProcessEnv = loadOzonEnvironment()): OzonCredentialsStatus {
+export function credentialStatus(env: NodeJS.ProcessEnv = getActiveOzonMcpCredentials()): OzonCredentialsStatus {
   return {
     sellerCredentials: Boolean(env.OZON_CLIENT_ID && env.OZON_API_KEY),
     performanceCredentials: Boolean(

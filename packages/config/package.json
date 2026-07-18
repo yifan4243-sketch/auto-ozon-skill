@@ -19,6 +19,7 @@
     "@auto-ozon/contracts": "workspace:*"
   },
   "files": [
-    "dist"
+    "dist",
+    "store-profile-v2.schema.json"
   ]
 }

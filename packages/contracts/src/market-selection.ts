@@ -1,10 +1,27 @@
 export interface MarketSelectionMetricsV1 {
-  gmv: number;
-  items: number;
-  growth_percent: number;
-  seller_count: number;
-  buyout_percent: number;
-  leader_share_percent: number;
+  gmv: number | null;
+  items: number | null;
+  growth_percent: number | null;
+  seller_count: number | null;
+  buyout_percent: number | null;
+  leader_share_percent: number | null;
+}
+
+export interface OpportunityScoreComponentsV1 {
+  demand_gmv: number | null;
+  demand_items: number | null;
+  growth: number | null;
+  small_seller_opportunity: number | null;
+  competition_balance: number | null;
+  buyout: number | null;
+  long_tail: number | null;
+  seasonality: number;
+  /** Product-level profit is unavailable until 1688 price and package facts exist. */
+  profit: null;
+  /** Product-level logistics is unavailable until package facts exist. */
+  logistics: null;
+  /** Product-level regulatory/image risk is unavailable until a product is collected. */
+  risk: null;
 }
 
 export interface SelectedMarketCategoryV1 {
@@ -15,6 +32,8 @@ export interface SelectedMarketCategoryV1 {
   search_keyword_1688_zh: string;
   score: number;
   metrics: MarketSelectionMetricsV1;
+  score_components: OpportunityScoreComponentsV1;
+  unavailable_components: string[];
   seasonal_adjustment: number;
   seasonal_reason_zh: string;
   rationale_zh: string;
@@ -42,7 +61,7 @@ export interface CollectionAttemptV1 {
 }
 
 export interface AccountFailoverResultV1<T> {
-  status: 'succeeded' | 'skipped' | 'stopped';
+  status: 'succeeded' | 'skipped' | 'stopped' | 'failed';
   value: T | null;
   attempts: CollectionAttemptV1[];
   final_error_code: string | null;

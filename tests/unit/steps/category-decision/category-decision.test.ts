@@ -162,7 +162,12 @@ describe('CategoryDecisionV1 examples and validation', () => {
 
     expect(result.ok).toBe(true);
     expect(result.command).toBe('category.decision');
-    expect(result.data).toEqual(output);
+    expect(result.data).toMatchObject(output);
+    expect(result.data?.category_snapshot).toMatchObject({
+      schema_version: 1,
+      source: 'ozon-seller-api',
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
   });
 
   it('blocks invalid provider output at the public service boundary', async () => {

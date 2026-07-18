@@ -9,6 +9,7 @@ import type {
   CommandResult,
   CostPricingAgentInputV1,
   CostPricingProfileV1,
+  ImageReviewAgentInputV1,
 } from '@auto-ozon/contracts';
 import {
   runOfflineNormalizeCommand,
@@ -19,6 +20,10 @@ import {
   getListingPublishStatus,
   createBatchWorkflow,
   getBatchWorkflowStatus,
+  runBatchWorkflow,
+  runSetupDoctor,
+  refreshOzonCategoryTree,
+  loadConfiguredImageGeneration,
 } from '@auto-ozon/workflows';
 import {
   CliError,
@@ -41,6 +46,7 @@ import {
   setOutputFlags,
 } from '@auto-ozon/adapters-1688';
 import { registerOzonCommands } from './commands/ozon.js';
+import { getBatchDecisionTasks, startReviewConsole, submitBatchAgentDecision } from '@auto-ozon/control-plane';
 
 export function buildProgram(): Command {
   const program = new Command();
@@ -272,6 +278,32 @@ export function buildProgram(): Command {
 
   registerOzonCommands(program, emitCommandResult, parseJsonParams, parseNumber);
 
+  program
+    .command('setup')
+    .description('Validate local accounts, stores, credentials, snapshots, browser, and Ozon MCP')
+    .command('doctor')
+    .description('Run the complete read-only setup readiness report')
+    .action(async () => {
+      emitCommandResult(await runSetupDoctor());
+    });
+
+  const reviewConsole = program
+    .command('review-console')
+    .description('Start the explicit foreground review console on localhost');
+  reviewConsole
+    .command('start')
+    .description('Start the local single-user reviewer; never exposes API keys')
+    .option('--port <n>', 'Local port; 0 selects an available port', '0')
+    .action(async (opts) => {
+      const parsedPort = parseNumber(opts.port);
+      if (parsedPort === undefined || !Number.isInteger(parsedPort) || parsedPort < 0 || parsedPort > 65535) {
+        throw new CliError(2, 'BAD_INPUT', '--port must be an integer from 0 to 65535.');
+      }
+      const port = parsedPort;
+      const running = await startReviewConsole({ port });
+      process.stdout.write(`Auto Ozon review console: ${running.url}\nPress Ctrl+C to stop.\n`);
+    });
+
   registerWorkflowCommands(program, emitCommandResult, parseNumber, parseSkuMax);
 
   addOutputFlagsToAll(program);
@@ -334,13 +366,14 @@ function registerWorkflowCommands(
     .requiredOption('--profiles <names>', 'At least two 1688 profile names separated by commas')
     .option('--keyword <keyword>', 'Explicit 1688 keyword; omit for market selection')
     .option('--market-snapshot <path>', 'Saved annual Ozon category analytics snapshot')
-    .option('--category-count <n>', 'Market-selection category count from 5 to 10', '8')
+    .option('--category-count <n>', 'Market-selection category count from 5 to 10; defaults to 5-8 based on requested count')
     .option('--candidate-limit <n>', 'Maximum candidate products examined')
     .option('--sku-max <n>', 'Maximum Ozon SKUs retained per source product', '3')
     .option('--price-min <n>', 'Minimum 1688 purchase price in CNY')
     .option('--price-max <n>', 'Maximum 1688 purchase price in CNY')
     .option('--headed', 'Use a visible browser')
-    .option('--captcha-policy <policy>', 'pause or skip_product', 'pause')
+    .option('--generate-images', 'Use the customer-configured image provider; default is validated 1688 originals')
+    .option('--captcha-policy <policy>', 'pause or skip_product', 'skip_product')
     .action(async (opts) => {
       const count = positiveInteger(opts.count, '--count');
       const candidateLimit = opts.candidateLimit ? positiveInteger(opts.candidateLimit, '--candidate-limit') : Math.max(count * 3, count);
@@ -351,17 +384,59 @@ function registerWorkflowCommands(
         keyword: opts.keyword, profiles: parseTwoProfiles(opts.profiles), headed: Boolean(opts.headed),
         captcha_policy: captchaPolicy, max_sku_per_product: positiveInteger(opts.skuMax, '--sku-max'),
         price_min_cny: parseOptionalNumber(opts.priceMin), price_max_cny: parseOptionalNumber(opts.priceMax),
-        candidate_limit: candidateLimit, category_count: positiveInteger(opts.categoryCount, '--category-count'),
+        candidate_limit: candidateLimit,
+        category_count: opts.categoryCount === undefined ? undefined : positiveInteger(opts.categoryCount, '--category-count'),
         market_snapshot_path: opts.marketSnapshot,
+        generate_images: Boolean(opts.generateImages),
       }));
     });
   batch.command('status').description('Read a saved batch without starting collection or publishing')
     .requiredOption('--batch-id <id>', 'Batch ID to inspect')
     .action(async (opts) => { emitCommandResult(await getBatchWorkflowStatus(opts.batchId)); });
+  batch.command('agent-tasks').description('Read paused current-Agent tasks and their binding hashes')
+    .requiredOption('--batch-id <id>', 'Batch ID to inspect')
+    .action(async (opts) => {
+      emitCommandResult({
+        ok: true,
+        command: 'workflow.batch.agent-tasks',
+        data: await getBatchDecisionTasks(opts.batchId),
+        warnings: [],
+        errors: [],
+        nextActions: [],
+      });
+    });
+  for (const commandName of ['run', 'resume'] as const) {
+    batch.command(commandName).description(commandName === 'run' ? 'Run the foreground batch until completion or an Agent decision is required' : 'Resume paused product runs without creating a new batch')
+      .requiredOption('--batch-id <id>', 'Batch ID')
+      .action(async (opts) => { emitCommandResult(await runBatchWorkflow({ batch_id: opts.batchId })); });
+  }
+  batch.command('agent-input').description('Validate and save an AgentDecisionEnvelopeV1 into a fixed batch handoff slot')
+    .requiredOption('--batch-id <id>', 'Batch ID')
+    .requiredOption('--offer-id <id>', '1688 offer ID')
+    .requiredOption('--kind <kind>', 'category, pricing, attributes, or images')
+    .option('--value <json>', 'Decision JSON')
+    .option('--stdin', 'Read decision JSON from stdin')
+    .action(async (opts) => {
+      const kind = ['category', 'pricing', 'attributes', 'images'].includes(opts.kind) ? opts.kind as 'category' | 'pricing' | 'attributes' | 'images' : null;
+      if (!kind) throw new CliError(2, 'BAD_INPUT', '--kind must be category, pricing, attributes, or images.');
+      if (Boolean(opts.stdin) === Boolean(opts.value)) throw new CliError(2, 'BAD_INPUT', 'Use exactly one of --value or --stdin.');
+      const raw = opts.stdin ? await readStdinText() : opts.value;
+      let value: unknown;
+      try { value = JSON.parse(raw); } catch { throw new CliError(2, 'BAD_INPUT', 'Agent input must be valid JSON.'); }
+      emitCommandResult(await submitBatchAgentDecision({ batch_id: opts.batchId, offer_id: opts.offerId, kind, envelope: value }));
+    });
 
   const categoryCmd = workflow
     .command('category')
     .description('Category-related workflows: sourcing → decision → attributes');
+
+  categoryCmd
+    .command('refresh-tree')
+    .description('Refresh the versioned Chinese Ozon category tree through the fixed read-only Seller endpoint')
+    .requiredOption('--store-id <Client-Id>', 'Local StoreProfileV2 used only to authenticate the read')
+    .action(async (opts) => {
+      emitCommandResult(await refreshOzonCategoryTree({ store_id: opts.storeId }));
+    });
 
   categoryCmd
     .command('inspect')
@@ -369,7 +444,10 @@ function registerWorkflowCommands(
     .argument('<keyword>', 'Search keyword for 1688 sourcing')
     .option('--max <n>', 'Maximum products to source', '1')
     .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
+    .option('--price-min <n>', 'Minimum actual 1688 SKU purchase price in CNY')
+    .option('--price-max <n>', 'Maximum actual 1688 SKU purchase price in CNY')
     .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON file')
+    .requiredOption('--store-id <Client-Id>', 'Local StoreProfileV2 used only to authenticate the read')
     .option('--products-dir <directory>', 'Product workspace root', 'data/products')
     .action(async (keyword, opts) => {
       emitCommandResult(
@@ -378,6 +456,7 @@ function registerWorkflowCommands(
           max: parseNumber(opts.max) ?? 1,
           skuMax: parseSkuMax(opts.skuMax),
           decisionFile: opts.decisionFile,
+          storeId: opts.storeId,
           productsDir: opts.productsDir,
         }),
       );
@@ -392,11 +471,14 @@ function registerWorkflowCommands(
     .description('Run or resume source → canonical → category → pricing → attributes → mapping')
     .argument('<keyword>', '1688 keyword used when the source step must run')
     .option('--run-id <id>', 'Reuse a run ID to resume from saved artifacts')
+    .option('--store-id <Client-Id>', 'Store profile used for read-only Ozon category/attribute calls')
     .option('--decision-file <path>', 'Path to CategoryDecisionV1 JSON')
     .option('--attribute-agent-json <json>', 'Agent-selected attribute values as AttributeMappingAgentInputV1 JSON')
     .option('--attribute-agent-stdin', 'Read AttributeMappingAgentInputV1 JSON from stdin')
     .option('--pricing-agent-json <json>', 'Agent-estimated package values as CostPricingAgentInputV1 JSON')
     .option('--pricing-agent-stdin', 'Read CostPricingAgentInputV1 JSON from stdin')
+    .option('--image-review-json <json>', 'Current-Agent image text/watermark review as ImageReviewAgentInputV1 JSON')
+    .option('--image-review-stdin', 'Read ImageReviewAgentInputV1 JSON from stdin')
     .option('--pricing-profile-json <json>', 'CostPricingProfileV1 overrides as JSON')
     .option('--commission-file <path>', 'Ozon category commission snapshot JSON')
     .option('--start-from <step>', 'First step to execute', 'source-1688')
@@ -404,10 +486,13 @@ function registerWorkflowCommands(
     .option('--force-step <steps...>', 'Refresh this step and all downstream steps')
     .option('--continue-on-review', 'Continue when an upstream step needs review')
     .option('--sku-max <n>', 'Keep only products with at most n normalized SKUs')
+    .option('--price-min <n>', 'Minimum accepted 1688 SKU purchase price in CNY')
+    .option('--price-max <n>', 'Maximum accepted 1688 SKU purchase price in CNY')
     .option('--profile <name>', '1688 profile name')
     .option('--headed', 'Open a browser window for manual verification')
+    .option('--generate-images', 'Use data/config/image-generation.local.json and its referenced local secret')
     .action(async (keyword, opts) => {
-      if (opts.attributeAgentStdin && opts.pricingAgentStdin) {
+      if ([opts.attributeAgentStdin, opts.pricingAgentStdin, opts.imageReviewStdin].filter(Boolean).length > 1) {
         throw new CliError(2, 'BAD_AGENT_INPUT', 'Only one Agent input may read from stdin per invocation.');
       }
       const attributeAgentInput = await resolveAttributeAgentInput(
@@ -418,6 +503,10 @@ function registerWorkflowCommands(
         opts.pricingAgentJson,
         Boolean(opts.pricingAgentStdin),
       );
+      const imageReviewAgentInput = await resolveImageReviewAgentInput(
+        opts.imageReviewJson,
+        Boolean(opts.imageReviewStdin),
+      );
       const pricingProfile = parsePricingProfile(opts.pricingProfileJson);
       const commissionText = opts.commissionFile
         ? await fs.readFile(path.resolve(opts.commissionFile), 'utf8')
@@ -425,16 +514,28 @@ function registerWorkflowCommands(
       const commissionSnapshot = commissionText === undefined
         ? undefined
         : JSON.parse(commissionText) as unknown;
+      const configuredImages = opts.generateImages ? await loadConfiguredImageGeneration() : null;
       emitCommandResult(
         await runListingPreparation({
           run_id: opts.runId,
+          store_id: opts.storeId,
           source: {
             mode: 'keyword',
             keyword,
             max: 1,
             skuMax: parseSkuMax(opts.skuMax),
+            filters: {
+              priceMin: parseOptionalNumber(opts.priceMin),
+              priceMax: parseOptionalNumber(opts.priceMax),
+            },
             profile: opts.profile,
             headed: opts.headed,
+          },
+          qualification: {
+            max_sku_per_product: parseSkuMax(opts.skuMax) ?? Number.MAX_SAFE_INTEGER,
+            price_min_cny: parseOptionalNumber(opts.priceMin),
+            price_max_cny: parseOptionalNumber(opts.priceMax),
+            require_image: true,
           },
           category_decision_file: opts.decisionFile,
           cost_pricing_profile: pricingProfile,
@@ -444,6 +545,9 @@ function registerWorkflowCommands(
             ? undefined
             : createHash('sha256').update(commissionText).digest('hex'),
           attribute_mapping_agent_input: attributeAgentInput,
+          image_review_agent_input: imageReviewAgentInput,
+          image_generation: configuredImages?.options,
+          image_generation_provider: configuredImages?.provider,
           start_from: parseWorkflowStep(opts.startFrom),
           stop_after: parseWorkflowStep(opts.stopAfter),
           force_steps: (opts.forceStep ?? []).map(parseWorkflowStep),
@@ -666,6 +770,31 @@ function parseSkuMax(raw: string | undefined): number | undefined {
   return value;
 }
 
+function parseImageReviewAgentJson(raw: string | undefined): ImageReviewAgentInputV1 | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const value = JSON.parse(raw) as Partial<ImageReviewAgentInputV1>;
+    if (!value || typeof value.source_offer_id !== 'string' || !Array.isArray(value.assets)) throw new Error('shape');
+    for (const asset of value.assets) {
+      if (!asset || typeof asset.content_sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(asset.content_sha256)
+        || typeof asset.contains_chinese_text !== 'boolean'
+        || typeof asset.contains_watermark !== 'boolean'
+        || typeof asset.notes !== 'string') throw new Error('shape');
+    }
+    return value as ImageReviewAgentInputV1;
+  } catch {
+    throw new CliError(2, 'BAD_IMAGE_REVIEW_JSON', 'Image review must be valid ImageReviewAgentInputV1 JSON.');
+  }
+}
+
+async function resolveImageReviewAgentInput(raw: string | undefined, fromStdin: boolean): Promise<ImageReviewAgentInputV1 | undefined> {
+  if (raw !== undefined && fromStdin) throw new CliError(2, 'BAD_IMAGE_REVIEW_INPUT', 'Use only one of --image-review-json or --image-review-stdin.');
+  if (!fromStdin) return parseImageReviewAgentJson(raw);
+  const input = await readStdinText();
+  if (!input.trim()) throw new CliError(2, 'BAD_IMAGE_REVIEW_INPUT', '--image-review-stdin received no JSON.');
+  return parseImageReviewAgentJson(input.trim());
+}
+
 function positiveInteger(raw: string | undefined, option: string): number {
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value < 1) throw new CliError(2, 'BAD_INPUT', `${option} must be a positive integer.`);
@@ -678,6 +807,13 @@ function parseTwoProfiles(raw: string): [string, string, ...string[]] {
     throw new CliError(2, 'BAD_INPUT', '--profiles requires at least two safe 1688 profile names separated by commas.');
   }
   return profiles as [string, string, ...string[]];
+}
+
+async function readStdinText(): Promise<string> {
+  let value = '';
+  for await (const chunk of process.stdin) value += String(chunk);
+  if (!value.trim()) throw new CliError(2, 'BAD_INPUT', 'stdin contained no JSON.');
+  return value.trim();
 }
 
 function parseNumber(raw: string | undefined): number | undefined {

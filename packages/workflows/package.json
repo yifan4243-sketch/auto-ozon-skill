@@ -36,6 +36,7 @@
     "@auto-ozon/step-source-1688": "workspace:*"
   },
   "files": [
-    "dist"
+    "dist",
+    "image-generation-config.schema.json"
   ]
 }
