@@ -71,8 +71,8 @@ Write atomically and preserve unrelated entries.
 
 | File | Allowed contents |
 | --- | --- |
-| `.env` | `OZON_CLIENT_ID_<store>`, `OZON_API_KEY_<store>`, and, only when image generation is configured, `IMAGE_GENERATION_API_KEY`; never show a key after writing. |
-| `data/config/ozon-stores.local.json` | Store metadata, env-variable references, publishing flag, polling settings. |
+| `.env` | `OZON_CLIENT_ID_<store>`, `OZON_API_KEY_<store>`; optional separate `OZON_PERFORMANCE_CLIENT_ID_<store>` / `OZON_PERFORMANCE_CLIENT_SECRET_<store>`; and, only for image generation, `IMAGE_GENERATION_API_KEY`. Never show a value after writing. |
+| `data/config/ozon-stores.local.json` | Store metadata, Seller/optional Performance env references, CEL logistics policy, publishing flag, pricing and polling settings. |
 | `data/config/customer-settings.local.json` | Non-secret collection, pricing, retry, and timeout preferences. |
 | `data/config/image-generation.local.json` | Non-secret image-model endpoint, model, reference-image policy, and image count. |
 
@@ -90,13 +90,14 @@ and update the following JSON paths instead.
 | 备注 | `data/config/ozon-stores.local.json` → matching store entry → `store_name` |
 | ID | same store entry → `store_id`; `.env` → `OZON_CLIENT_ID_<store_id>`; same entry → `credentials.client_id.key` with `provider=env` |
 | API KEY | `.env` → `OZON_API_KEY_<store_id>`; same store entry → `credentials.api_key.key` with `provider=env`; never put the key in JSON |
+| Performance Client-Id/Secret（仅客户需要认证广告能力时） | `.env` → store-specific Performance variables; same entry → `performance_credentials` SecretRefs. Do not reuse Seller values. |
 | 最大 SKU 数量 | `data/config/customer-settings.local.json` → `collection.max_sku_per_product` |
 | 最低/最高采购价 | same file → `collection.purchase_price_cny.min` and `.max`; use `null` for “不限制” |
 | 售价和成本公式 | customer settings → `pricing.formula_text`; matching StoreProfileV2 → executable `pricing` fields |
 | 生图 Base URL 和模型名称 | `data/config/image-generation.local.json` → `base_url` and `model` |
 | 生图 API KEY | `.env` → `IMAGE_GENERATION_API_KEY`; image config → `api_key_env` only |
 | 是否使用 1688 原图 | image config → `use_1688_reference_images`; omitted answer means `true` |
-| 自动发布确认 | `data/config/ozon-stores.local.json` → matching store entry → `publishing.enabled` |
+| 自动发布确认 | Run `setup publishing enable --store-id <id> --actor <actor>` (or the equivalent local review-console action). It atomically updates the profile and creates durable `StorePublishingConsentV1`; editing `publishing.enabled` alone is not authorization. |
 
 Convert a formula to the matching `StoreProfileV2.pricing` only when it can be
 expressed as `mode=multiplier` plus `multiplier`, or `mode=target_margin` plus
@@ -121,6 +122,9 @@ When launching a workflow for the customer, translate saved collection and
 pricing preferences into the existing CLI options (`--sku-max`, `--price-min`,
 `--price-max`, and `--pricing-profile-json`). Do not silently enable publishing
 when the local store profile says it is disabled.
+Never manufacture Consent from a publish request. Enabling or disabling must
+use the setup command (or equivalent local-console action) so the durable
+Consent is created or revoked together with the profile switch.
 
 For image generation, default `image_count` to `3`. Store only configuration;
 do not call a model during setup. Use the versioned prompt in
@@ -137,8 +141,9 @@ uses `--generate-images`; without that flag the workflow validates and keeps
   only for the requested value and update `customer-settings.local.json`.
 - For “bind another store”, add a new store entry and unique environment-variable
   names; do not overwrite an existing store.
-- For “disable publishing”, set `publishing.enabled` to `false` immediately;
-  retain the key locally unless the customer explicitly asks to remove it.
+- For “disable publishing”, run `setup publishing disable` immediately so the
+  active Consent is revoked; retain the key locally unless the customer
+  explicitly asks to remove it.
 - For “show configuration”, redact all values whose key contains `KEY`,
   `TOKEN`, `SECRET`, `COOKIE`, or `PASSWORD`.
 
@@ -148,3 +153,15 @@ Block and explain the issue if a Client-Id is empty, the SKU limit is not a
 positive integer, a price minimum exceeds its maximum, a multiplier is not
 positive, or a store is enabled without an API-key reference. Do not call
 Ozon, collect 1688 data, or publish anything while configuring.
+
+## Capability disclosures
+
+- Seller product/order reads use `credentials`. Performance discovery needs no
+  credential, but authenticated advertising calls require the separate optional
+  pair. Never claim all discoverable MCP methods are authenticated.
+- The only pricing logistics Provider is CEL and its tracked `cel-2026.json` is
+  a legacy manual snapshot pending independent verification, with no confirmed
+  validity dates. Preserve the default policy only as an explicitly reviewed
+  local choice.
+- The review console is localhost-only and single-user. Do not configure or
+  advertise team/public/OIDC deployment.

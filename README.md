@@ -14,7 +14,7 @@
 | 账号与风控协作 | 多账号 Profile、登录状态诊断、调试日志；遇到滑块或验证码时以可视浏览器交给人工完成。 |
 | 俄罗斯市场选品 | 根据本地全年 Ozon 类目数据、竞争度、季节和生活场景规划 5–10 个类目，再用类目名到 1688 找货。 |
 | Ozon 类目与属性 | 检索类目、验证类目 ID 组合、按 SKU 分组、读取类目属性与字典值，并保留快照。 |
-| 成本与定价 | 使用 CEL 物流规则、1688 采购价、包装数据、汇率和 Ozon 佣金计算到俄成本与售价。 |
+| 成本与定价 | 当前只实现 CEL Provider；使用版本化费率快照、1688 采购价、包装数据、汇率和 Ozon 佣金计算到俄成本与售价。 |
 | 俄语内容与草稿 | 脚本填写确定性属性，Agent 只在真实事实和字典候选范围内补全俄语名称、简介、标签等字段；生成可直接导入的 `items[]` 草稿。 |
 | Ozon 上架 | 只向预先启用的本地店铺提交，轮询导入任务、保留逐 SKU 成功/失败结果、可恢复轮询与可恢复失败重试。 |
 | 店铺经营数据 | 通过 Ozon MCP 查询商品、订单、财务、库存、广告、内容质量和定价分析。 |
@@ -152,12 +152,17 @@ data/runs/<run_id>/
 └── 08-listing-submit/ozon-publish-result-v1.json
 ```
 
-发布前必须通过本机配置绑定店铺，并明确设置 `publishing.enabled: true`。发布只接受第 7 步状态为 `draft_complete` 的草稿：
+发布前必须通过本机配置绑定店铺，并由用户显式创建店铺级自动发布许可。仅修改
+`publishing.enabled` 不构成授权；第 8 步还会校验未撤销的 Consent、店铺配置哈希、
+草稿哈希、每日限额、类目允许列表和 Preflight。发布只接受第 7 步状态为
+`draft_complete` 的草稿：
 
 ```powershell
+pnpm exec tsx apps/cli/src/cli.ts setup publishing enable --store-id <Client-Id> --actor <操作者>
 pnpm exec tsx apps/cli/src/cli.ts workflow listing publish --run-id <run_id> --store-id <Client-Id>
 pnpm exec tsx apps/cli/src/cli.ts workflow listing resume --run-id <run_id> --store-id <Client-Id>
 pnpm exec tsx apps/cli/src/cli.ts workflow listing status --run-id <run_id>
+pnpm exec tsx apps/cli/src/cli.ts setup publishing disable --store-id <Client-Id> --actor <操作者>
 ```
 
 第 8 步不会管理库存，也不会自动删除、下架、归档或回滚商品。成功 SKU 保留；可恢复的失败最多再尝试两次。
@@ -183,7 +188,11 @@ pnpm exec tsx apps/cli/src/cli.ts workflow listing status --run-id <run_id>
 
 ## Ozon MCP：查询和经营分析
 
-项目内置 Ozon MCP TypeScript 桥接。它包含约 466 个 Seller / Performance API 方法，以及 13 个已整理的分析工作流，例如订单同步、商品目录同步、财务交易、日销售分析、广告、库存、退货、内容审计与价格分析。
+项目内置 Ozon MCP TypeScript 桥接。随仓库保存的 Swagger/知识快照可发现约 466 个
+Seller / Performance API 方法，并提供 13 个整理后的分析工作流。**方法发现不需要凭据；
+认证执行不是同一件事。** Seller 读调用需要所选店铺的 Seller Client-Id/API Key；
+Performance 认证调用必须在同一店铺配置中另行提供 Performance Client-Id/Client Secret。
+没有 Performance 凭据时仍可检索其方法契约，但不能宣称或执行已认证的广告调用。
 
 ```powershell
 pnpm exec tsx apps/cli/src/cli.ts ozon --store-id <Client-Id> doctor
@@ -197,11 +206,23 @@ pnpm exec tsx apps/cli/src/cli.ts ozon methods describe ProductAPI_GetProductInf
 
 完整说明见：[Ozon MCP 使用说明](references/ozon-mcp-bridge.md)。
 
+## 当前生产边界
+
+- 物流 Provider 当前只有 CEL。费率来自
+  `packages/steps/cost-pricing/references/logistics/cel-2026.json`，其元数据明确标为
+  `legacy_manual_snapshot / needs_review`；`captured_at`、`valid_from`、`valid_to` 均未知，
+  在获得可核验来源前不能把它描述为官方最新费率。超出 CEL 能力的真实包裹会保留事实并阻止定价，不会交给 Agent 重新猜测。
+- 1688 SKU 包装事实 > 1688 商品级包装事实 > 用户明确输入 > Agent 估算。Agent 只能补缺，不能覆盖更高优先级事实；估算会保留低置信度审计记录。
+- `review-console start` 是仅绑定 `127.0.0.1` 的本地单用户审核台。团队模式、公共部署、OIDC 登录、共享 Artifact Store 和多节点部署均未实现；PostgreSQL reader 只提供持久状态读模型，不等于团队版。
+- 自动化测试全部使用 fixture、mock resolver、mock image fetch 和 Fake Ozon transport，禁止向真实 Seller API 发写请求。真实店铺发布属于人工配置后的独立操作，不是测试步骤。
+
 ## 安全与边界
 
 - 不绕过 1688 风控、滑块或验证码；不使用打码服务。
 - 不记录或提交 Cookie、API Key、Token、密码等秘密信息。
 - 店铺凭据只保存在 `.env` 或 Git 忽略的本地配置中；界面和日志只显示“已配置”。
+- Seller 与 Performance 凭据相互独立，并按当前店铺、当前调用类型最小化传给 MCP 子进程；不会转发整个 `process.env`。
+- 普通 `pnpm verify:pack` 只验证包内容，不要求 Tag。正式 npm Release 还必须在干净、被正确版本 Tag 指向的提交上通过严格 Release 校验。
 - 不支持购物车、下单采购、旺旺聊天、供应商研究、订单履约或后台常驻进程。
 - 上架前请先在测试店铺用单 SKU 验证配置与类目规则。
 

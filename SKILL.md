@@ -117,7 +117,10 @@ Use the CLI from the repository root:
 # Prepare through the internal import draft; this is read-only toward Ozon.
 pnpm exec tsx apps/cli/src/cli.ts workflow listing prepare "杯子" --store-id <Client-Id> --sku-max 3
 
-# Publish only a draft_complete run and only to an enabled local store.
+# Explicit consent is separate from the profile flag and is never invented by publish.
+pnpm exec tsx apps/cli/src/cli.ts setup publishing enable --store-id <Client-Id> --actor <actor>
+
+# Publish only a draft_complete run with valid, unrevoked store consent.
 pnpm exec tsx apps/cli/src/cli.ts workflow listing publish --run-id <run_id> --store-id <Client-Id>
 
 # Resume polling/recoverable import retry, or read the saved result.
@@ -133,8 +136,12 @@ the successful SKU results.
 ## Ozon MCP: 466 methods and 13 curated workflows
 
 The MCP bridge is an API discovery and **read-only** execution tool. Its
-bundled Swagger snapshot contains roughly 466 Seller/Performance methods. Do
-not paste or memorize them; discover the exact current method before using it.
+bundled Swagger snapshot contains roughly 466 Seller/Performance methods. That
+number describes discoverable contracts, not authenticated capability. Seller
+execution needs the selected store's Seller credentials. Performance discovery
+works without credentials, while authenticated Performance execution needs the
+separate `performance_credentials` Client-Id/Client-Secret pair. Do not paste
+or memorize methods; discover the exact current method before using it.
 Read [references/ozon-mcp-bridge.md](references/ozon-mcp-bridge.md) for the
 commands, 13 workflow names, and safety boundary.
 
@@ -143,5 +150,26 @@ Credentialed MCP commands must select the intended local profile with
 `ozon --store-id <Client-Id> ...`; never expose another store's environment
 references to the MCP child.
 Only `workflow listing publish` may write, through its fixed typed adapter to
-the import endpoints. It requires a locally enabled store profile and never
-accepts arbitrary operation IDs or URLs.
+the import endpoints. It requires a locally enabled store profile plus a valid
+`StorePublishingConsentV1`; publish derives a draft-bound execution
+authorization but must never create consent itself. It never accepts arbitrary
+operation IDs or URLs.
+
+## Production boundaries the Agent must preserve
+
+- CEL is the only implemented logistics Provider. The bundled `cel-2026.json`
+  is a legacy manual snapshot with unknown validity dates and `needs_review`
+  source verification. Do not call it an official/latest tariff.
+- Preserve package evidence in this order: 1688 SKU fact, 1688 product fact,
+  explicit customer input, Agent estimate. An Agent estimate may fill a gap but
+  must never replace a higher-priority fact. An unsupported real package blocks
+  CEL pricing; it is not converted back into an estimate task.
+- `review-console start` is localhost-only, single-user Local Review Console.
+  Team/public/OIDC/multi-node operation is unsupported. A PostgreSQL state
+  reader does not make artifacts shared or turn it into a team deployment.
+- Repository tests must use fake transports. Never run a real Seller write as
+  a test, fixture refresh, smoke check, or release gate.
+- `pnpm verify:pack` is ordinary package-content verification. Strict release
+  verification additionally requires a clean worktree and a version-matching
+  Tag pointing at HEAD; never create or publish a Release unless explicitly
+  authorized.

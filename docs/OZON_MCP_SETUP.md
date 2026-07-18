@@ -26,17 +26,30 @@ Environment overrides:
 
 ## Credentials
 
-Discovery commands work without Ozon credentials. Seller execution must select
-one locally registered store with `--store-id`. The registry contains only the
-two environment-variable references; it never contains their values:
+Discovery, workflow, graph and reference commands work without Ozon
+credentials. Authenticated execution must select one locally registered store
+with `--store-id`. Seller and Performance credentials are distinct; configuring
+one does not authenticate the other. The registry contains only environment
+variable references and never their values:
 
 - `credentials.client_id.key`
 - `credentials.api_key.key`
+- `performance_credentials.client_id.key` (optional)
+- `performance_credentials.client_secret.key` (optional)
 
-The CLI resolves those two references for the selected store and passes only
-`OZON_CLIENT_ID` and `OZON_API_KEY` to that one MCP child process. Ambient keys
-for other stores are not forwarded. `auto-ozon` only reports credential
-presence as booleans and never prints secret values.
+For a Seller call, the CLI resolves only Seller references and passes
+`OZON_CLIENT_ID`/`OZON_API_KEY`. For an authenticated Performance call it
+resolves only the Performance references and passes
+`OZON_PERFORMANCE_CLIENT_ID`/`OZON_PERFORMANCE_CLIENT_SECRET`. A workflow that
+explicitly needs both may receive both scopes. The bridge never forwards the
+whole `process.env`, and credentials from other stores are not forwarded.
+`setup doctor` reports only `seller_credentials_configured` and
+`performance_credentials_configured` booleans.
+
+Performance method **discovery** remains available without Performance
+credentials. Authenticated advertising/Performance execution without the
+optional pair fails structurally with `PERFORMANCE_CREDENTIALS_NOT_CONFIGURED`;
+do not describe all discoverable methods as immediately callable.
 
 ## Commands
 

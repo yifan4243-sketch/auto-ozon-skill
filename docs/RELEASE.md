@@ -4,6 +4,17 @@
 GitHub tag, its exact commit and tree, and the SHA-256 of a deterministic
 `git archive` of that commit. The installer rejects placeholder or moving refs.
 
+## Ordinary package verification is not a release
+
+`pnpm verify:pack` and `pnpm --filter ozon-master pack:check` are safe on a
+normal, untagged development commit. They validate tarball contents and must not
+change tracked files or require a Release Tag. `prepack` only runs
+`prepare-package.mjs`, which checks required package files and deliberately
+leaves the tracked `unreleased` manifest unchanged.
+
+Strict tag, clean-worktree and immutable-manifest checks are separate and run
+only through `release:prepare` / `release:verify` in the Release workflow.
+
 ## Release `v1.0.0-rc1`
 
 1. Finish and commit the intended release on `dev`.
@@ -16,18 +27,24 @@ GitHub tag, its exact commit and tree, and the SHA-256 of a deterministic
    git push origin v1.0.0-rc1
    ```
 
-5. From that clean tagged worktree, inspect and publish the npm package:
+5. From that clean tagged worktree, prepare and verify the immutable manifest,
+   inspect the tarball, publish from the reviewed release process, and restore
+   the tracked placeholder afterward:
 
    ```powershell
    $env:OZON_MASTER_RELEASE_TAG = 'v1.0.0-rc1'
+   pnpm --filter ozon-master release:prepare
+   pnpm --filter ozon-master release:verify
    pnpm --filter ozon-master pack:check
    pnpm --filter ozon-master publish --access public --tag next
+   pnpm --filter ozon-master release:reset
    Remove-Item Env:OZON_MASTER_RELEASE_TAG
    ```
 
-   `prepack` injects the pinned manifest into the tarball and `postpack`
-   restores the tracked placeholder, so the dry run does not dirty the
-   release worktree before `publish`.
+   Run `release:reset` in a `finally`/cleanup step if publishing fails. The
+   Release verification workflow performs prepare/verify/pack/reset without
+   publishing and asserts that the worktree is clean afterward. Publishing is
+   never part of ordinary CI and is not performed by this hardening task.
 
 6. Create a GitHub Release for the same `v1.0.0-rc1` tag. Record the npm
    version and package integrity in the release notes.

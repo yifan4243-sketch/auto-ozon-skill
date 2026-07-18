@@ -16,6 +16,15 @@
       "client_id": { "provider": "env", "key": "OZON_CLIENT_ID_123456" },
       "api_key": { "provider": "env", "key": "OZON_API_KEY_123456" }
     },
+    "performance_credentials": {
+      "client_id": { "provider": "env", "key": "OZON_PERFORMANCE_CLIENT_ID_123456" },
+      "client_secret": { "provider": "env", "key": "OZON_PERFORMANCE_CLIENT_SECRET_123456" }
+    },
+    "logistics": {
+      "provider_id": "cel",
+      "service_mode": "land",
+      "tariff_snapshot": "cel-2026.json"
+    },
     "publishing": {
       "enabled": false,
       "automation_level": "automatic",
@@ -72,8 +81,20 @@
 ```dotenv
 OZON_CLIENT_ID_123456=123456
 OZON_API_KEY_123456=replace-locally
+OZON_PERFORMANCE_CLIENT_ID_123456=replace-locally
+OZON_PERFORMANCE_CLIENT_SECRET_123456=replace-locally
 IMAGE_GENERATION_API_KEY=replace-locally
 ```
+
+`performance_credentials` and its two environment variables are optional and
+should be omitted unless the customer needs authenticated Performance/ads API
+execution. Method discovery does not require them. Seller and Performance
+credentials are never interchangeable.
+
+The current logistics implementation supports only `provider_id=cel` and the
+tracked `cel-2026.json`. That snapshot is marked `legacy_manual_snapshot` /
+`needs_review`; its capture and validity dates are unknown until an independently
+verifiable source is supplied.
 
 ## `data/config/image-generation.local.json`
 

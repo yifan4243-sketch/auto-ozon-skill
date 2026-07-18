@@ -47,6 +47,9 @@ auto-ozon ozon workflows get cabinet_health_check --json --pretty
 auto-ozon workflow category inspect "收纳盒" --store-id <Client-Id> --decision-file decision.json --json --pretty
 auto-ozon workflow listing prepare "收纳盒" --stop-after draft-generation --json --pretty
 auto-ozon setup doctor --json --pretty
+auto-ozon setup publishing enable --store-id 123456 --actor local-owner
+auto-ozon setup publishing disable --store-id 123456 --actor local-owner
+auto-ozon workflow category refresh-tree --store-id 123456
 auto-ozon workflow batch create --batch-id batch-001 --store-id 123456 --count 20 --profiles account-1,account-2
 auto-ozon workflow batch run --batch-id batch-001
 auto-ozon workflow batch resume --batch-id batch-001
@@ -157,8 +160,11 @@ auto-ozon workflow listing prepare "收纳盒" \
   --json --pretty
 ```
 
-The workflow reuses successful artifacts, stops on `needs_review` by default,
-and reruns downstream dependants when a step is forced. Supported step names
+The workflow reuses valid `succeeded`/`needs_review` artifacts, stops on
+`needs_review` by default, and reruns downstream dependants when a step is
+forced. When `--start-from` is used, earlier steps are integrity/schema checked
+and read only; absent Provider/Agent inputs on the resume command do not stale
+or rerun those upstream artifacts. Supported step names
 are `source-1688`, `canonicalize-product`, `category-decision`,
 `cost-pricing`, `category-attributes`, `attribute-mapping`, and `draft-generation`. Cost pricing runs
 after category decision and before category-attribute retrieval. The workflow always ends after
@@ -172,22 +178,28 @@ under `06-attribute-mapping`, and drafts under `07-draft-generation`; pre-draft 
 ## Listing submission
 
 Prepare remains read-only and stops at `draft-generation`. To submit its unchanged
-`items[]`, first copy the tracked profile template to the ignored local profile,
-set `publishing.enabled` only for the intended test store, and provide the two
-referenced environment variables. Neither the profile nor command output stores
-the API key.
+`items[]`, first copy the tracked profile template to the ignored local profile
+and provide the referenced environment variables. Then explicitly enable
+store-level automatic publishing. This creates `StorePublishingConsentV1` in
+the durable reliability store; changing the JSON flag alone is insufficient.
+Neither the profile nor command output stores the API key.
 
 ```powershell
 Copy-Item data/config/ozon-stores.example.json data/config/ozon-stores.local.json
-$env:OZON_CLIENT_ID = '<Client-Id>'
-$env:OZON_API_KEY = '<Seller-API-Key>'
+$env:OZON_CLIENT_ID_123456 = '<Client-Id>'
+$env:OZON_API_KEY_123456 = '<Seller-API-Key>'
 
+auto-ozon setup publishing enable --store-id <Client-Id> --actor <operator>
 auto-ozon workflow listing publish --run-id listing-cup-001 --store-id <Client-Id> --json --pretty
 auto-ozon workflow listing resume --run-id listing-cup-001 --store-id <Client-Id> --json --pretty
 auto-ozon workflow listing status --run-id listing-cup-001 --json --pretty
+auto-ozon setup publishing disable --store-id <Client-Id> --actor <operator>
 ```
 
-`publish` requires `draft_complete` and CNY items. It records the task under
+`publish` requires `draft_complete`, CNY items, a passed Preflight, and an
+enabled, unrevoked Consent whose store/profile hashes still match. It creates a
+run/draft-bound execution authorization from that Consent; it never creates the
+Consent itself. It records the task under
 `08-listing-submit`, polls it in the foreground, retries only recoverable failed
 SKUs up to two times, and reads back confirmed `product_id` values. `resume`
 first polls an unfinished task and never resubmits the timed-out batch just for
@@ -217,9 +229,26 @@ The TypeScript adapter provides wrappers for all 15 MCP tools defined by `vendor
 Runtime registration follows the upstream server:
 
 - 12 discovery, workflow, graph, and reference tools are always available.
-- `ozon_call_method` and `ozon_fetch_all` are available when Seller or Performance credentials are configured.
+- `ozon_call_method` and `ozon_fetch_all` are registered when Seller or Performance credentials are configured; the selected method still determines which credential family is required.
 - `ozon_get_subscription_status` is available only when Seller credentials are configured.
 
 The Python MCP implementation remains in the external `vendor/ozon-mcp` submodule and is not copied into TypeScript.
 
+Discovery, workflow, graph and reference tools need no live credentials.
+Authenticated Seller reads use `credentials`; authenticated Performance reads
+use the distinct optional `performance_credentials`. A store without
+Performance Client-Id/Client-Secret may discover Performance contracts but
+must receive `PERFORMANCE_CREDENTIALS_NOT_CONFIGURED` for authenticated
+Performance execution. Only credentials required by the selected operation are
+forwarded; the bridge never copies all of `process.env` into the child.
+
 The local integration remains read-only for generic execution. `ozon call` and `ozon fetch-all` first describe the requested method and reject `write` or `destructive` methods with `OZON_WRITE_BLOCKED`. Discovery and reference commands can still inspect write-method schemas, examples, limits, related methods, and error catalogs without executing them. Listing submission is intentionally separate and uses a fixed typed client limited to import, polling, and product-ID readback.
+
+## Local Review Console
+
+`auto-ozon review-console start` binds only to `127.0.0.1`, runs in the
+foreground, and uses a local HttpOnly/SameSite session, same-origin CSRF checks,
+request-size limits and strict CSP. It is a single-user local tool. Team mode,
+public binding, OIDC login, shared artifacts and multi-node operation are
+unsupported. An optional PostgreSQL review-state reader supplies a durable read
+model only; it does not change that deployment boundary.
