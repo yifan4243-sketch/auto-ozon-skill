@@ -115,6 +115,10 @@ pnpm exec tsx apps/cli/src/cli.ts source similar 123456789 --max 10
 08 提交 Ozon、轮询并记录每个 SKU 的结果
 ```
 
+属性 `4191` 是提交给买家的俄语商品描述。描述正文只能使用合规的俄语/拉丁字符，
+不得复制中文、日文、韩文 SKU 名或不安全控制字符；1688 中文原始值只保留在证据与
+审计字段中。属性填写、草稿生成和发布预检会分别拦截不合规描述。
+
 准备草稿不会写入 Ozon：
 
 ```powershell
@@ -141,16 +145,18 @@ pnpm exec tsx apps/cli/src/cli.ts workflow batch status --batch-id batch-001
 ```text
 data/runs/<run_id>/
 ├── manifest.json
-├── 01-source-1688/
-├── 02-canonical/
-├── 03-category-decision/
-├── 04-cost-pricing/
-├── 05-category-attributes/
-├── 06-attribute-mapping/
-├── 07-draft-generation/image-bundle-v1.json
-├── 07-draft-generation/listing-draft-v2.json
-└── 08-listing-submit/ozon-publish-result-v1.json
+├── 01-source-1688/attempt-000N/
+├── 02-canonical/attempt-000N/
+├── 03-category-decision/attempt-000N/
+├── 04-cost-pricing/attempt-000N/
+├── 05-category-attributes/attempt-000N/
+├── 06-attribute-mapping/attempt-000N/
+├── 07-draft-generation/attempt-000N/
+└── 08-listing-submit/attempt-000N/
 ```
+
+步骤产物采用不可变的 `attempt-000N` 目录。不要猜测最新编号，也不要读取旧 attempt；
+始终先读取 `manifest.json`，再使用对应步骤的 `output`/`artifacts` 指向的当前有效文件。
 
 发布前必须通过本机配置绑定店铺，并由用户显式创建店铺级自动发布许可。仅修改
 `publishing.enabled` 不构成授权；第 8 步还会校验未撤销的 Consent、店铺配置哈希、
@@ -166,6 +172,9 @@ pnpm exec tsx apps/cli/src/cli.ts setup publishing disable --store-id <Client-Id
 ```
 
 第 8 步不会管理库存，也不会自动删除、下架、归档或回滚商品。成功 SKU 保留；可恢复的失败最多再尝试两次。
+结果中的 `imported` 表示本次任务确认导入；`skipped + product_id` 表示相同商品已通过
+幂等检查或远端对账确认成功，同样计入成功数量。`polling_timeout` 必须使用 `resume`，
+不得直接重新发布；`failed` 或没有 `product_id` 的 `skipped` 不得计为成功。
 
 ## 让 Agent 使用本项目
 
@@ -180,11 +189,13 @@ pnpm exec tsx apps/cli/src/cli.ts setup publishing disable --store-id <Client-Id
 
 相关专项 Skill：
 
+- [首次配置与店铺绑定](skills/customer-setup/SKILL.md)
 - [俄罗斯市场选品](skills/ozon-russia-market-selection/SKILL.md)
 - [Ozon 类目决策](packages/steps/category-decision/SKILL.md)
 - [Ozon 属性填写](packages/steps/attribute-mapping/SKILL.md)
 - [成本定价](packages/steps/cost-pricing/SKILL.md)
 - [草稿生成](packages/steps/draft-generation/SKILL.md)
+- [Ozon 提交、轮询与对账](packages/steps/listing-submit/SKILL.md)
 
 ## Ozon MCP：查询和经营分析
 

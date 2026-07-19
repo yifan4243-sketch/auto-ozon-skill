@@ -44,7 +44,9 @@ Agent-owned attributes:
 - 4180: one natural Russian product-name string; omit all brands and no-brand
   phrases. It may include supported use cases, but is never split into fields.
 - 4191: factual Russian description, at least four paragraphs and 500
-  non-whitespace characters.
+  non-whitespace characters. Translate retained source facts into Russian.
+  Chinese, Japanese, and Korean characters are forbidden in the description;
+  raw source-language values remain only in evidence and audit fields.
 - 4383 only when script weight is missing: estimate grams, value >3, low
   confidence, automatically accepted.
 - 8229: always select the best current dictionary value.

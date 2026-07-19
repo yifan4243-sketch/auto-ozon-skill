@@ -26,7 +26,9 @@ For a request containing a concrete product noun, that noun is already the
 keyword. Ask for a product name only when the customer did not state either a
 quantity or a product/selection intent.
 
-For a requested number `N`, count only SKUs confirmed `imported` by step 8.
+For a requested number `N`, count only step-8 successes: rows confirmed
+`imported`, or idempotently reconciled rows recorded as `skipped` **with a
+non-null `product_id`**. A bare `skipped` row is not a success.
 Respect the saved SKU maximum and purchase-price range. Use `workflow batch`
 as the durable ledger; it owns one independent run per selected offer and
 continues sourcing until `N` is met, a terminal failure occurs, or the candidate
@@ -98,6 +100,9 @@ Run the following eight steps in order for every selected 1688 offer:
 4. `cost-pricing` — calculate CEL cost, exchange rate, commission, and price.
 5. `category-attributes` — fetch Ozon category attribute and dictionary snapshots.
 6. `attribute-mapping` — apply script rules, then validated Agent values.
+   Attribute 4191 must be Russian customer-facing text without Chinese,
+   Japanese, Korean, or unsafe control characters. Raw Chinese facts stay only
+   in evidence/audit fields.
 7. `draft-generation` — download/hash images, pause for current-Agent text and
    watermark review, then combine price, images and attributes into import `items[]`.
 8. `listing-submit` — submit the unchanged `items[]`, poll, and store per-SKU results.
@@ -109,6 +114,8 @@ Read the owning procedure before performing a specialized step:
 - Attribute mapping: `packages/steps/attribute-mapping/SKILL.md`.
 - Cost pricing: `packages/steps/cost-pricing/SKILL.md`.
 - Draft construction: `packages/steps/draft-generation/SKILL.md`.
+- Ozon submission, reconciliation and result interpretation:
+  `packages/steps/listing-submit/SKILL.md`.
 - First-time and later customer configuration: `skills/customer-setup/SKILL.md`.
 
 Use the CLI from the repository root:

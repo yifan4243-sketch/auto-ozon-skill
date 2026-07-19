@@ -164,5 +164,10 @@ function sanitizeResponse(value: unknown): unknown {
 }
 
 function valueAt(value: unknown, paths: string[]): unknown { for (const path of paths) { let current: unknown = value; for (const key of path.split('.')) current = current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined; if (current !== undefined) return current; } return undefined; }
-function stringAt(value: unknown, paths: string[]): string | null { const found = valueAt(value, paths); return typeof found === 'string' && found ? found : null; }
+function stringAt(value: unknown, paths: string[]): string | null {
+  const found = valueAt(value, paths);
+  if (typeof found === 'string' && found) return found;
+  if (typeof found === 'number' && Number.isFinite(found)) return String(found);
+  return null;
+}
 function arrayAt(value: unknown, paths: string[]): unknown[] { const found = valueAt(value, paths); return Array.isArray(found) ? found : []; }

@@ -12,6 +12,7 @@ import type {
   PreflightReportV1,
   StoreProfileV2,
 } from '@auto-ozon/contracts';
+import { hasForbiddenOzonDescriptionCharacters } from '@auto-ozon/contracts';
 import { validateListingDraftArtifact } from '@auto-ozon/artifact-validation';
 
 export function validatePublishPreflight(input: {
@@ -54,6 +55,19 @@ export function validatePublishPreflight(input: {
   check(checks, 'PRIMARY_IMAGE_FIRST', draft.items.every((item) => item.primary_image === item.images[0]), '每个 SKU 的主图必须是构建完成后的 images[0]。');
   check(checks, 'SKU_BINDINGS', validSkuBindings(draft), '草稿必须保留完整且唯一的 source_sku_id 到 offer_id 绑定。');
   check(checks, 'ATTRIBUTES', Boolean(input.category_attributes?.length) && draft.items.every((item) => invalidAttributeIds(item, input.category_attributes!).length === 0), '当前类目快照中的必填属性和字典值必须完整有效。');
+  check(
+    checks,
+    'DESCRIPTION_4191_CHARACTERS',
+    draft.items.every((item) => {
+      const description = item.attributes
+        .filter((attribute) => attribute.id === 4191)
+        .flatMap((attribute) => attribute.values.map((value) => value.value))
+        .join('\n');
+      return Boolean(description) && !hasForbiddenOzonDescriptionCharacters(description);
+    }),
+    '属性 4191 必须存在，且不得包含 Ozon 会拒绝的中日韩字符或不安全控制字符。',
+    draft.items.map((item) => item.offer_id),
+  );
   check(checks, 'CATEGORY_SNAPSHOT_FRESH', Boolean(input.category_attributes?.length) && input.category_attributes!.every((group) => Date.parse(group.attributes_schema.snapshot.valid_to) > Date.parse(input.now ?? new Date().toISOString())), '类目属性快照必须存在且未过期。');
   check(checks, 'CATEGORY_TREE_SNAPSHOT_FRESH', Boolean(draft.category_tree_snapshot) && Date.parse(draft.category_tree_snapshot!.valid_to) > Date.parse(input.now ?? new Date().toISOString()), '类目树快照必须存在且未过期。');
   check(checks, 'CATEGORY_TREE_SNAPSHOT_MATCH', Boolean(input.category_decision?.category_snapshot) && stableHash(input.category_decision!.category_snapshot) === stableHash(draft.category_tree_snapshot), '草稿必须绑定当前类目决定使用的类目树快照。');

@@ -1,4 +1,5 @@
 import type { AttributeMappingV2, ContentBundleV1, MappedOzonAttributeV2 } from '@auto-ozon/contracts';
+import { hasForbiddenOzonDescriptionCharacters } from '@auto-ozon/contracts';
 
 export function buildContentBundle(mapping: AttributeMappingV2): ContentBundleV1 {
   const result: ContentBundleV1 = { schema_version: 1, source_offer_id: mapping.source_offer_id, status: 'completed', sku_content: [], errors: [] };
@@ -65,6 +66,9 @@ function validateContent(item: {
   const paragraphs = item.description_ru.split(/\n\s*\n/u).map((value) => value.trim()).filter(Boolean);
   if (item.description_ru.trim().length < 500 || paragraphs.length < 4) {
     errors.push('Russian description must contain at least four paragraphs and 500 trimmed characters.');
+  }
+  if (hasForbiddenOzonDescriptionCharacters(item.description_ru)) {
+    errors.push('Russian description must not contain Chinese, Japanese, or Korean characters or unsafe control characters.');
   }
   if (item.hashtags_ru.length !== 20 || new Set(item.hashtags_ru).size !== 20
     || item.hashtags_ru.some((tag) => !/^#[А-Яа-яЁёA-Za-z0-9_]+$/u.test(tag))) {

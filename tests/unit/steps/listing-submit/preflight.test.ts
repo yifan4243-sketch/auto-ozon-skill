@@ -49,6 +49,21 @@ describe('publish preflight', () => {
     expect(report.status).toBe('blocked');
     expect(report.checks[0]?.message).toContain('LEGACY_DRAFT_CONTRACT_UNSUPPORTED');
   });
+
+  it('blocks a draft whose 4191 description contains Chinese source text', () => {
+    const fixture = completeFixture();
+    fixture.draft.items[0]!.attributes.push({
+      id: 4191,
+      complex_id: 0,
+      values: [{ value: 'Описание варианта поставщика 红色圆口.' }],
+    });
+    const report = validatePublishPreflight({ run_id: 'run-1', ...fixture, now: '2026-07-17T00:00:00.000Z' });
+    expect(report.status).toBe('blocked');
+    expect(report.checks).toContainEqual(expect.objectContaining({
+      code: 'DESCRIPTION_4191_CHARACTERS',
+      status: 'failed',
+    }));
+  });
 });
 
 function completeFixture(validTo = '2026-07-18T00:00:00.000Z') {
@@ -96,6 +111,7 @@ function completeFixture(validTo = '2026-07-18T00:00:00.000Z') {
       weight: 100, depth: 100, width: 100, height: 100, dimension_unit: 'mm', weight_unit: 'g',
       images: ['https://img.test/a.jpg'], primary_image: 'https://img.test/a.jpg', complex_attributes: [], currency_code: 'CNY',
       attributes: [{ id: 85, complex_id: 0, values: [{ dictionary_value_id: 126745801, value: 'Нет бренда' }] },
+        { id: 4191, complex_id: 0, values: [{ value: 'Подробное описание товара на русском языке.' }] },
         { id: 4383, complex_id: 0, values: [{ value: '100' }] }, { id: 4497, complex_id: 0, values: [{ value: '150' }] },
         { id: 9048, complex_id: 0, values: [{ value: '20260717080000' }] }],
     }],
@@ -117,5 +133,5 @@ function categoryAttributes(validTo: string): CategoryAttributesGroupV1[] {
       snapshot: { schema_version: 1, source: 'ozon-seller-api', captured_at: '2026-07-17T00:00:00.000Z', valid_from: '2026-07-17T00:00:00.000Z', valid_to: validTo, sha256: 'a'.repeat(64) },
       category: { description_category_id: 10, type_id: 20 }, raw_response: {}, dictionary_raw_responses: {},
       attributes: [{ id: 85, name: '品牌', description: '', type: 'string', required: true, is_collection: false, is_aspect: false, dictionary_id: 1, group_id: 0, group_name: '', category_dependent: false, values: [{ id: 126745801, value: 'Нет бренда' }] },
-        ...[4383, 4497, 9048].map((id) => ({ id, name: String(id), description: '', type: 'string', required: true, is_collection: false, is_aspect: false, dictionary_id: 0, group_id: 0, group_name: '', category_dependent: false, values: [] }))] } }];
+        ...[4191, 4383, 4497, 9048].map((id) => ({ id, name: String(id), description: '', type: 'string', required: true, is_collection: false, is_aspect: false, dictionary_id: 0, group_id: 0, group_name: '', category_dependent: false, values: [] }))] } }];
 }

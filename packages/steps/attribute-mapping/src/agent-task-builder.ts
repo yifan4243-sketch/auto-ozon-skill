@@ -72,7 +72,7 @@ function instructionFor(attribute: CategoryAttributeV1): string {
     case 4180:
       return 'Write one natural Russian product name in a single field. It may state the product and supported use cases, but must not contain a brand or a no-brand phrase.';
     case 4191:
-      return 'Write a factual Russian description with at least 4 paragraphs and 500 non-whitespace characters. Return content_claims with exactly one claim_text per complete paragraph and cite every retained CanonicalProduct fact that supports that paragraph. Do not invent material, certification, function, brand, package contents, or use cases.';
+      return 'Write a factual Russian description with at least 4 paragraphs and 500 non-whitespace characters. Return content_claims with exactly one claim_text per complete paragraph and cite every retained CanonicalProduct fact that supports that paragraph. Do not invent material, certification, function, brand, package contents, or use cases. The description must not contain Chinese, Japanese, or Korean characters: translate source facts into Russian and keep raw source-language values only in evidence.';
     case 4383:
       return 'Only when cost-pricing has no shared weight fact, estimate the legacy cost-base product weight in grams from retained 1688 facts. Return one number greater than 3 with low confidence.';
     case 8229:

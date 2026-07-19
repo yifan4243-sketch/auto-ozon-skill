@@ -3,6 +3,7 @@ import type {
   CategoryAttributeV1,
   MappedOzonAttributeV1,
 } from '@auto-ozon/contracts';
+import { hasForbiddenOzonDescriptionCharacters } from '@auto-ozon/contracts';
 import { validateDictionaryValues } from './dictionary-resolver.js';
 
 export interface AgentResolutionV1 {
@@ -75,7 +76,8 @@ function validateAgentSemantics(
       .filter(Boolean);
     return paragraphs.length >= 4 &&
       values[0]!.value.replace(/\s/gu, '').length >= 500 &&
-      /[А-Яа-яЁё]/u.test(values[0]!.value);
+      /[А-Яа-яЁё]/u.test(values[0]!.value) &&
+      !hasForbiddenOzonDescriptionCharacters(values[0]!.value);
   }
   if (attribute.id === 4383) {
     return values.length === 1 &&

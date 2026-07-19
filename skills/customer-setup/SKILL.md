@@ -18,7 +18,8 @@ does not decide whether a later request needs market selection or a supplied
 
 1. Inspect `.env`, `data/config/ozon-stores.local.json`, and
    `data/config/customer-settings.local.json` if they exist. Also run `1688
-   profile list`. Report only whether a secret or profile is configured; never
+   profile list` through the repository CLI command shown below. Report only
+   whether a secret or profile is configured; never
    display a secret, cookie, QR payload, or session value.
 2. Before doing any product work, ensure that at least two independent 1688
    Profiles are logged in. If fewer than two are usable, tell the customer:
@@ -28,11 +29,12 @@ does not decide whether a later request needs market selection or a supplied
    Create distinct profile names such as `account-1` and `account-2`, unless
    the customer supplies names. Run and verify each profile in turn:
 
-   ```text
-   1688 login --profile account-1
-   1688 login --profile account-2
-   1688 profile status account-1
-   1688 profile status account-2
+   ```powershell
+   pnpm exec tsx apps/cli/src/cli.ts 1688 profile list
+   pnpm exec tsx apps/cli/src/cli.ts 1688 login --profile account-1 --headed
+   pnpm exec tsx apps/cli/src/cli.ts 1688 login --profile account-2 --headed
+   pnpm exec tsx apps/cli/src/cli.ts 1688 profile status account-1
+   pnpm exec tsx apps/cli/src/cli.ts 1688 profile status account-2
    ```
 
    Do not collect products until two profiles are usable. Do not expose their

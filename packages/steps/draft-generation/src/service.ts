@@ -14,6 +14,7 @@ import type {
   ImageBundleV1,
   OzonReadyAttributeV1,
 } from '@auto-ozon/contracts';
+import { hasForbiddenOzonDescriptionCharacters } from '@auto-ozon/contracts';
 import { LEGACY_WEIGHT_SEMANTICS_V1 } from '@auto-ozon/contracts';
 import { assertWorkflowActive, type WorkflowContext } from '@auto-ozon/artifact-store';
 import { validateListingDraftSchema } from './schema-validator.js';
@@ -210,7 +211,16 @@ function validateAttributes(
       }
     }
   }
-  if (!attributeText(item.attributes, 4191)) result.errors.push(issue('DESCRIPTION_4191_MISSING', `SKU ${skuId} lacks description attribute 4191.`, [skuId], [4191]));
+  const description4191 = attributeText(item.attributes, 4191);
+  if (!description4191) result.errors.push(issue('DESCRIPTION_4191_MISSING', `SKU ${skuId} lacks description attribute 4191.`, [skuId], [4191]));
+  if (description4191 && hasForbiddenOzonDescriptionCharacters(description4191)) {
+    result.errors.push(issue(
+      'DESCRIPTION_4191_FORBIDDEN_CHARACTERS',
+      `SKU ${skuId} description attribute 4191 contains CJK or unsafe control characters rejected by Ozon.`,
+      [skuId],
+      [4191],
+    ));
+  }
   const attribute4383 = numericAttribute(item.attributes, 4383);
   if (attribute4383 !== null && attribute4383 !== weightFacts.attribute_4383_weight_g) {
     result.errors.push(issue('WEIGHT_4383_INCONSISTENT', `SKU ${skuId} attribute 4383 does not match audited weight_facts.attribute_4383_weight_g.`, [skuId], [4383]));

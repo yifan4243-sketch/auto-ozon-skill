@@ -5,8 +5,9 @@ description: Combine immutable product, category, pricing, AttributeMappingV2, C
 
 # Draft Generation
 
-Create one `ListingDraftV2` at
-`data/runs/<run_id>/07-draft-generation/listing-draft-v2.json`.
+Create one immutable `ListingDraftV2` in the current draft-generation attempt.
+Resolve its exact `attempt-000N/listing-draft-v2.json` path through
+`data/runs/<run_id>/manifest.json`; never guess the latest attempt number.
 
 Read steps 02–06 through the run manifest. Require a completed
 `ContentBundleV1` from step 06. Output `items[]` in the future Ozon
@@ -16,6 +17,10 @@ dimensions, images, primary image, and the unchanged `ozon_attributes` array.
 Keep 4191 in `items[].attributes`; do not create a second description or
 rewrite it. Do not invent VAT, barcode, old price, stock, a non-CNY currency,
 or images.
+
+Reject 4191 when it contains Chinese, Japanese, Korean, or unsafe control
+characters. Source-language values may remain in upstream evidence but must
+never leak into the customer-facing Ozon description.
 
 - Bind the exact SHA-256 of CanonicalProduct, category decision, pricing,
   category attributes, AttributeMappingV2, ContentBundleV1, and ImageBundleV1.

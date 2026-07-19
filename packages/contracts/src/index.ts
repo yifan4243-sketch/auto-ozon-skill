@@ -20,3 +20,4 @@ export * from './listing-job.js';
 export * from './publish-reliability.js';
 export * from './setup-report.js';
 export * from './content-bundle.js';
+export * from './ozon-text-policy.js';

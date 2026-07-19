@@ -223,6 +223,19 @@ describe('runAttributeMapping', () => {
     );
   });
 
+  it('rejects descriptions that copy Chinese source variant text into attribute 4191', async () => {
+    const fixture = inputFixture();
+    const description = fixture.agent_input!.sku_inputs[0]!.attributes.find(
+      (attribute) => attribute.attribute_id === 4191,
+    )!;
+    description.values = [{ value: `${description.values[0]!.value}\n\nВариант поставщика: 红色圆口.` }];
+    const result = await runAttributeMapping(fixture);
+    expect(result.ok).toBe(false);
+    expect(result.data?.unresolved_attributes).toContainEqual(
+      expect.objectContaining({ attribute_id: 4191, reason: 'invalid_agent_value' }),
+    );
+  });
+
   it('records a non-blocking warning when source brand facts are overridden by no-brand policy', async () => {
     const fixture = inputFixture();
     fixture.product.product.attributes.品牌 = 'ExampleBrand';

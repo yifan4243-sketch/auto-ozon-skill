@@ -99,4 +99,22 @@ describe('draft-generation', () => {
     const result = await runDraftGeneration(fixture);
     expect(result).toMatchObject({ ok: false, data: { status: 'blocked', errors: [{ code: 'WEIGHT_4497_INCONSISTENT' }] } });
   });
+
+  it('blocks an Ozon description containing Chinese source text', async () => {
+    const fixture = input();
+    const description = `${fixture.content_bundle.sku_content[0].description_ru}\n\nВариант поставщика: 蓝色方口.`;
+    fixture.content_bundle.sku_content[0].description_ru = description;
+    fixture.content_bundle.sku_content[0].claims = description.split('\n\n').map((claim_text: string) => ({
+      claim_text,
+      evidence_refs: [{ json_pointer: '/canonical_v2/product/title_zh', value: '陶瓷杯' }],
+    }));
+    fixture.attribute_mapping.sku_attributes[0].ozon_attributes.find(
+      (attribute: { id: number }) => attribute.id === 4191,
+    ).values[0].value = description;
+    const result = await runDraftGeneration(fixture);
+    expect(result).toMatchObject({
+      ok: false,
+      data: { status: 'blocked', errors: [expect.objectContaining({ code: 'DESCRIPTION_4191_FORBIDDEN_CHARACTERS' })] },
+    });
+  });
 });

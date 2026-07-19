@@ -23,9 +23,10 @@ an external text-model runtime.
    compact Agent JSON to stdin. `--attribute-agent-json` remains available for
    small inputs.
    Do not hand-author common, variant, or Ozon-ready arrays.
-7. Save output matching `output.schema.json` as
-   `06-attribute-mapping/attribute-mapping-v2.json`, then derive and save
-   `06-attribute-mapping/content-bundle-v1.json`.
+7. Save both artifacts in the immutable attempt directory selected by the run
+   manifest. Resolve the current `attribute-mapping-v2.json` and
+   `content-bundle-v1.json` from `manifest.json`; never guess an attempt number
+   or overwrite an earlier attempt.
 
 ## Boundaries
 
@@ -35,6 +36,10 @@ an external text-model runtime.
   mapping method, confidence, and category-attribute snapshot SHA-256.
 - Attributes 4180, 4191, and 23171 must cite retained CanonicalProductV2
   evidence. Content without valid evidence is blocked, not guessed.
+- Attribute 4191 is Russian marketplace copy. It must not contain Chinese,
+  Japanese, Korean, or unsafe control characters. Translate retained source
+  facts into Russian and keep raw Chinese SKU names only in evidence/audit
+  fields. A violation is blocked before draft generation.
 - Reuse the explicit audited `attribute_4383_weight_g` and
   `attribute_4497_weight_g` values from cost pricing. Do not silently derive
   either value inside attribute mapping. The current 50 g platform increment is

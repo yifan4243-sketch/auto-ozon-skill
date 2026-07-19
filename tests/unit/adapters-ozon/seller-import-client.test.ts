@@ -25,6 +25,12 @@ describe('typed Ozon Seller import client', () => {
     const client = new OzonSellerImportClient({ clientId: '525', apiKey: 'secret' }, 'https://example.test', { fetch: execute as typeof fetch });
     await expect(client.getImportInfo('task')).resolves.toEqual({ complete: true, items: [{ offer_id: 'a', status: 'failed', errors: ['ATTRIBUTE_REQUIRED: missing field'], recoverable: false }] });
   });
+
+  it('accepts the numeric result.task_id returned by product import v3', async () => {
+    const execute = vi.fn(async () => response(200, { result: { task_id: 123456789 } }));
+    const client = new OzonSellerImportClient({ clientId: '525', apiKey: 'secret' }, 'https://example.test', { fetch: execute as typeof fetch });
+    await expect(client.submit([])).resolves.toEqual({ task_id: '123456789' });
+  });
 });
 
 function response(status: number, body: unknown, headers: Record<string, string> = {}): Response {
