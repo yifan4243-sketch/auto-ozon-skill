@@ -1,6 +1,6 @@
 {
   "name": "ozon-master",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.2",
   "description": "One-command installer and Agent skill bootstrapper for Auto Ozon Skill.",
   "type": "module",
   "bin": {

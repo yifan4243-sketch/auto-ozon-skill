@@ -15,7 +15,7 @@ leaves the tracked `unreleased` manifest unchanged.
 Strict tag, clean-worktree and immutable-manifest checks are separate and run
 only through `release:prepare` / `release:verify` in the Release workflow.
 
-## Release `v1.0.0-rc1`
+## Release `v0.1.2`
 
 1. Finish and commit the intended release on `dev`.
 2. Complete the required automated and real-store gates documented in ADR 0002.
@@ -23,8 +23,8 @@ only through `release:prepare` / `release:verify` in the Release workflow.
 4. Create and push the annotated tag:
 
    ```powershell
-   git tag -a v1.0.0-rc1 -m "ozon-master v1.0.0-rc1"
-   git push origin v1.0.0-rc1
+   git tag -a v0.1.2 -m "ozon-master v0.1.2"
+   git push origin v0.1.2
    ```
 
 5. From that clean tagged worktree, prepare and verify the immutable manifest,
@@ -32,11 +32,11 @@ only through `release:prepare` / `release:verify` in the Release workflow.
    the tracked placeholder afterward:
 
    ```powershell
-   $env:OZON_MASTER_RELEASE_TAG = 'v1.0.0-rc1'
+   $env:OZON_MASTER_RELEASE_TAG = 'v0.1.2'
    pnpm --filter ozon-master release:prepare
    pnpm --filter ozon-master release:verify
    pnpm --filter ozon-master pack:check
-   pnpm --filter ozon-master publish --access public --tag next
+   pnpm --filter ozon-master publish --access public
    pnpm --filter ozon-master release:reset
    Remove-Item Env:OZON_MASTER_RELEASE_TAG
    ```
@@ -46,12 +46,12 @@ only through `release:prepare` / `release:verify` in the Release workflow.
    publishing and asserts that the worktree is clean afterward. Publishing is
    never part of ordinary CI and is not performed by this hardening task.
 
-6. Create a GitHub Release for the same `v1.0.0-rc1` tag. Record the npm
+6. Create a GitHub Release for the same `v0.1.2` tag. Record the npm
    version and package integrity in the release notes.
 7. Confirm the documented command installs only the tagged commit:
 
    ```powershell
-   pnpm dlx ozon-master@1.0.0-rc.1 init --agent all
+   pnpm dlx ozon-master@0.1.2 init --agent all
    ```
 
 Never publish from a dirty worktree, never change the release manifest by hand,

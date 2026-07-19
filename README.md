@@ -44,7 +44,7 @@ CanonicalProduct（供定价、类目与上架步骤使用）
 **推荐一键安装：**
 
 ```powershell
-pnpm dlx ozon-master@1.0.0-rc.1 init --agent all
+pnpm dlx ozon-master@0.1.2 init --agent all
 ```
 
 该命令会下载仓库、安装依赖、初始化 Ozon MCP、检查 Chrome，并在没有 Chrome 时下载 Playwright Chromium；同时为 Codex、Claude Code 和 Hermes 安装不含密钥的本地 Skill 指针。Node.js 20+ 与 pnpm 是此命令的前提。
