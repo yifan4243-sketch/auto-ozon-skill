@@ -9,7 +9,11 @@ export class SqliteJobStore implements PublishReliabilityStore {
 
   constructor(file = path.resolve('data/state/auto-ozon.sqlite')) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    this.database = new Database(file);
+    // Windows can briefly retain an SQLite file lock while another workflow
+    // connection is committing or closing. Keep lock waiting bounded so WAL
+    // initialization is reliable without hiding a persistent storage failure.
+    this.database = new Database(file, { timeout: 5_000 });
+    this.database.pragma('busy_timeout = 5000');
     this.database.pragma('journal_mode = WAL');
     this.database.pragma('foreign_keys = ON');
     this.migrate();

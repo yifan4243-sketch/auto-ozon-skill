@@ -5,11 +5,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FileArtifactStore } from '../../packages/artifact-store/src/index.js';
 import type { OfferResult } from '../../packages/adapters-1688/src/index.js';
 import { AgentDecisionProvider } from '../../packages/steps/category-decision/src/index.js';
-import { runListingPreparation } from '../../packages/workflows/src/index.js';
+import { SqliteJobStore } from '../../packages/job-store/src/index.js';
+import { runListingPreparation as runListingPreparationWorkflow } from '../../packages/workflows/src/index.js';
 
 const roots: string[] = [];
+const jobStores: SqliteJobStore[] = [];
+const jobStoreByArtifactStore = new WeakMap<object, SqliteJobStore>();
+
+function runListingPreparation(input: Parameters<typeof runListingPreparationWorkflow>[0]) {
+  const jobStateStore = input.artifact_store
+    ? jobStoreByArtifactStore.get(input.artifact_store as object)
+    : undefined;
+  if (!jobStateStore) throw new Error('Test fixture must provide an isolated job state store.');
+  return runListingPreparationWorkflow({ ...input, job_state_store: jobStateStore });
+}
 
 afterEach(async () => {
+  for (const store of jobStores.splice(0)) store.close();
   await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
 });
 
@@ -257,6 +269,9 @@ async function seededSourceRun(title?: string) {
     runsRoot: path.join(root, 'runs'),
     cacheRoot: path.join(root, 'cache'),
   });
+  const jobStore = new SqliteJobStore(path.join(root, 'state', 'workflow.sqlite'));
+  jobStores.push(jobStore);
+  jobStoreByArtifactStore.set(store, jobStore);
   const runId = 'workflow-test';
   const offer = JSON.parse(
     await fs.readFile(
